@@ -1,0 +1,26 @@
+# Core (keep in sync with pyproject.toml; CI installs from pyproject)
+apscheduler>=3.10
+beautifulsoup4>=4.13.3
+curl_cffi>=0.10.0
+joblib>=1.4
+numpy>=2.2.3
+pandas>=2.2.3
+python-dotenv>=1.0.0
+python-telegram-bot>=20.0
+pytz>=2024.1
+requests>=2.32.3
+scikit-learn>=1.5
+scipy>=1.15.2
+sqlalchemy>=2.0
+tqdm>=4.66.2
+yfinance>=0.2.54
+
+# Selenium (Market Chameleon scraping)
+selenium>=4.15.2
+webdriver-manager>=4.0.0
+
+# Optional: DoltHub integration
+# mysql-connector-python>=8.2.0
+
+# Optional: Yahooquery (not used in current codebase)
+# yahooquery>=2.3.7

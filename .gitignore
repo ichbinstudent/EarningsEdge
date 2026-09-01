@@ -1,0 +1,65 @@
+# Logs
+logs/
+*.log
+ 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+ 
+# Virtual Environment
+venv/
+env/
+ENV/
+ 
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+ 
+# OS specific files
+.DS_Store
+Thumbs.db
+ 
+# Generated files
+recommended_*.txt
+cli_scanner/.env
+oquants.env
+
+# SQLite databases (contain live trading data / account balances) — never track
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Runtime, salvage, and vendor binaries sitting under data/
+cli_scanner/data/backups/
+cli_scanner/data/gettex_quotes/
+cli_scanner/data/*.sql
+cli_scanner/data/sqlite-tools*/
+cli_scanner/data/sqlite-tools*.zip
+cli_scanner/data/sqlite3
+cli_scanner/data/sqlite3_analyzer
+cli_scanner/data/sqldiff
+cli_scanner/data/trading-bot.lock
+
+# AI agent / coding-assistant tooling — local only, never project deliverables
+.claude/
+.codex/
+.cursor/
+.grok/
+.hermes/
+.kilo/
+.kilocode/
+.mimocode/
+.opencode/
+.vexp/
+AGENTS.md
+CLAUDE.md
+opencode.json
+vexp.toml
+
