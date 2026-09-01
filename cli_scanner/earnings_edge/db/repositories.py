@@ -1724,7 +1724,7 @@ def ff_ladders_update_state(
 
 
 # ---------------------------------------------------------------------------
-# dashboard / streamlit analytics
+# live ops dashboard analytics
 # ---------------------------------------------------------------------------
 
 def scan_runs_recent(limit: int = 10) -> list[dict]:
