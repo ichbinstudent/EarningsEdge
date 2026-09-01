@@ -1,0 +1,37 @@
+# Volatility risk premium harvest (short premium, systematic).
+[strategy]
+name = "vol_risk_premium"
+enabled = false
+execution_mode = "approval"
+lifecycle = "paper"
+
+[universe]
+type = "earnings_calendar"
+
+[risk.sizer]
+name = "vol_target"
+risk_pct = 0.01
+# Sizing note: per-unit max loss for naked short premium is the earnings
+# stress proxy — 2.0 x expected_move_dollars x 100 (EARNINGS_STRESS_MULTIPLE
+# in earnings_edge/alpaca_bridge.py), i.e. the stock moving twice the
+# straddle-priced move; falls back to 20% of strike notional when the scan
+# layer has no expected move. risk_pct stays 1% of equity (~$1k on the ~$100k
+# paper account): names whose 2x-implied-move stress loss exceeds the budget
+# are vetoed by design.
+
+[risk.limits]
+max_pct_per_trade = 0.03
+max_pct_per_underlying = 0.10
+max_pct_per_strategy_day = 0.10
+
+[[exits]]
+rule = "time"
+days_after_entry = 2
+
+[[exits]]
+rule = "profit_target"
+pct = 0.50
+
+[[exits]]
+rule = "stop_loss"
+pct = 1.00

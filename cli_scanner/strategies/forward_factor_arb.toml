@@ -1,0 +1,29 @@
+# Pure Mathematical Forward Factor Arbitrage
+# Scans for Front IV vs Forward Volatility mispricing (Forward Factor > 1.1).
+# Entry is worked via a limit ladder targeting theoretical factors from 1.5 down to 1.25.
+# Exits are managed via ScheduledExit at the front leg's expiration day.
+[strategy]
+name = "forward_factor_arb"
+enabled = true
+schedule = "0 14 * * mon-fri"
+execution_mode = "approval"
+engine = "limit_ladder"
+lifecycle = "paper"
+
+[universe]
+type = "earnings_calendar" # To ensure we have event_date for ex-earnings calculations
+
+[risk.sizer]
+name = "fixed_dollar"
+budget = 2000.0
+max_pct_of_equity = 0.05
+
+[risk.limits]
+max_pct_per_trade = 0.05
+max_pct_per_underlying = 0.15
+max_pct_per_strategy_day = 0.20
+
+# ScheduledExit is the near-leg expiry backstop.
+[[exits]]
+rule = "scheduled"
+minutes_before_close = 90

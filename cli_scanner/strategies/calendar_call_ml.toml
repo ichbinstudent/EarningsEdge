@@ -1,0 +1,34 @@
+# ML-scored earnings call calendar (the primary proposal strategy).
+[strategy]
+name = "calendar_call_ml"
+enabled = true
+schedule = "15 15 * * mon-fri"   # proposals chain to the 14:00 ET scan
+execution_mode = "approval"
+lifecycle = "paper"
+
+[universe]
+type = "earnings_calendar"
+
+[risk.sizer]
+name = "pct_portfolio"
+pct = 0.05
+
+[risk.limits]
+max_pct_per_trade = 0.10
+max_pct_per_underlying = 0.25
+max_pct_per_strategy_day = 0.30
+
+# Calendar spread: the near leg's expiry is the real deadline (first
+# session after earnings), not a fixed day-count from entry — see
+# ScheduledExit. Fires automatically ~90min before close on/after that date.
+[[exits]]
+rule = "scheduled"
+minutes_before_close = 90
+
+[[exits]]
+rule = "profit_target"
+pct = 0.50
+
+[[exits]]
+rule = "stop_loss"
+pct = 0.75

@@ -1,0 +1,29 @@
+# Earnings quality drift (PEAD-style, equity or defined-risk options).
+[strategy]
+name = "earnings_quality"
+enabled = false
+execution_mode = "approval"
+lifecycle = "paper"
+
+[universe]
+type = "earnings_calendar"
+
+[risk.sizer]
+name = "pct_portfolio"
+pct = 0.04
+
+[risk.limits]
+max_pct_per_trade = 0.08
+max_pct_per_strategy_day = 0.20
+
+[[exits]]
+rule = "time"
+days_after_entry = 10
+
+[[exits]]
+rule = "profit_target"
+pct = 0.75
+
+[[exits]]
+rule = "stop_loss"
+pct = 0.50
