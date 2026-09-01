@@ -1,0 +1,57 @@
+{"id": 15634, "ticker": "PPLI", "scan_date": "2026-08-03", "err": "no ATM near option prices"}
+{"id": 4899, "ticker": "ARREF", "scan_date": "2026-07-28", "err": "no historical option contracts"}
+{"id": 4587, "ticker": "DIT", "scan_date": "2026-07-28", "err": "no historical option contracts"}
+{"id": 4939, "ticker": "LARK", "scan_date": "2026-07-28", "err": "no historical option contracts"}
+{"id": 4624, "ticker": "OPI", "scan_date": "2026-07-28", "err": "no historical option contracts"}
+{"id": 3944, "ticker": "GAM", "scan_date": "2026-07-27", "err": "no historical option contracts"}
+{"id": 4189, "ticker": "OPI", "scan_date": "2026-07-27", "err": "no historical option contracts"}
+{"id": 2713, "ticker": "CRWS", "scan_date": "2026-06-10", "err": "no ATM near option prices"}
+{"id": 2589, "ticker": "LAKE", "scan_date": "2026-06-08", "err": "no ATM near option prices"}
+{"id": 2554, "ticker": "YQ", "scan_date": "2026-06-08", "err": "no ATM near option prices"}
+{"id": 2539, "ticker": "CMCM", "scan_date": "2026-06-04", "err": "no ATM near option prices"}
+{"id": 2526, "ticker": "DXLG", "scan_date": "2026-06-04", "err": "no ATM near option prices"}
+{"id": 2301, "ticker": "DSL", "scan_date": "2026-06-03", "err": "no ATM near option prices"}
+{"id": 2303, "ticker": "DXLG", "scan_date": "2026-06-03", "err": "no ATM near option prices"}
+{"id": 2327, "ticker": "PAYP", "scan_date": "2026-06-03", "err": "no ATM near option prices"}
+{"id": 2007, "ticker": "DSL", "scan_date": "2026-06-02", "err": "no ATM near option prices"}
+{"id": 2009, "ticker": "DXLG", "scan_date": "2026-06-02", "err": "no ATM near option prices"}
+{"id": 2032, "ticker": "PAYP", "scan_date": "2026-06-02", "err": "no ATM near option prices"}
+{"id": 1756, "ticker": "AEG", "scan_date": "2026-05-29", "err": "no ATM near option prices"}
+{"id": 1877, "ticker": "CLGN", "scan_date": "2026-05-29", "err": "no ATM near option prices"}
+{"id": 1826, "ticker": "INCR", "scan_date": "2026-05-29", "err": "no ATM near option prices"}
+{"id": 1764, "ticker": "TRNO", "scan_date": "2026-05-29", "err": "no ATM near option prices"}
+{"id": 1790, "ticker": "XOMA", "scan_date": "2026-05-29", "err": "no ATM near option prices"}
+{"id": 1227, "ticker": "AEG", "scan_date": "2026-05-28", "err": "no ATM near option prices"}
+{"id": 1352, "ticker": "CLGN", "scan_date": "2026-05-28", "err": "no ATM near option prices"}
+{"id": 1174, "ticker": "DXLG", "scan_date": "2026-05-28", "err": "no ATM near option prices"}
+{"id": 1306, "ticker": "INCR", "scan_date": "2026-05-28", "err": "no ATM near option prices"}
+{"id": 1236, "ticker": "TRNO", "scan_date": "2026-05-28", "err": "no ATM near option prices"}
+{"id": 1268, "ticker": "XOMA", "scan_date": "2026-05-28", "err": "no ATM near option prices"}
+{"id": 904, "ticker": "AEG", "scan_date": "2026-05-26", "err": "no ATM near option prices"}
+{"id": 1109, "ticker": "CAL", "scan_date": "2026-05-26", "err": "no ATM near option prices"}
+{"id": 1014, "ticker": "CLGN", "scan_date": "2026-05-26", "err": "no ATM near option prices"}
+{"id": 974, "ticker": "INCR", "scan_date": "2026-05-26", "err": "no ATM near option prices"}
+{"id": 1153, "ticker": "NOAH", "scan_date": "2026-05-26", "err": "no ATM near option prices"}
+{"id": 911, "ticker": "TRNO", "scan_date": "2026-05-26", "err": "no ATM near option prices"}
+{"id": 939, "ticker": "XOMA", "scan_date": "2026-05-26", "err": "no ATM near option prices"}
+{"id": 311, "ticker": "AEG", "scan_date": "2026-05-25", "err": "no ATM near option prices"}
+{"id": 417, "ticker": "CLGN", "scan_date": "2026-05-25", "err": "no ATM near option prices"}
+{"id": 377, "ticker": "INCR", "scan_date": "2026-05-25", "err": "no ATM near option prices"}
+{"id": 319, "ticker": "TRNO", "scan_date": "2026-05-25", "err": "no ATM near option prices"}
+{"id": 344, "ticker": "XOMA", "scan_date": "2026-05-25", "err": "no ATM near option prices"}
+{"id": 17849, "ticker": "AKA", "scan_date": "2026-08-05", "err": "no historical option contracts"}
+{"id": 17862, "ticker": "DIT", "scan_date": "2026-08-05", "err": "no historical option contracts"}
+{"id": 18662, "ticker": "KWY", "scan_date": "2026-08-05", "err": "no ATM near option prices"}
+{"id": 18675, "ticker": "OGEN", "scan_date": "2026-08-05", "err": "no historical option contracts"}
+{"id": 17994, "ticker": "SVC", "scan_date": "2026-08-05", "err": "no ATM near option prices"}
+{"id": 17112, "ticker": "AKA", "scan_date": "2026-08-04", "err": "no historical option contracts"}
+{"id": 16703, "ticker": "CHT", "scan_date": "2026-08-04", "err": "no ATM near option prices"}
+{"id": 16545, "ticker": "DIT", "scan_date": "2026-08-04", "err": "no historical option contracts"}
+{"id": 16601, "ticker": "DXPE", "scan_date": "2026-08-04", "err": "no ATM near option prices"}
+{"id": 16459, "ticker": "FTH", "scan_date": "2026-08-04", "err": "no historical option contracts"}
+{"id": 17237, "ticker": "SVC", "scan_date": "2026-08-04", "err": "no ATM near option prices"}
+{"id": 17241, "ticker": "TGLS", "scan_date": "2026-08-04", "err": "no ATM near option prices"}
+{"id": 15779, "ticker": "ANY", "scan_date": "2026-08-03", "err": "no ATM near option prices"}
+{"id": 15747, "ticker": "DIT", "scan_date": "2026-08-03", "err": "no historical option contracts"}
+{"id": 15831, "ticker": "MSC", "scan_date": "2026-08-03", "err": "no historical option contracts"}
+{"id": 15862, "ticker": "TALK", "scan_date": "2026-08-03", "err": "no ATM near option prices"}
