@@ -1,0 +1,24 @@
+[Unit]
+Description=Earnings Edge Trading Bot (Telegram)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=david
+Group=david
+WorkingDirectory=/home/david/EarningsEdgeDetection/cli_scanner
+ExecStart=/home/david/EarningsEdgeDetection/cli_scanner/.venv/bin/python3.12 bot.py
+Restart=on-failure
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-/home/david/EarningsEdgeDetection/cli_scanner/.env
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/david/EarningsEdgeDetection/cli_scanner/data /home/david/EarningsEdgeDetection/cli_scanner/logs
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

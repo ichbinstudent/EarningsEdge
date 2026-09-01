@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Earnings Edge — Desk</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --fg: #e6edf3; --dim: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --red: #f85149; --amber: #d29922;
+    --btn: #21262d;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 14px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 12px;
+  }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+  h1 { font-size: 18px; font-weight: 650; }
+  #conn, #auth { font-size: 12px; color: var(--dim); }
+  #conn.live, #auth.ok { color: var(--green); }
+  #conn.dead, #auth.bad { color: var(--red); }
+  #banner {
+    display: none; margin-bottom: 12px; padding: 8px 10px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  }
+  #banner.show { display: block; }
+  #grid {
+    display: grid; gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px; min-height: 72px;
+  }
+  .panel h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--dim); margin-bottom: 10px;
+  }
+  .panel h2 .suffix { color: var(--accent); text-transform: none; letter-spacing: 0; margin-left: 8px; }
+  .stats { display: flex; flex-wrap: wrap; gap: 8px; }
+  .stat {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 12px; min-width: 96px;
+  }
+  .stat .k { font-size: 11px; color: var(--dim); }
+  .stat .v { font-size: 16px; font-weight: 600; margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 4px 6px; }
+  th { color: var(--dim); font-weight: 500; border-bottom: 1px solid var(--border); }
+  td { border-bottom: 1px solid #21262d; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  .empty { color: var(--dim); font-style: italic; padding: 6px 0; }
+  .tbl-wrap { overflow-x: auto; }
+  .num { text-align: right; }
+  .row-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+  button {
+    background: var(--btn); color: var(--fg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 8px; font-size: 12px; cursor: pointer;
+  }
+  button:active { border-color: var(--accent); }
+  button.danger { color: var(--red); }
+  button.good { color: var(--green); }
+  .killbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .sym { font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚡ Earnings Edge</h1>
+  <span id="conn">connecting…</span>
+  <span id="auth">auth…</span>
+</header>
+<div id="banner"></div>
+<div id="grid"></div>
+
+<script>
+function telegramApp() {
+  return (window.Telegram && window.Telegram.WebApp) || null;
+}
+
+const tg = telegramApp();
+if (tg) {
+  tg.ready();
+  tg.expand();
+  const tp = tg.themeParams || {};
+  if (tp.bg_color) document.documentElement.style.setProperty('--bg', tp.bg_color);
+  if (tp.text_color) document.documentElement.style.setProperty('--fg', tp.text_color);
+  if (tp.secondary_bg_color) document.documentElement.style.setProperty('--panel', tp.secondary_bg_color);
+  if (tp.hint_color) document.documentElement.style.setProperty('--dim', tp.hint_color);
+  if (tp.button_color) document.documentElement.style.setProperty('--accent', tp.button_color);
+}
+
+const grid = document.getElementById('grid');
+const connEl = document.getElementById('conn');
+const authEl = document.getElementById('auth');
+const bannerEl = document.getElementById('banner');
+const sections = new Map();
+let backoff = 1000;
+let busy = false;
+
+function initDataFromLaunch() {
+  try {
+    const hash = (location.hash || '').replace(/^#/, '');
+    const fromHash = new URLSearchParams(hash).get('tgWebAppData');
+    if (fromHash) return fromHash;
+    const fromQuery = new URLSearchParams(location.search).get('tgWebAppData');
+    if (fromQuery) return fromQuery;
+    for (const key of Object.keys(sessionStorage || {})) {
+      if (!/telegram|launch|init/i.test(key)) continue;
+      const raw = sessionStorage.getItem(key) || '';
+      try {
+        const obj = JSON.parse(raw);
+        const d = obj.tgWebAppData || obj.initData || (obj.launchParams && obj.launchParams.tgWebAppData);
+        if (d) return d;
+      } catch {
+        const m = /tgWebAppData=([^&]+)/.exec(raw);
+        if (m) return decodeURIComponent(m[1]);
+      }
+    }
+  } catch (e) {}
+  return '';
+}
+
+function initData() {
+  const app = telegramApp();
+  return (app && app.initData) || initDataFromLaunch() || '';
+}
+
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+async function waitForInitData() {
+  for (const ms of [0, 100, 250, 500, 1000, 2000]) {
+    if (ms) await sleep(ms);
+    if (initData()) return initData();
+  }
+  return '';
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g,
+    c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function headers(extra) {
+  const h = Object.assign({'Accept': 'application/json'}, extra || {});
+  const id = initData();
+  if (id) {
+    h['X-Telegram-Init-Data'] = id;
+    h['Authorization'] = 'tma ' + id;
+  }
+  return h;
+}
+
+function withInitQuery(path) {
+  const id = initData();
+  if (!id) return path;
+  const sep = path.includes('?') ? '&' : '?';
+  return path + sep + 'initData=' + encodeURIComponent(id);
+}
+
+function showBanner(text) {
+  bannerEl.textContent = text || '';
+  bannerEl.classList.toggle('show', !!text);
+}
+
+function ensureSection(id, title) {
+  let el = sections.get(id);
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'panel';
+    el.id = 'p-' + id;
+    el.innerHTML = `<h2>${esc(title)}<span class="suffix"></span></h2><div class="body"></div>`;
+    if (id === 'desk') grid.prepend(el);
+    else grid.appendChild(el);
+    sections.set(id, el);
+  }
+  return el;
+}
+
+function renderStats(body, stats) {
+  body.innerHTML = '<div class="stats">' + Object.entries(stats).map(([k, v]) =>
+    `<div class="stat"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`
+  ).join('') + '</div>';
+}
+
+function renderTable(body, payload) {
+  if (!payload.rows || !payload.rows.length) {
+    body.innerHTML = '<div class="empty">no rows</div>';
+    return;
+  }
+  const cols = payload.columns;
+  const head = cols.map(c => `<th>${esc(c)}</th>`).join('');
+  const rows = payload.rows.map(r =>
+    '<tr>' + cols.map(c => `<td>${esc(r[c] ?? '')}</td>`).join('') + '</tr>'
+  ).join('');
+  body.innerHTML = `<div class="tbl-wrap"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function compactOcc(sym) {
+  const m = /^([A-Z]+)\s*(\d{2})(\d{2})(\d{2})([CP])(\d{8})$/.exec(String(sym || ''));
+  if (!m) return '';
+  const strike = (parseInt(m[6], 10) / 1000).toString().replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1');
+  return `${m[3]}/${m[4]} ${m[5]} ${strike}`;
+}
+
+function actButtons(ops) {
+  return '<div class="row-actions">' + ops.map(o =>
+    `<button data-op="${esc(o.op)}" data-payload="${esc(JSON.stringify(o.payload || {}))}" class="${o.cls || ''}">${esc(o.label)}</button>`
+  ).join('') + '</div>';
+}
+
+function renderDesk(data) {
+  const el = ensureSection('desk', 'Desk');
+  const ks = data.kill || {};
+  const book = data.book || {};
+  const inbox = (data.inbox || []).filter(i => !i.expired);
+  let html = '<div class="killbar">';
+  html += ks.halted
+    ? `<span>🛑 HALTED — ${esc(ks.reason || '')}</span>${actButtons([{op:'resume', label:'Resume', cls:'good'}])}`
+    : `<span>🟢 armed</span>${actButtons([{op:'halt', label:'Halt', cls:'danger'}])}`;
+  if (data.broker_error) html += `<span class="empty">broker: ${esc(data.broker_error)}</span>`;
+  html += '</div>';
+
+  html += '<h2>Book</h2>';
+  const rows = [];
+  (book.managed || []).forEach(it => {
+    rows.push({bucket:'managed', it, ops: [
+      {op:'close', label:'Close', payload:{symbol: it.symbol}, cls:'danger'},
+    ]});
+  });
+  (book.orphan || []).forEach(it => {
+    rows.push({bucket:'orphan', it, ops: [
+      {op:'adopt', label:'Adopt', payload:{symbol: it.symbol}, cls:'good'},
+      {op:'ignore', label:'Ignore', payload:{symbol: it.symbol}},
+      {op:'close', label:'Close', payload:{symbol: it.symbol}, cls:'danger'},
+    ]});
+  });
+  (book.missing || []).forEach(it => {
+    const ops = it.group_id
+      ? [{op:'mark_closed', label:'Mark closed', payload:{group_id: it.group_id}}]
+      : [];
+    rows.push({bucket:'missing', it, ops});
+  });
+  if (!rows.length) {
+    html += '<div class="empty">no positions</div>';
+  } else {
+    html += '<div class="tbl-wrap"><table><thead><tr><th></th><th>name</th><th>qty</th><th></th></tr></thead><tbody>';
+    rows.forEach(r => {
+      const occ = compactOcc(r.it.symbol);
+      const name = occ
+        ? `${esc(r.it.ticker)}<div class="sym" title="${esc(r.it.symbol)}">${esc(occ)}</div>`
+        : `<span title="${esc(r.it.symbol)}">${esc(r.it.ticker)}</span>`;
+      html += `<tr><td>${esc(r.bucket)}</td><td>${name}</td><td>${esc(r.it.qty)}</td><td>${actButtons(r.ops)}</td></tr>`;
+    });
+    html += '</tbody></table></div>';
+  }
+
+  html += '<h2>Inbox</h2>';
+  const live = inbox.filter(i => i.actions && i.actions.length);
+  if (!live.length) {
+    html += '<div class="empty">nothing pending</div>';
+  } else {
+    html += '<div class="tbl-wrap"><table><thead><tr><th>kind</th><th>ticker</th><th></th></tr></thead><tbody>';
+    live.forEach(i => {
+      const ops = [];
+      if (i.kind === 'entry') {
+        ops.push({op:'exec', label:'Execute', payload:{id: Number(i.item_id)}, cls:'good'});
+        ops.push({op:'skip', label:'Skip', payload:{id: Number(i.item_id)}});
+      } else if (i.kind === 'exit') {
+        ops.push({op:'exit_close', label:'Close', payload:{id: Number(i.item_id)}, cls:'danger'});
+        ops.push({op:'exit_snooze', label:'Snooze', payload:{id: Number(i.item_id)}});
+      } else if (i.kind === 'orphan') {
+        ops.push({op:'adopt', label:'Adopt', payload:{symbol: i.item_id}, cls:'good'});
+        ops.push({op:'ignore', label:'Ignore', payload:{symbol: i.item_id}});
+      } else if (i.kind === 'assignment') {
+        ops.push({op:'adopt', label:'Adopt', payload:{symbol: i.item_id}, cls:'good'});
+        ops.push({op:'close', label:'Close', payload:{symbol: i.item_id}, cls:'danger'});
+      }
+      html += `<tr><td>${esc(i.kind)}</td><td>${esc(i.ticker)}</td><td>${actButtons(ops)}</td></tr>`;
+    });
+    html += '</tbody></table></div>';
+  }
+  el.querySelector('.body').innerHTML = html;
+}
+
+function render(msg) {
+  const el = ensureSection(msg.id, msg.title);
+  el.querySelector('h2 .suffix').textContent = msg.payload.title_suffix || '';
+  const body = el.querySelector('.body');
+  if (msg.payload.empty) {
+    body.innerHTML = `<div class="empty">${esc(msg.payload.empty)}</div>`;
+  } else if (msg.kind === 'stats') {
+    renderStats(body, msg.payload.stats || {});
+  } else if (msg.kind === 'table') {
+    renderTable(body, msg.payload);
+  } else {
+    body.textContent = msg.payload.text || '';
+  }
+}
+
+async function postAction(op, payload) {
+  if (busy) return;
+  if (op === 'halt' || op === 'close') {
+    const ok = tg && tg.showConfirm
+      ? await new Promise(res => tg.showConfirm(op === 'halt' ? 'Trip the kill switch?' : 'Close at the broker?', res))
+      : window.confirm(op === 'halt' ? 'Trip the kill switch?' : 'Close at the broker?');
+    if (!ok) return;
+  }
+  busy = true;
+  try {
+    const r = await fetch(withInitQuery('/api/action'), {
+      method: 'POST',
+      headers: headers({'Content-Type': 'application/json'}),
+      body: JSON.stringify(Object.assign({op, initData: initData()}, payload || {})),
+    });
+    const data = await r.json();
+    showBanner(data.banner || data.error || (r.ok ? 'ok' : r.statusText));
+    await loadDesk();
+  } catch (e) {
+    showBanner(String(e));
+  } finally {
+    busy = false;
+  }
+}
+
+document.addEventListener('click', (ev) => {
+  const btn = ev.target.closest('button[data-op]');
+  if (!btn) return;
+  let payload = {};
+  try { payload = JSON.parse(btn.getAttribute('data-payload') || '{}'); } catch {}
+  postAction(btn.getAttribute('data-op'), payload);
+});
+
+async function loadDesk() {
+  if (!initData()) {
+    const hasTg = !!telegramApp();
+    authEl.textContent = hasTg ? 'Telegram open, no initData' : 'not inside Telegram';
+    authEl.className = 'bad';
+    return;
+  }
+  try {
+    const r = await fetch(withInitQuery('/api/desk'), {headers: headers()});
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      const msg = err.error || (r.status === 503 ? 'desk busy' : ('desk ' + r.status));
+      authEl.textContent = (r.status === 403 ? 'auth ' : '') + msg;
+      authEl.className = 'bad';
+      return;
+    }
+    const data = await r.json();
+    authEl.textContent = 'operator ' + data.user_id;
+    authEl.className = 'ok';
+    renderDesk(data);
+  } catch (e) {
+    authEl.textContent = String(e);
+    authEl.className = 'bad';
+  }
+}
+
+function applyPanels(obj) {
+  Object.values(obj || {}).forEach(state => {
+    if (state && state.id) render({type: 'panel', ...state});
+  });
+}
+
+async function pollState() {
+  if (!initData()) return;
+  try {
+    const r = await fetch(withInitQuery('/api/state'), {headers: headers()});
+    if (r.ok) applyPanels(await r.json());
+  } catch {}
+}
+
+let wsOk = false;
+function connect() {
+  if (!initData()) {
+    connEl.textContent = '● open from Telegram';
+    connEl.className = 'dead';
+    showBanner('Telegram did not launch this as a Mini App, so there is no login token. Close this view, open the bot, and tap the in-chat Open desk button (not a pasted https link).');
+    return;
+  }
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+  ws.onopen = () => {
+    backoff = 1000;
+    try { ws.send(JSON.stringify({initData: initData()})); } catch {}
+  };
+  ws.onmessage = (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+    wsOk = true;
+    connEl.textContent = '● live';
+    connEl.className = 'live';
+    if (msg.type === 'hello') {
+      msg.panels.forEach(p => ensureSection(p.id, p.title));
+    } else if (msg.type === 'panel') {
+      render(msg);
+    }
+  };
+  ws.onclose = () => {
+    if (!wsOk) {
+      connEl.textContent = '● polling';
+      connEl.className = 'live';
+      pollState();
+      return;
+    }
+    connEl.textContent = `● disconnected — retrying in ${backoff / 1000}s`;
+    connEl.className = 'dead';
+    setTimeout(connect, backoff);
+    backoff = Math.min(backoff * 2, 30000);
+  };
+  ws.onerror = () => ws.close();
+}
+
+(async function boot() {
+  await waitForInitData();
+  connect();
+  await loadDesk();
+  setInterval(loadDesk, 8000);
+  setInterval(() => { if (!wsOk) pollState(); }, 5000);
+})();
+</script>
+</body>
+</html>
