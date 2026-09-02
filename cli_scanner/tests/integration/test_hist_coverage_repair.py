@@ -108,7 +108,7 @@ def test_ensure_hist_moves_writes_backfill_rows(conn, mocked_providers):
     with computed outcome fields, tagged timing='Backfill'."""
     from earnings_edge.fwd_factor_ladder import ensure_hist_moves
 
-    total = ensure_hist_moves(conn, "REPR", today=TODAY)
+    total = ensure_hist_moves("REPR", today=TODAY)
     assert total == 3
 
     rows = conn.execute(
@@ -136,18 +136,18 @@ def test_hist_gate_flips_after_repair(conn, mocked_providers):
 
     rms, n = hist_rms_move(ticker="GATECO")
     assert rms is None and n == 1
-    before = hist_move_coverage(conn, universe=["GATECO"])
+    before = hist_move_coverage(universe=["GATECO"])
     assert before["covered"] == 0
-    assert "GATECO" in repair_candidates(conn)
+    assert "GATECO" in repair_candidates()
 
-    total = ensure_hist_moves(conn, "GATECO", today=TODAY)
+    total = ensure_hist_moves("GATECO", today=TODAY)
     assert total >= 3
 
     rms, n = hist_rms_move(ticker="GATECO")
     assert rms is not None and rms > 0 and n >= 3
-    after = hist_move_coverage(conn, universe=["GATECO"])
+    after = hist_move_coverage(universe=["GATECO"])
     assert after["covered"] == 1 and after["pct"] == 100.0
-    assert "GATECO" not in repair_candidates(conn)
+    assert "GATECO" not in repair_candidates()
 
 
 def test_ancient_event_dates_skipped_without_provider_call(conn, monkeypatch):
@@ -170,7 +170,7 @@ def test_ancient_event_dates_skipped_without_provider_call(conn, monkeypatch):
     monkeypatch.setattr(ffl, "_polygon_bars_client", lambda: None)
     ffl._hist_backfill_attempted.clear()
 
-    total = ffl.ensure_hist_moves(conn, "OLDCO", today=TODAY)
+    total = ffl.ensure_hist_moves("OLDCO", today=TODAY)
     assert total == 3  # only the three in-plan events were backfilled
     cutoff = TODAY - timedelta(days=ffl.HIST_BACKFILL_MAX_AGE_DAYS)
     assert requested_windows, "expected bars requests for in-plan events"

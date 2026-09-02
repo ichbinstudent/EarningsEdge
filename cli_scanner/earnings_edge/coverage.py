@@ -34,7 +34,6 @@ _USABLE_OUTCOME = (
 
 
 def hist_move_coverage(
-    *args,
     universe: Optional[list[str]] = None,
     min_events: int = DEFAULT_MIN_EVENTS,
 ) -> dict:
@@ -42,22 +41,13 @@ def hist_move_coverage(
 
     Universe defaults to every distinct ticker in snapshots. Returns counts
     plus a small distribution so repair drives can report before/after.
-    A leading DB-API connection is still accepted (ignored when the engine
-    is already configured to the same file).
     """
-    from earnings_edge.db.repositories import _split_conn
-
-    conn, rest = _split_conn(args)
-    if universe is None and rest:
-        universe = rest[0]
     if universe is None:
-        universe = snapshots_distinct_tickers(*((conn,) if conn is not None else ()))
+        universe = snapshots_distinct_tickers()
     if not universe:
         return {"universe": 0, "covered": 0, "pct": 0.0, "distribution": {}}
 
-    counts = snapshots_usable_counts_by_ticker(
-        *((conn,) if conn is not None else ()), universe=list(universe)
-    )
+    counts = snapshots_usable_counts_by_ticker(universe=list(universe))
     distribution: dict[int, int] = {}
     covered = 0
     for t in universe:
@@ -74,7 +64,6 @@ def hist_move_coverage(
 
 
 def repair_candidates(
-    *args,
     min_events: int = DEFAULT_MIN_EVENTS,
     liquid_only: bool = False,
 ) -> list[str]:
@@ -85,10 +74,7 @@ def repair_candidates(
     ``liquid_only`` the OTC/zero-option tail is skipped entirely — those
     rows never feed option-feature training and are never FF candidates.
     """
-    from earnings_edge.db.repositories import _split_conn
-
-    conn, _rest = _split_conn(args)
-    rows = snapshots_hist_repair_stats(*((conn,) if conn is not None else ()))
+    rows = snapshots_hist_repair_stats()
     cands = [
         (r["ticker"], int(r["usable"] or 0), int(r["liquid"] or 0))
         for r in rows if int(r["usable"] or 0) < min_events

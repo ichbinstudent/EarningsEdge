@@ -95,28 +95,10 @@ class CalendarCandidate:
     strategy_override: Optional[str] = None
 
 
-def hist_rms_move(*args, ticker: str | None = None) -> tuple[Optional[float], int]:
-    """RMS |actual_move_pct| over the ticker's realized events (as a fraction).
-
-    A leading DB-API connection is still accepted for in-memory tests.
-    """
-    from earnings_edge.db.repositories import _split_conn, snapshots_hist_abs_moves
-
-    conn, rest = _split_conn(args)
-    if ticker is None:
-        ticker = rest[0]
-    if conn is not None:
-        rows = conn.execute(
-            """
-            SELECT ABS(actual_move_pct) FROM snapshots
-            WHERE ticker=? AND actual_move_pct IS NOT NULL
-              AND outcome_fetched_at IS NOT NULL AND outcome_fetched_at != 'unavailable'
-            """,
-            (ticker,),
-        ).fetchall()
-        vals = [float(r[0]) / 100.0 for r in rows if r[0] is not None]
-    else:
-        vals = [v / 100.0 for v in snapshots_hist_abs_moves(ticker)]
+def hist_rms_move(ticker: str) -> tuple[Optional[float], int]:
+    """RMS |actual_move_pct| over the ticker's realized events (as a fraction)."""
+    from earnings_edge.db.repositories import snapshots_hist_abs_moves
+    vals = [v / 100.0 for v in snapshots_hist_abs_moves(ticker)]
     if len(vals) < MIN_HIST_EVENTS:
         return None, len(vals)
     return math.sqrt(sum(v * v for v in vals) / len(vals)), len(vals)
@@ -174,8 +156,7 @@ _POLYGON_SINGLETON = None
 
 
 def ensure_hist_moves(
-    *args,
-    ticker: str | None = None,
+    ticker: str,
     today: Optional[date] = None,
     min_events: int = MIN_HIST_EVENTS,
 ) -> int:
@@ -183,22 +164,16 @@ def ensure_hist_moves(
 
     Returns the number of usable events after the attempt. Never raises —
     any failure degrades to the pre-existing skip behaviour.
-    A leading DB-API connection is still accepted for in-memory tests.
     """
     from .db.repositories import (
-        _split_conn,
         snapshots_apply_hist_backfill_batch,
         snapshots_outcome_row,
         snapshots_usable_outcome_count,
     )
     from .services.outcome_service import OutcomeService
-
-    conn, rest = _split_conn(args)
-    if ticker is None:
-        ticker = rest[0]
     today = today or datetime.now(timezone.utc).date()
     have = snapshots_usable_outcome_count(
-        *((conn,) if conn is not None else ()), ticker=ticker
+        ticker=ticker
     )
     if have >= min_events or ticker in _hist_backfill_attempted:
         return have
@@ -277,7 +252,6 @@ def ensure_hist_moves(
         if not outcome:
             continue
         existing = snapshots_outcome_row(
-            *((conn,) if conn is not None else ()),
             ticker=ticker,
             earnings_date=ed.isoformat(),
         )
@@ -300,7 +274,7 @@ def ensure_hist_moves(
             logger.info("hist backfill %s %s: write failed (%s)", ticker, ed, exc)
     try:
         snapshots_apply_hist_backfill_batch(
-            *((conn,) if conn is not None else ()), writes=writes
+            writes=writes
         )
     except Exception:
         pass
@@ -366,7 +340,6 @@ def build_candidate(
     earnings_date: date,
     spec: LadderSpec = LadderSpec(),
     today: Optional[date] = None,
-    conn=None,
 ) -> CalendarCandidate:
     """Construct (or reject) one ladder candidate from live Alpaca quotes."""
     today = today or datetime.now(timezone.utc).date()
@@ -374,13 +347,12 @@ def build_candidate(
     if not spot or spot < MIN_PRICE:
         return _reject(ticker, earnings_date, spot or 0.0, f"price {spot} < {MIN_PRICE}")
 
-    conn_args = (conn,) if conn is not None else ()
-    rms, n_hist = hist_rms_move(*conn_args, ticker=ticker)
+    rms, n_hist = hist_rms_move(ticker=ticker)
     if rms is None:
         # Scanner never covered this ticker — backfill realized moves from
         # Yahoo earnings dates + LSE daily bars, then re-check the gate.
-        ensure_hist_moves(*conn_args, ticker=ticker, today=today)
-        rms, n_hist = hist_rms_move(*conn_args, ticker=ticker)
+        ensure_hist_moves(ticker=ticker, today=today)
+        rms, n_hist = hist_rms_move(ticker=ticker)
     if rms is None:
         return _reject(ticker, earnings_date, spot, f"hist events {n_hist} < {MIN_HIST_EVENTS}")
 

@@ -1,34 +1,24 @@
 """Tests for historical-move backfill with Polygon fallback."""
 
-import sqlite3
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 import pytest
 import pandas as pd
+from sqlalchemy import text
+
+from earnings_edge.db import engine as db_engine
 
 
 def create_test_db():
-    """Create in-memory SQLite with minimal snapshots table."""
-    conn = sqlite3.connect(":memory:")
-    conn.row_factory = sqlite3.Row
-    conn.execute("""
-        CREATE TABLE snapshots (
-            id INTEGER PRIMARY KEY,
-            ticker TEXT,
-            earnings_date TEXT,
-            scan_date TEXT,
-            timing TEXT,
-            has_options INTEGER,
-            pre_earnings_close REAL,
-            post_earnings_close REAL,
-            actual_move_pct REAL,
-            actual_move_direction TEXT,
-            max_intraday_range_pct REAL,
-            outcome_fetched_at TEXT,
-            outcome_attempt_count INTEGER
-        )
-    """)
-    return conn
+    """Re-point the engine at a fresh temp DB (per-test isolation, like the
+    old in-memory :memory: database). Returns None — verifications go
+    through db_engine.session_scope()."""
+    import tempfile
+    from pathlib import Path
+
+    tmp = Path(tempfile.mkdtemp(prefix="hist_backfill_test_"))
+    db_engine.configure(tmp / "hist_backfill.db")
+    return None
 
 
 def make_bars(ticker, ed, close_pre=100.0, close_post=105.0):
@@ -78,7 +68,7 @@ def test_lse_has_data_polygon_not_called():
     with patch("earnings_edge.fwd_factor_ladder._lse_bars_client", return_value=mock_lse):
         with patch("earnings_edge.fwd_factor_ladder._polygon_bars_client", return_value=mock_polygon):
             with patch("yfinance.Ticker", return_value=mock_ticker):
-                result = ensure_hist_moves(conn, ticker, today=ed)
+                result = ensure_hist_moves(ticker, today=ed)
     
     # Verify Polygon was never called
     mock_polygon.get_daily_bars.assert_not_called()
@@ -87,9 +77,11 @@ def test_lse_has_data_polygon_not_called():
     mock_lse.daily_bars.assert_called_once()
     
     # Verify row was inserted
-    rows = conn.execute("SELECT * FROM snapshots WHERE ticker=?", (ticker,)).fetchall()
+    with db_engine.session_scope() as s:
+        rows = [dict(r) for r in s.execute(
+            text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker}).mappings().all()]
     assert len(rows) == 1
-    assert rows[0][8] == 5.0  # actual_move_pct
+    assert rows[0]["actual_move_pct"] == 5.0  # actual_move_pct
     assert result == 1
 
 
@@ -117,7 +109,7 @@ def test_lse_returns_empty_polygon_used():
     with patch("earnings_edge.fwd_factor_ladder._lse_bars_client", return_value=mock_lse):
         with patch("earnings_edge.fwd_factor_ladder._polygon_bars_client", return_value=mock_polygon):
             with patch("yfinance.Ticker", return_value=mock_ticker):
-                result = ensure_hist_moves(conn, ticker, today=ed)
+                result = ensure_hist_moves(ticker, today=ed)
     
     # Verify both were called (LSE first, then Polygon)
     mock_lse.daily_bars.assert_called_once()
@@ -130,10 +122,12 @@ def test_lse_returns_empty_polygon_used():
     assert isinstance(call_args[2], str)  # ISO date string
     
     # Verify row was inserted with Backfill timing
-    rows = conn.execute("SELECT * FROM snapshots WHERE ticker=?", (ticker,)).fetchall()
+    with db_engine.session_scope() as s:
+        rows = [dict(r) for r in s.execute(
+            text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker}).mappings().all()]
     assert len(rows) == 1
-    assert rows[0][4] == "Backfill"  # timing
-    assert rows[0][8] == 5.0  # actual_move_pct
+    assert rows[0]["timing"] == "Backfill"  # timing
+    assert rows[0]["actual_move_pct"] == 5.0  # actual_move_pct
     assert result == 1
 
 
@@ -146,11 +140,10 @@ def test_both_sources_fail_returns_existing_count():
     ed = date(2026, 7, 1)
     
     # Pre-existing row
-    conn.execute("""
-        INSERT INTO snapshots (ticker, earnings_date, actual_move_pct, outcome_fetched_at)
-        VALUES (?, ?, ?, ?)
-    """, (ticker, "2026-06-01", 3.5, "2026-06-02"))
-    conn.commit()
+    with db_engine.session_scope() as s:
+        s.execute(text("INSERT INTO snapshots (ticker, earnings_date, scan_date, timing, actual_move_pct, outcome_fetched_at) "
+                       "VALUES (:t, :ed, :sc, 'Backfill', :m, :f)"),
+                  {"t": ticker, "ed": "2026-06-01", "sc": "2026-06-02", "m": 3.5, "f": "2026-06-02"})
     
     # Mock yfinance to return one earnings date
     mock_df = pd.DataFrame(index=pd.to_datetime([ed - timedelta(days=10)]))
@@ -168,13 +161,15 @@ def test_both_sources_fail_returns_existing_count():
     with patch("earnings_edge.fwd_factor_ladder._lse_bars_client", return_value=mock_lse):
         with patch("earnings_edge.fwd_factor_ladder._polygon_bars_client", return_value=mock_polygon):
             with patch("yfinance.Ticker", return_value=mock_ticker):
-                result = ensure_hist_moves(conn, ticker, today=ed)
+                result = ensure_hist_moves(ticker, today=ed)
     
     # Should return the pre-existing count
     assert result == 1
     
     # No new rows should be inserted
-    rows = conn.execute("SELECT * FROM snapshots WHERE ticker=?", (ticker,)).fetchall()
+    with db_engine.session_scope() as s:
+        rows = [dict(r) for r in s.execute(
+            text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker}).mappings().all()]
     assert len(rows) == 1
 
 
@@ -187,11 +182,10 @@ def test_early_exit_when_min_events_satisfied():
     ed = date(2026, 7, 1)
     
     # Pre-existing row
-    conn.execute("""
-        INSERT INTO snapshots (ticker, earnings_date, actual_move_pct, outcome_fetched_at)
-        VALUES (?, ?, ?, ?)
-    """, (ticker, "2026-03-01", 2.5, "2026-03-02"))
-    conn.commit()
+    with db_engine.session_scope() as s:
+        s.execute(text("INSERT INTO snapshots (ticker, earnings_date, scan_date, timing, actual_move_pct, outcome_fetched_at) "
+                       "VALUES (:t, :ed, :sc, 'Backfill', :m, :f)"),
+                  {"t": ticker, "ed": "2026-03-01", "sc": "2026-03-02", "m": 2.5, "f": "2026-03-02"})
     
     # Mock yfinance to return 4 earnings dates
     dates = [ed - timedelta(days=i*90) for i in range(1, 5)]
@@ -212,14 +206,16 @@ def test_early_exit_when_min_events_satisfied():
         with patch("earnings_edge.fwd_factor_ladder._polygon_bars_client", return_value=None):
             with patch("yfinance.Ticker", return_value=mock_ticker):
                 # min_events=3, already have 1, so should stop after 2 more
-                result = ensure_hist_moves(conn, ticker, today=ed, min_events=3)
+                result = ensure_hist_moves(ticker, today=ed, min_events=3)
     
     # Should have fetched only 2 dates (early exit after reaching 3 total)
     assert mock_lse.daily_bars.call_count == 2
     assert result == 3
     
     # Should have 3 total rows (1 pre-existing + 2 new)
-    rows = conn.execute("SELECT * FROM snapshots WHERE ticker=?", (ticker,)).fetchall()
+    with db_engine.session_scope() as s:
+        rows = [dict(r) for r in s.execute(
+            text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker}).mappings().all()]
     assert len(rows) == 3
 
 
@@ -233,11 +229,10 @@ def test_existing_good_outcome_not_overwritten():
     earnings_date = (ed - timedelta(days=10)).isoformat()
     
     # Pre-existing row with good outcome
-    conn.execute("""
-        INSERT INTO snapshots (ticker, earnings_date, actual_move_pct, outcome_fetched_at, pre_earnings_close)
-        VALUES (?, ?, ?, ?, ?)
-    """, (ticker, earnings_date, 4.5, "2026-06-15", 150.0))
-    conn.commit()
+    with db_engine.session_scope() as s:
+        s.execute(text("INSERT INTO snapshots (ticker, earnings_date, scan_date, timing, actual_move_pct, outcome_fetched_at, pre_earnings_close) "
+                       "VALUES (:t, :ed, :sc, 'Backfill', :m, :f, :p)"),
+                  {"t": ticker, "ed": earnings_date, "sc": "2026-06-15", "m": 4.5, "f": "2026-06-15", "p": 150.0})
     
     # Mock yfinance to return same earnings date
     mock_df = pd.DataFrame(index=pd.to_datetime([ed - timedelta(days=10)]))
@@ -251,16 +246,18 @@ def test_existing_good_outcome_not_overwritten():
     with patch("earnings_edge.fwd_factor_ladder._lse_bars_client", return_value=mock_lse):
         with patch("earnings_edge.fwd_factor_ladder._polygon_bars_client", return_value=None):
             with patch("yfinance.Ticker", return_value=mock_ticker):
-                result = ensure_hist_moves(conn, ticker, today=ed)
+                result = ensure_hist_moves(ticker, today=ed)
     
     # Should return 1 (the pre-existing row)
     assert result == 1
     
     # Row should not be modified
-    rows = conn.execute("SELECT * FROM snapshots WHERE ticker=?", (ticker,)).fetchall()
+    with db_engine.session_scope() as s:
+        rows = [dict(r) for r in s.execute(
+            text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker}).mappings().all()]
     assert len(rows) == 1
-    assert rows[0][8] == 4.5  # actual_move_pct unchanged
-    assert rows[0][6] == 150.0  # pre_earnings_close unchanged
+    assert rows[0]["actual_move_pct"] == 4.5  # actual_move_pct unchanged
+    assert rows[0]["pre_earnings_close"] == 150.0  # pre_earnings_close unchanged
 
 
 def test_lse_raises_exception_polygon_fallback():
@@ -287,16 +284,18 @@ def test_lse_raises_exception_polygon_fallback():
     with patch("earnings_edge.fwd_factor_ladder._lse_bars_client", return_value=mock_lse):
         with patch("earnings_edge.fwd_factor_ladder._polygon_bars_client", return_value=mock_polygon):
             with patch("yfinance.Ticker", return_value=mock_ticker):
-                result = ensure_hist_moves(conn, ticker, today=ed)
+                result = ensure_hist_moves(ticker, today=ed)
     
     # Verify both were called
     mock_lse.daily_bars.assert_called_once()
     mock_polygon.get_daily_bars.assert_called_once()
     
     # Verify row was inserted
-    rows = conn.execute("SELECT * FROM snapshots WHERE ticker=?", (ticker,)).fetchall()
+    with db_engine.session_scope() as s:
+        rows = [dict(r) for r in s.execute(
+            text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker}).mappings().all()]
     assert len(rows) == 1
-    assert rows[0][8] == 5.0  # actual_move_pct
+    assert rows[0]["actual_move_pct"] == 5.0  # actual_move_pct
     assert result == 1
 
 
@@ -309,22 +308,23 @@ def test_no_api_keys_returns_existing():
     ed = date(2026, 7, 1)
     
     # Pre-existing row
-    conn.execute("""
-        INSERT INTO snapshots (ticker, earnings_date, actual_move_pct, outcome_fetched_at)
-        VALUES (?, ?, ?, ?)
-    """, (ticker, "2026-06-01", 3.5, "2026-06-02"))
-    conn.commit()
+    with db_engine.session_scope() as s:
+        s.execute(text("INSERT INTO snapshots (ticker, earnings_date, scan_date, timing, actual_move_pct, outcome_fetched_at) "
+                       "VALUES (:t, :ed, :sc, 'Backfill', :m, :f)"),
+                  {"t": ticker, "ed": "2026-06-01", "sc": "2026-06-02", "m": 3.5, "f": "2026-06-02"})
     
     # Mock clients to return None (no API keys)
     with patch("earnings_edge.fwd_factor_ladder._lse_bars_client", return_value=None):
         with patch("earnings_edge.fwd_factor_ladder._polygon_bars_client", return_value=None):
-            result = ensure_hist_moves(conn, ticker, today=ed)
+            result = ensure_hist_moves(ticker, today=ed)
     
     # Should return the pre-existing count
     assert result == 1
     
     # No new rows should be inserted
-    rows = conn.execute("SELECT * FROM snapshots WHERE ticker=?", (ticker,)).fetchall()
+    with db_engine.session_scope() as s:
+        rows = [dict(r) for r in s.execute(
+            text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker}).mappings().all()]
     assert len(rows) == 1
 
 
@@ -338,11 +338,11 @@ def test_update_existing_row_with_null_outcome():
     earnings_date = (ed - timedelta(days=10)).isoformat()
     
     # Pre-existing row with NULL outcome
-    conn.execute("""
-        INSERT INTO snapshots (ticker, earnings_date, actual_move_pct, outcome_fetched_at)
-        VALUES (?, ?, NULL, NULL)
-    """, (ticker, earnings_date))
-    conn.commit()
+    with db_engine.session_scope() as s:
+        s.execute(text(
+            "INSERT INTO snapshots (ticker, earnings_date, scan_date, timing, actual_move_pct, outcome_fetched_at) "
+            "VALUES (:t, :ed, :sc, 'Backfill', NULL, NULL)"),
+            {"t": ticker, "ed": earnings_date, "sc": "2026-06-15"})
     
     # Mock yfinance to return same earnings date
     mock_df = pd.DataFrame(index=pd.to_datetime([ed - timedelta(days=10)]))
@@ -356,13 +356,15 @@ def test_update_existing_row_with_null_outcome():
     with patch("earnings_edge.fwd_factor_ladder._lse_bars_client", return_value=None):
         with patch("earnings_edge.fwd_factor_ladder._polygon_bars_client", return_value=mock_polygon):
             with patch("yfinance.Ticker", return_value=mock_ticker):
-                result = ensure_hist_moves(conn, ticker, today=ed)
+                result = ensure_hist_moves(ticker, today=ed)
     
     # Should return 1
     assert result == 1
     
     # Row should be updated
-    rows = conn.execute("SELECT * FROM snapshots WHERE ticker=?", (ticker,)).fetchall()
+    with db_engine.session_scope() as s:
+        rows = [dict(r) for r in s.execute(
+            text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker}).mappings().all()]
     assert len(rows) == 1
-    assert rows[0][8] == 5.0  # actual_move_pct now set
-    assert rows[0][11] is not None  # outcome_fetched_at now set
+    assert rows[0]["actual_move_pct"] == 5.0  # actual_move_pct now set
+    assert rows[0]["outcome_fetched_at"] is not None  # outcome_fetched_at now set

@@ -82,29 +82,32 @@ def _collect_phase(collector, monkeypatch) -> list:
 
 def _persist_phase(tmp_db_path, candidates) -> None:
     """Write snapshots + matching calendar_call_trades fixture rows."""
-    import sqlite3
+    from sqlalchemy import text
+    from earnings_edge.db import engine as db_engine
     from earnings_edge.db import insert_snapshot
 
     near_expiry = (EARNINGS_DATE + timedelta(days=7)).isoformat()
     far_expiry = (EARNINGS_DATE + timedelta(days=35)).isoformat()
 
-    conn = sqlite3.connect(str(tmp_db_path), timeout=30)
-    conn.row_factory = sqlite3.Row
-    try:
-        conn.execute(_CALENDAR_TRADES_DDL)
+    db_engine.configure(tmp_db_path)
+    with db_engine.session_scope() as s:
+        s.execute(text(_CALENDAR_TRADES_DDL))
+    for i, c in enumerate(candidates):
+        price = 100.0 + i  # vary prices so rows aren't identical
+        insert_snapshot({
+            "ticker": c.ticker,
+            "earnings_date": EARNINGS_DATE.isoformat(),
+            "scan_date": SCAN_DATE.isoformat(),
+            "timing": c.timing,
+            "price": price,
+            "avg_volume_30d": 5_000_000,
+            "has_options": 1,
+            "data_source": "e2e_fixture",
+        })
+    with db_engine.session_scope() as s:
         for i, c in enumerate(candidates):
             price = 100.0 + i  # vary prices so rows aren't identical
-            insert_snapshot(conn, {
-                "ticker": c.ticker,
-                "earnings_date": EARNINGS_DATE.isoformat(),
-                "scan_date": SCAN_DATE.isoformat(),
-                "timing": c.timing,
-                "price": price,
-                "avg_volume_30d": 5_000_000,
-                "has_options": 1,
-                "data_source": "e2e_fixture",
-            })
-            conn.execute(
+            s.execute(text(
                 """
                 INSERT INTO calendar_call_trades (
                     ticker, earnings_date, scan_date,
@@ -112,24 +115,21 @@ def _persist_phase(tmp_db_path, candidates) -> None:
                     near_call_ticker, far_call_ticker,
                     near_entry, far_entry, near_exit, far_exit,
                     net_debit, exit_value, pnl_dollars, return_on_debit
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                """,
-                (
-                    c.ticker, EARNINGS_DATE.isoformat(), SCAN_DATE.isoformat(),
-                    near_expiry, far_expiry, price,  # ATM: strike == price
-                    f"O:{c.ticker}{near_expiry.replace('-', '')}C{int(price):08d}",
-                    f"O:{c.ticker}{far_expiry.replace('-', '')}C{int(price):08d}",
-                    0.40, 1.00,   # near_entry, far_entry
-                    0.05, 0.90,   # near_exit, far_exit (IV crush on near leg)
-                    0.60,         # net_debit (combo ask convention)
-                    0.85,         # exit_value
-                    25.0,         # pnl_dollars
-                    0.42,         # return_on_debit
-                ),
+                ) VALUES (:tk,:ed,:sc,:ne,:fe,:st,:nc,:fc,:n1,:f1,:n2,:f2,:nd,:ev,:pnl,:rod)
+                """),
+                {
+                    "tk": c.ticker, "ed": EARNINGS_DATE.isoformat(), "sc": SCAN_DATE.isoformat(),
+                    "ne": near_expiry, "fe": far_expiry, "st": price,  # ATM: strike == price
+                    "nc": f"O:{c.ticker}{near_expiry.replace('-', '')}C{int(price):08d}",
+                    "fc": f"O:{c.ticker}{far_expiry.replace('-', '')}C{int(price):08d}",
+                    "n1": 0.40, "f1": 1.00,   # near_entry, far_entry
+                    "n2": 0.05, "f2": 0.90,   # near_exit, far_exit (IV crush on near leg)
+                    "nd": 0.60,         # net_debit (combo ask convention)
+                    "ev": 0.85,         # exit_value
+                    "pnl": 25.0,        # pnl_dollars
+                    "rod": 0.42,         # return_on_debit
+                },
             )
-        conn.commit()
-    finally:
-        conn.close()
 
 
 def test_collect_scan_propose_pipeline(tmp_db_path, tmp_path, monkeypatch, test_settings):

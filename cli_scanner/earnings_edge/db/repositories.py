@@ -1,16 +1,13 @@
 """Repository functions — the only SQL-bearing call sites after the migration.
 
-Each helper is a port of the matching function in ``db_legacy.py`` (or
-``picks.py`` / ``signals.py``) with the ``conn`` parameter dropped. During
-the incremental migration a leading sqlite3 connection is still accepted
-and used (same-connection writes) so existing ``fn(conn, ...)`` call sites
-keep working until later tasks convert them.
+One interface: every function opens its own ``session_scope()`` (or uses the
+shared engine). The legacy leading-sqlite3-connection form was removed
+2026-09-02 — all production callers already use the keyword/row-only form.
 """
 
 from __future__ import annotations
 
 import json
-import sqlite3
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -121,52 +118,33 @@ _SCAN_RUN_COLS = [
 ]
 
 
-def _is_connection(obj: Any) -> bool:
-    if obj is None or isinstance(obj, (dict, str, int, float, bool, list, tuple, pd.DataFrame)):
-        return False
-    if isinstance(obj, sqlite3.Connection):
-        return True
-    return hasattr(obj, "cursor") and hasattr(obj, "commit") and hasattr(obj, "rollback")
-
-
-def _split_conn(args: tuple) -> tuple[Any, tuple]:
-    if args and _is_connection(args[0]):
-        return args[0], args[1:]
-    return None, args
-
-
-def _execute(conn, sql: str, params, *, many: bool = False, commit: bool = True):
-    if conn is not None:
-        cur = conn.executemany(sql, params) if many else conn.execute(sql, params)
-        if commit:
-            conn.commit()
-        return cur
+def _execute(sql: str, params, *, many: bool = False):
     with session_scope() as s:
-        result = s.execute(text(sql), params)
-        return result
+        return s.execute(text(sql), params) if not many else s.execute(
+            text(sql), params)
 
 
-def _fetchall(conn, sql: str, params) -> list[dict]:
-    if conn is not None:
-        return [dict(r) for r in conn.execute(sql, params).fetchall()]
+def _execute_many(sql: str, payload: list[dict]):
+    with session_scope() as s:
+        return s.execute(text(sql), payload)
+
+
+def _fetchall(sql: str, params) -> list[dict]:
     with session_scope() as s:
         return [dict(r) for r in s.execute(text(sql), params).mappings().all()]
 
 
-def _insert_row(conn, table: str, cols: list[str], row: dict, *, or_ignore: bool = False) -> int:
+def _insert_row(table: str, cols: list[str], row: dict, *, or_ignore: bool = False) -> int:
     verb = "INSERT OR IGNORE" if or_ignore else "INSERT"
     placeholders = ", ".join(f":{c}" for c in cols)
     sql = f"{verb} INTO {table} ({', '.join(cols)}) VALUES ({placeholders})"
-    result = _execute(conn, sql, {c: row.get(c) for c in cols})
+    result = _execute(sql, {c: row.get(c) for c in cols})
     return (result.lastrowid or 0) if result is not None else 0
 
 
-def insert_snapshot(*args, row: dict | None = None) -> int:
+def insert_snapshot(row: dict) -> int:
     """Insert a single feature snapshot and return the row id."""
-    conn, rest = _split_conn(args)
-    if row is None:
-        row = rest[0]
-    rid = _insert_row(conn, "snapshots", _SNAPSHOT_COLS, row, or_ignore=True)
+    rid = _insert_row("snapshots", _SNAPSHOT_COLS, row, or_ignore=True)
     if rid == 0:
         logger.debug(
             "Skipping duplicate snapshot for %s @ %s",
@@ -175,15 +153,11 @@ def insert_snapshot(*args, row: dict | None = None) -> int:
     return rid
 
 
-def fetch_pending_outcomes(*args, min_age_days: int = 2) -> list[dict]:
+def fetch_pending_outcomes(min_age_days: int = 2) -> list[dict]:
     """Return snapshots where earnings_date is past and outcome not yet fetched."""
-    conn, rest = _split_conn(args)
-    if rest:
-        min_age_days = rest[0]
     cutoff = date.today().isoformat()
     age_cutoff = (date.today() - timedelta(days=min_age_days)).isoformat()
     return _fetchall(
-        conn,
         "SELECT * FROM snapshots "
         "WHERE outcome_fetched_at IS NULL "
         "  AND earnings_date <= :cutoff "
@@ -193,14 +167,10 @@ def fetch_pending_outcomes(*args, min_age_days: int = 2) -> list[dict]:
     )
 
 
-def fetch_pending_live_candidates(*args, min_age_days: int = 2) -> list[dict]:
+def fetch_pending_live_candidates(min_age_days: int = 2) -> list[dict]:
     """Return live_calendar_candidates needing a stock-move outcome."""
-    conn, rest = _split_conn(args)
-    if rest:
-        min_age_days = rest[0]
     age_cutoff = (date.today() - timedelta(days=min_age_days)).isoformat()
     return _fetchall(
-        conn,
         "SELECT * FROM live_calendar_candidates "
         "WHERE outcome_fetched_at IS NULL "
         "  AND earnings_date IS NOT NULL "
@@ -210,14 +180,9 @@ def fetch_pending_live_candidates(*args, min_age_days: int = 2) -> list[dict]:
     )
 
 
-def update_live_candidate_move(*args, cid: int | None = None, outcome: dict | None = None) -> None:
+def update_live_candidate_move(cid: int, outcome: dict) -> None:
     """Write a stock-move outcome row to a live_calendar_candidates row."""
-    conn, rest = _split_conn(args)
-    if cid is None:
-        cid = rest[0]
-        outcome = rest[1] if len(rest) > 1 else outcome
     _execute(
-        conn,
         """UPDATE live_calendar_candidates SET
             pre_earnings_close = :pre_earnings_close,
             post_earnings_close = :post_earnings_close,
@@ -230,61 +195,42 @@ def update_live_candidate_move(*args, cid: int | None = None, outcome: dict | No
     )
 
 
-def record_live_candidate_failure(*args, cid: int | None = None, max_retries: int | None = None) -> None:
+def record_live_candidate_failure(cid: int, max_retries: int) -> None:
     """Bump attempt_count; mark unavailable once retries are exhausted."""
-    conn, rest = _split_conn(args)
-    if cid is None:
-        cid = rest[0]
-        max_retries = rest[1] if len(rest) > 1 else max_retries
-    rows = _fetchall(
-        conn,
-        "SELECT outcome_attempt_count FROM live_calendar_candidates WHERE id = :id",
+    rows = _fetchall("SELECT outcome_attempt_count FROM live_calendar_candidates WHERE id = :id",
         {"id": cid},
     )
     attempt_count = (rows[0]["outcome_attempt_count"] if rows else None) or 0
     attempt_count += 1
     if attempt_count >= max_retries:
-        _execute(
-            conn,
-            "UPDATE live_calendar_candidates "
+        _execute("UPDATE live_calendar_candidates "
             "SET outcome_fetched_at = 'unavailable', "
             "outcome_attempt_count = :n WHERE id = :id",
             {"n": attempt_count, "id": cid},
         )
     else:
-        _execute(
-            conn,
-            "UPDATE live_calendar_candidates "
+        _execute("UPDATE live_calendar_candidates "
             "SET outcome_attempt_count = :n WHERE id = :id",
             {"n": attempt_count, "id": cid},
         )
 
 
-def insert_live_calendar_candidate(*args, row: dict | None = None) -> int:
+def insert_live_calendar_candidate(row: dict) -> int:
     """Insert a live call-calendar candidate quote/model snapshot."""
-    conn, rest = _split_conn(args)
-    if row is None:
-        row = rest[0]
-    return _insert_row(conn, "live_calendar_candidates", _LIVE_CANDIDATE_COLS, row)
+    return _insert_row("live_calendar_candidates", _LIVE_CANDIDATE_COLS, row)
 
 
-def insert_scanner_output(*args, row: dict | None = None) -> int:
+def insert_scanner_output(row: dict) -> int:
     """Insert a scanner output row for backtest/audit purposes."""
-    conn, rest = _split_conn(args)
-    if row is None:
-        row = rest[0]
-    return _insert_row(conn, "scanner_scan_outputs", _SCANNER_OUTPUT_COLS, row)
+    return _insert_row("scanner_scan_outputs", _SCANNER_OUTPUT_COLS, row)
 
 
-def insert_options_chain_rows(*args, rows: list[dict] | None = None) -> int:
+def insert_options_chain_rows(rows: list[dict]) -> int:
     """Bulk-insert Alpaca options-chain snapshot rows.
 
     Uses INSERT OR IGNORE so re-running on the same contracts skips duplicates.
     Returns number of rows actually inserted.
     """
-    conn, rest = _split_conn(args)
-    if rows is None:
-        rows = rest[0]
     if not rows:
         return 0
     placeholders = ", ".join(f":{c}" for c in _OPTIONS_CHAIN_COLS)
@@ -293,19 +239,13 @@ def insert_options_chain_rows(*args, rows: list[dict] | None = None) -> int:
         f"VALUES ({placeholders})"
     )
     payload = [{c: r.get(c) for c in _OPTIONS_CHAIN_COLS} for r in rows]
-    result = _execute(conn, sql, payload, many=True)
+    result = _execute(sql, payload, many=True)
     return result.rowcount or 0
 
 
-def fetch_chain_for_ticker(*args, ticker: str | None = None, scan_date: str | None = None) -> list[dict]:
+def fetch_chain_for_ticker(ticker: str, scan_date: str) -> list[dict]:
     """Return all options_chain rows for one ticker/scan_date."""
-    conn, rest = _split_conn(args)
-    if ticker is None:
-        ticker = rest[0]
-        scan_date = rest[1] if len(rest) > 1 else scan_date
-    return _fetchall(
-        conn,
-        "SELECT * FROM options_chain WHERE ticker = :ticker AND scan_date = :scan_date",
+    return _fetchall("SELECT * FROM options_chain WHERE ticker = :ticker AND scan_date = :scan_date",
         {"ticker": ticker, "scan_date": scan_date},
     )
 
@@ -315,15 +255,9 @@ def fetch_chain_for_ticker_date(date: str) -> list:  # noqa: ARG001
     return []  # placeholder — kept for type-checker parity with other fetch funcs
 
 
-def update_outcome(*args, snapshot_id: int | None = None, outcome: dict | None = None) -> None:
+def update_outcome(snapshot_id: int, outcome: dict) -> None:
     """Write outcome data back to a snapshot row."""
-    conn, rest = _split_conn(args)
-    if snapshot_id is None:
-        snapshot_id = rest[0]
-        outcome = rest[1] if len(rest) > 1 else outcome
-    _execute(
-        conn,
-        """UPDATE snapshots SET
+    _execute("""UPDATE snapshots SET
             pre_earnings_close = :pre_earnings_close,
             post_earnings_close = :post_earnings_close,
             actual_move_pct = :actual_move_pct,
@@ -335,24 +269,17 @@ def update_outcome(*args, snapshot_id: int | None = None, outcome: dict | None =
     )
 
 
-def insert_scan_run(*args, row: dict | None = None) -> int:
+def insert_scan_run(row: dict) -> int:
     """Insert a scan-run audit row and return its id."""
-    conn, rest = _split_conn(args)
-    if row is None:
-        row = rest[0]
-    return _insert_row(conn, "scan_runs", _SCAN_RUN_COLS, row)
+    return _insert_row("scan_runs", _SCAN_RUN_COLS, row)
 
 
-def persist_picks(*args, picks: dict | None = None, as_of=None) -> int:
+def persist_picks(picks: dict, as_of=None) -> int:
     """Persist one day's pick lists (insert-or-replace per date/strategy/ticker).
 
     Stores each pick as (pick_date, strategy, rank, ticker, signals_json) so
     historical pick performance can be evaluated later. Returns rows written.
     """
-    conn, rest = _split_conn(args)
-    if picks is None:
-        picks = rest[0]
-        as_of = rest[1] if len(rest) > 1 else as_of
     pick_date = as_of.isoformat() if isinstance(as_of, (date, datetime)) else str(as_of)
     payload = []
     for strategy, df in picks.items():
@@ -375,108 +302,74 @@ def persist_picks(*args, picks: dict | None = None, as_of=None) -> int:
         "(pick_date, strategy, rank, ticker, signals_json) "
         "VALUES (:pick_date, :strategy, :rank, :ticker, :signals_json)"
     )
-    result = _execute(conn, sql, payload, many=True)
+    result = _execute(sql, payload, many=True)
     return result.rowcount or 0
 
 
-def load_picks(*args, pick_date: str | None = None, strategy: Optional[str] = None) -> pd.DataFrame:
+def load_picks(pick_date: str, strategy: Optional[str] = None) -> pd.DataFrame:
     """Read persisted picks for one date (optionally one strategy)."""
-    conn, rest = _split_conn(args)
-    if pick_date is None:
-        pick_date = rest[0]
-        if len(rest) > 1:
-            strategy = rest[1]
     sql = "SELECT * FROM picks WHERE pick_date = :pick_date"
     params: dict = {"pick_date": pick_date}
     if strategy:
         sql += " AND strategy = :strategy"
         params["strategy"] = strategy
     sql += " ORDER BY strategy, rank"
-    if conn is not None:
-        return pd.read_sql_query(sql, conn, params=params)
     with session_scope() as s:
         return pd.read_sql_query(text(sql), s.connection(), params=params)
 
 
-def upsert_daily_signals(*args, rows: list[dict] | None = None) -> int:
+def upsert_daily_signals(rows: list[dict]) -> int:
     """Insert-or-replace daily signal rows. Returns affected row count."""
-    conn, rest = _split_conn(args)
-    if rows is None:
-        rows = rest[0]
     if not rows:
         return 0
     cols = ", ".join(_DAILY_SIGNAL_COLS)
     placeholders = ", ".join(f":{c}" for c in _DAILY_SIGNAL_COLS)
     sql = f"INSERT OR REPLACE INTO daily_signals ({cols}) VALUES ({placeholders})"
     payload = [{c: r.get(c) for c in _DAILY_SIGNAL_COLS} for r in rows]
-    result = _execute(conn, sql, payload, many=True)
+    result = _execute(sql, payload, many=True)
     return result.rowcount or 0
 
 
-def record_snapshot_outcome_failure(
-    *args, snapshot_id: int | None = None, max_retries: int | None = None
-) -> None:
+def record_snapshot_outcome_failure(snapshot_id: int, max_retries: int) -> None:
     """Bump snapshots.outcome_attempt_count; mark unavailable once retries are exhausted."""
-    conn, rest = _split_conn(args)
-    if snapshot_id is None:
-        snapshot_id = rest[0]
-        max_retries = rest[1] if len(rest) > 1 else max_retries
-    rows = _fetchall(
-        conn,
-        "SELECT outcome_attempt_count FROM snapshots WHERE id = :id",
+    rows = _fetchall("SELECT outcome_attempt_count FROM snapshots WHERE id = :id",
         {"id": snapshot_id},
     )
     attempt_count = (rows[0]["outcome_attempt_count"] if rows else None) or 0
     attempt_count += 1
     if attempt_count >= max_retries:
-        _execute(
-            conn,
-            "UPDATE snapshots "
+        _execute("UPDATE snapshots "
             "SET outcome_fetched_at = 'unavailable', "
             "outcome_attempt_count = :n WHERE id = :id",
             {"n": attempt_count, "id": snapshot_id},
         )
     else:
-        _execute(
-            conn,
-            "UPDATE snapshots "
+        _execute("UPDATE snapshots "
             "SET outcome_attempt_count = :n WHERE id = :id",
             {"n": attempt_count, "id": snapshot_id},
         )
 
 
-def snapshots_earnings_on_date(*args, earnings_date: str | None = None) -> list[tuple[str, str]]:
+def snapshots_earnings_on_date(earnings_date: str) -> list[tuple[str, str]]:
     """(ticker, timing) pairs with earnings on exactly ``earnings_date``,
     optionable only. Used by the FF ladder/arb proposal builder to source
     tomorrow's earnings names without re-running the full scan pipeline."""
-    conn, rest = _split_conn(args)
-    if earnings_date is None:
-        earnings_date = rest[0]
-    rows = _fetchall(
-        conn,
-        "SELECT DISTINCT ticker, timing FROM snapshots "
+    rows = _fetchall("SELECT DISTINCT ticker, timing FROM snapshots "
         "WHERE has_options = 1 AND earnings_date = :earnings_date",
         {"earnings_date": earnings_date},
     )
     return [(r["ticker"], r["timing"]) for r in rows]
 
 
-def snapshots_optionable_universe(*args, max_tickers: int | None = None) -> list[str]:
+def snapshots_optionable_universe(max_tickers: int) -> list[str]:
     """Upcoming optionable earnings first, then recently-optionable names."""
-    conn, rest = _split_conn(args)
-    if max_tickers is None:
-        max_tickers = rest[0]
-    upcoming_rows = _fetchall(
-        conn,
-        "SELECT DISTINCT ticker FROM snapshots "
+    upcoming_rows = _fetchall("SELECT DISTINCT ticker FROM snapshots "
         "WHERE has_options = 1 "
         "AND earnings_date >= date('now') "
         "AND earnings_date <= date('now', '+21 days')",
         {},
     )
-    recent_rows = _fetchall(
-        conn,
-        "SELECT DISTINCT ticker FROM snapshots "
+    recent_rows = _fetchall("SELECT DISTINCT ticker FROM snapshots "
         "WHERE has_options = 1 "
         "ORDER BY rowid DESC LIMIT :max_tickers",
         {"max_tickers": max_tickers},
@@ -513,14 +406,13 @@ def calendar_call_trades_upsert(row: dict) -> None:
         f"INSERT OR REPLACE INTO calendar_call_trades "
         f"({', '.join(_CALENDAR_CALL_TRADE_COLS)}) VALUES ({placeholders})"
     )
-    _execute(None, sql, {c: row.get(c) for c in _CALENDAR_CALL_TRADE_COLS})
+    _execute(sql, {c: row.get(c) for c in _CALENDAR_CALL_TRADE_COLS})
 
 
 def calendar_call_trades_list() -> list[dict]:
     """All calendar-call trades ordered by earnings_date, ticker."""
     return _fetchall(
-        None,
-        "SELECT * FROM calendar_call_trades ORDER BY earnings_date, ticker",
+                "SELECT * FROM calendar_call_trades ORDER BY earnings_date, ticker",
         {},
     )
 
@@ -528,8 +420,7 @@ def calendar_call_trades_list() -> list[dict]:
 def calendar_call_trades_with_snapshots() -> list[dict]:
     """Calendar-call trades LEFT JOINed to snapshot features."""
     return _fetchall(
-        None,
-        "SELECT c.*, s.*, c.snapshot_id AS trade_snapshot_id "
+                "SELECT c.*, s.*, c.snapshot_id AS trade_snapshot_id "
         "FROM calendar_call_trades c "
         "LEFT JOIN snapshots s ON s.id = c.snapshot_id "
         "ORDER BY c.earnings_date, c.ticker",
@@ -548,8 +439,7 @@ def calendar_call_trades_update_model(
 ) -> None:
     """Write model score fields onto one stored calendar-call trade."""
     _execute(
-        None,
-        "UPDATE calendar_call_trades "
+                "UPDATE calendar_call_trades "
         "SET model_score = :model_score, "
         "    model_recommendation = :model_recommendation, "
         "    model_reason = :model_reason, "
@@ -576,8 +466,7 @@ def options_chain_latest_contract(
 ) -> dict | None:
     """Latest options_chain quote for one contract on or before ``as_of``."""
     rows = _fetchall(
-        None,
-        "SELECT midpoint, close, implied_volatility, delta, scan_date "
+                "SELECT midpoint, close, implied_volatility, delta, scan_date "
         "FROM options_chain "
         "WHERE ticker = :ticker AND contract_type = :kind AND strike = :strike "
         "AND expiry = :expiry AND scan_date <= :as_of "
@@ -2139,7 +2028,7 @@ def snapshots_iv_pending_groups(limit: int = 0) -> list[dict]:
     if limit:
         sql += " LIMIT :limit"
         params["limit"] = int(limit)
-    return _fetchall(None, sql, params)
+    return _fetchall(sql, params)
 
 
 def snapshots_update_iv(snapshot_ids: list[int], features: dict) -> None:
@@ -2171,8 +2060,7 @@ def snapshots_mark_iv_skip(
 def snapshots_rv_pending_pairs() -> list[dict]:
     """Distinct (ticker, scan_date) pairs needing rv30 backfill."""
     return _fetchall(
-        None,
-        "SELECT ticker, scan_date, MIN(id) AS sample_id "
+                "SELECT ticker, scan_date, MIN(id) AS sample_id "
         "FROM snapshots "
         "WHERE scan_date >= '2026-05-01' AND has_options = 1 AND rv30 IS NULL "
         "GROUP BY ticker, scan_date "
@@ -2221,8 +2109,7 @@ def snapshots_count_null_rv30() -> int:
 def snapshots_missing_atm_iv() -> list[dict]:
     """Snapshots with options but no atm_iv_near."""
     return _fetchall(
-        None,
-        "SELECT id, ticker, earnings_date, price FROM snapshots "
+                "SELECT id, ticker, earnings_date, price FROM snapshots "
         "WHERE has_options = 1 AND atm_iv_near IS NULL "
         "ORDER BY ticker, earnings_date",
         {},
@@ -2276,7 +2163,7 @@ def snapshots_iv_gap_rows(
         f"SELECT id, ticker, earnings_date, scan_date FROM snapshots WHERE {where} "
         "ORDER BY (actual_move_pct IS NOT NULL) DESC, scan_date DESC, ticker"
     )
-    rows = _fetchall(None, sql, params)
+    rows = _fetchall(sql, params)
     if limit:
         rows = rows[: int(limit)]
     return rows
@@ -2285,8 +2172,7 @@ def snapshots_iv_gap_rows(
 def ff_snapshots_pending_pairs(selector_version: int = 2) -> list[dict]:
     """(ticker, scan_date) pairs still needing an ff_snapshots row."""
     pairs = _fetchall(
-        None,
-        "SELECT ticker, scan_date, earnings_date, price, "
+                "SELECT ticker, scan_date, earnings_date, price, "
         "AVG(ABS(actual_move_pct)) AS _x "
         "FROM snapshots "
         "WHERE has_options=1 AND price>=3 AND actual_move_pct IS NOT NULL "
@@ -2303,8 +2189,7 @@ def ff_snapshots_pending_pairs(selector_version: int = 2) -> list[dict]:
     done = {
         (r["ticker"], r["scan_date"])
         for r in _fetchall(
-            None,
-            "SELECT ticker, scan_date FROM ff_snapshots "
+                        "SELECT ticker, scan_date FROM ff_snapshots "
             "WHERE (hist_rms_move_pct IS NOT NULL OR skip_reason IS NOT NULL) "
             "AND selector_version = :v",
             {"v": selector_version},
@@ -2316,8 +2201,7 @@ def ff_snapshots_pending_pairs(selector_version: int = 2) -> list[dict]:
 def snapshots_hist_move_abs(ticker: str, exclude_scan: str) -> list[float]:
     """|actual_move_pct| for a ticker excluding one scan_date."""
     rows = _fetchall(
-        None,
-        "SELECT ABS(actual_move_pct) AS mag FROM snapshots "
+                "SELECT ABS(actual_move_pct) AS mag FROM snapshots "
         "WHERE ticker = :ticker AND actual_move_pct IS NOT NULL "
         "AND outcome_fetched_at IS NOT NULL AND outcome_fetched_at != 'unavailable' "
         "AND scan_date != :exclude_scan",
@@ -2336,7 +2220,7 @@ def ff_snapshots_upsert_many(rows: list[dict]) -> None:
         f"VALUES ({placeholders})"
     )
     payload = [{c: r.get(c) for c in _FF_SNAPSHOT_COLS} for r in rows]
-    _execute(None, sql, payload, many=True)
+    _execute(sql, payload, many=True)
 
 def ff_universe_snapshots_upsert_many(rows: list[dict]) -> None:
     """INSERT OR REPLACE a batch of ff_universe_snapshots rows in one transaction."""
@@ -2348,7 +2232,7 @@ def ff_universe_snapshots_upsert_many(rows: list[dict]) -> None:
         f"VALUES ({placeholders})"
     )
     payload = [{c: r.get(c) for c in _FF_UNIVERSE_SNAPSHOT_COLS} for r in rows]
-    _execute(None, sql, payload, many=True)
+    _execute(sql, payload, many=True)
 
 
 def snapshots_clear_iv_since(scan_date: str) -> int:
@@ -2452,22 +2336,9 @@ def snapshots_dedup() -> tuple[int, int]:
         return deleted, int(remaining or 0)
 
 
-def snapshots_usable_outcome_count(*args, ticker: str | None = None) -> int:
+def snapshots_usable_outcome_count(ticker: str) -> int:
     """Usable realized-outcome count for one ticker (hist-gate numerator)."""
-    conn, rest = _split_conn(args)
-    if ticker is None:
-        ticker = rest[0]
-    if conn is not None:
-        row = conn.execute(
-            "SELECT COUNT(*) FROM snapshots "
-            "WHERE ticker=? AND actual_move_pct IS NOT NULL "
-            "AND outcome_fetched_at IS NOT NULL AND outcome_fetched_at != 'unavailable'",
-            (ticker,),
-        ).fetchone()
-        return int((row[0] if row else 0) or 0)
-    rows = _fetchall(
-        conn,
-        "SELECT COUNT(*) AS n FROM snapshots "
+    rows = _fetchall("SELECT COUNT(*) AS n FROM snapshots "
         "WHERE ticker = :ticker AND actual_move_pct IS NOT NULL "
         "AND outcome_fetched_at IS NOT NULL AND outcome_fetched_at != 'unavailable'",
         {"ticker": ticker},
@@ -2475,33 +2346,9 @@ def snapshots_usable_outcome_count(*args, ticker: str | None = None) -> int:
     return int(rows[0]["n"] if rows else 0)
 
 
-def snapshots_outcome_row(
-    *args, ticker: str | None = None, earnings_date: str | None = None
-) -> Optional[dict]:
+def snapshots_outcome_row(ticker: str, earnings_date: str) -> Optional[dict]:
     """id / actual_move_pct / outcome_fetched_at for ticker+earnings_date."""
-    conn, rest = _split_conn(args)
-    if ticker is None:
-        ticker = rest[0]
-        earnings_date = rest[1] if len(rest) > 1 else earnings_date
-    if conn is not None:
-        row = conn.execute(
-            "SELECT id, actual_move_pct, outcome_fetched_at FROM snapshots "
-            "WHERE ticker=? AND earnings_date=? ORDER BY id LIMIT 1",
-            (ticker, earnings_date),
-        ).fetchone()
-        if row is None:
-            return None
-        try:
-            return dict(row)
-        except TypeError:
-            return {
-                "id": row[0],
-                "actual_move_pct": row[1],
-                "outcome_fetched_at": row[2],
-            }
-    rows = _fetchall(
-        conn,
-        "SELECT id, actual_move_pct, outcome_fetched_at FROM snapshots "
+    rows = _fetchall("SELECT id, actual_move_pct, outcome_fetched_at FROM snapshots "
         "WHERE ticker = :ticker AND earnings_date = :earnings_date "
         "ORDER BY id LIMIT 1",
         {"ticker": ticker, "earnings_date": earnings_date},
@@ -2509,15 +2356,11 @@ def snapshots_outcome_row(
     return rows[0] if rows else None
 
 
-def snapshots_apply_hist_backfill_batch(*args, writes: list[dict] | None = None) -> None:
+def snapshots_apply_hist_backfill_batch(writes: list[dict]) -> None:
     """Apply collected hist-backfill INSERT/UPDATE writes in one transaction.
 
     Each write is ``{existing_id?, ticker, earnings_date, outcome, fetched_at}``.
-    A leading sqlite3 connection is still accepted so in-memory tests keep working.
     """
-    conn, rest = _split_conn(args)
-    if writes is None:
-        writes = rest[0]
     if not writes:
         return
     def _write_one(execute, w: dict) -> None:
@@ -2560,14 +2403,6 @@ def snapshots_apply_hist_backfill_batch(*args, writes: list[dict] | None = None)
                 },
             )
 
-    if conn is not None:
-        for w in writes:
-            try:
-                _write_one(conn.execute, w)
-            except Exception as exc:
-                logger.info("hist backfill write failed: %s", exc)
-        conn.commit()
-        return
     with session_scope() as s:
         for w in writes:
             try:
@@ -2576,24 +2411,16 @@ def snapshots_apply_hist_backfill_batch(*args, writes: list[dict] | None = None)
                 logger.info("hist backfill write failed: %s", exc)
 
 
-def snapshots_distinct_tickers(*args) -> list[str]:
-    conn, _rest = _split_conn(args)
-    return [r["ticker"] for r in _fetchall(conn, "SELECT DISTINCT ticker FROM snapshots", {})]
+def snapshots_distinct_tickers() -> list[str]:
+    return [r["ticker"] for r in _fetchall("SELECT DISTINCT ticker FROM snapshots", {})]
 
 
-def snapshots_usable_counts_by_ticker(
-    *args, universe: Optional[list[str]] = None
-) -> dict[str, int]:
-    conn, rest = _split_conn(args)
-    if universe is None and rest:
-        universe = rest[0]
+def snapshots_usable_counts_by_ticker(universe: Optional[list[str]] = None) -> dict[str, int]:
     if not universe:
         return {}
     params = {f"t{i}": t for i, t in enumerate(universe)}
     placeholders = ", ".join(f":t{i}" for i in range(len(universe)))
-    rows = _fetchall(
-        conn,
-        f"SELECT ticker, COUNT(*) AS n FROM snapshots "
+    rows = _fetchall(f"SELECT ticker, COUNT(*) AS n FROM snapshots "
         f"WHERE ticker IN ({placeholders}) AND {_USABLE_OUTCOME_SQL} "
         f"GROUP BY ticker",
         params,
@@ -2601,12 +2428,9 @@ def snapshots_usable_counts_by_ticker(
     return {r["ticker"]: int(r["n"]) for r in rows}
 
 
-def snapshots_hist_repair_stats(*args) -> list[dict]:
+def snapshots_hist_repair_stats() -> list[dict]:
     """Per-ticker usable-outcome count and has_options flag for repair ranking."""
-    conn, _rest = _split_conn(args)
-    return _fetchall(
-        conn,
-        "SELECT s.ticker AS ticker, "
+    return _fetchall("SELECT s.ticker AS ticker, "
         f"SUM(CASE WHEN {_USABLE_OUTCOME_SQL} THEN 1 ELSE 0 END) AS usable, "
         "MAX(s.has_options) AS liquid "
         "FROM snapshots s GROUP BY s.ticker",
@@ -2617,7 +2441,6 @@ def snapshots_hist_repair_stats(*args) -> list[dict]:
 def snapshots_hist_abs_moves(ticker: str) -> list[float]:
     """|actual_move_pct| for usable realized outcomes of one ticker."""
     rows = _fetchall(
-        None,
         "SELECT ABS(actual_move_pct) AS mag FROM snapshots "
         "WHERE ticker = :ticker AND actual_move_pct IS NOT NULL "
         "AND outcome_fetched_at IS NOT NULL AND outcome_fetched_at != 'unavailable'",
@@ -2708,8 +2531,7 @@ def daily_signals_history(
     if column not in _DAILY_SIGNAL_COLS:
         raise ValueError(f"unknown daily_signals column: {column}")
     rows = _fetchall(
-        None,
-        f"SELECT {column} AS v FROM daily_signals "
+                f"SELECT {column} AS v FROM daily_signals "
         "WHERE ticker = :ticker AND signal_date < :as_of "
         f"AND {column} IS NOT NULL ORDER BY signal_date DESC LIMIT :limit",
         {"ticker": ticker, "as_of": as_of, "limit": limit},

@@ -63,32 +63,36 @@ def _seed_calendar_fixture(db_path) -> None:
     i >= 30: net_debit 5.00 (debit > 3% of price  -> filtered out)
     pnl_dollars: +12 on even i, -6 on odd i.
     """
-    import sqlite3
+    from sqlalchemy import text
+    from earnings_edge.db import engine as db_engine
     from earnings_edge.db import insert_snapshot
 
     near_expiry = (EARNINGS_DATE + timedelta(days=7)).isoformat()
     far_expiry = (EARNINGS_DATE + timedelta(days=35)).isoformat()
 
-    conn = sqlite3.connect(str(db_path), timeout=30)
-    conn.row_factory = sqlite3.Row
-    try:
-        conn.execute(_CALENDAR_TRADES_DDL)
+    db_engine.configure(db_path)
+    with db_engine.session_scope() as s:
+        s.execute(text(_CALENDAR_TRADES_DDL))
+    for i in range(N_TICKERS):
+        ticker = f"FIX{i:02d}"
+        price = 100.0 + i
+        insert_snapshot({
+            "ticker": ticker,
+            "earnings_date": EARNINGS_DATE.isoformat(),
+            "scan_date": SCAN_DATE.isoformat(),
+            "timing": "Post Market",
+            "price": price,
+            "avg_volume_30d": 5_000_000,
+            "has_options": 1,
+            "data_source": "integration_fixture",
+        })
+    with db_engine.session_scope() as s:
         for i in range(N_TICKERS):
             ticker = f"FIX{i:02d}"
             price = 100.0 + i
             net_debit = 0.60 if i < 30 else 5.00
             pnl = 12.0 if i % 2 == 0 else -6.0
-            insert_snapshot(conn, {
-                "ticker": ticker,
-                "earnings_date": EARNINGS_DATE.isoformat(),
-                "scan_date": SCAN_DATE.isoformat(),
-                "timing": "Post Market",
-                "price": price,
-                "avg_volume_30d": 5_000_000,
-                "has_options": 1,
-                "data_source": "integration_fixture",
-            })
-            conn.execute(
+            s.execute(text(
                 """
                 INSERT INTO calendar_call_trades (
                     ticker, earnings_date, scan_date,
@@ -96,20 +100,18 @@ def _seed_calendar_fixture(db_path) -> None:
                     near_call_ticker, far_call_ticker,
                     near_entry, far_entry, near_exit, far_exit,
                     net_debit, exit_value, pnl_dollars, return_on_debit
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                """,
-                (
-                    ticker, EARNINGS_DATE.isoformat(), SCAN_DATE.isoformat(),
-                    near_expiry, far_expiry, price,  # ATM: strike == price
-                    f"O:{ticker}NEAR", f"O:{ticker}FAR",
-                    0.40, 1.00,
-                    0.05, 0.90,
-                    net_debit, 100.0, pnl, pnl / (net_debit * 100),
-                ),
+                ) VALUES (:tk,:ed,:sc,:ne,:fe,:st,:nc,:fc,:n1,:f1,:n2,:f2,:nd,:ev,:pnl,:rod)
+                """),
+                {
+                    "tk": ticker, "ed": EARNINGS_DATE.isoformat(), "sc": SCAN_DATE.isoformat(),
+                    "ne": near_expiry, "fe": far_expiry, "st": price,  # ATM: strike == price
+                    "nc": f"O:{ticker}NEAR", "fc": f"O:{ticker}FAR",
+                    "n1": 0.40, "f1": 1.00,
+                    "n2": 0.05, "f2": 0.90,
+                    "nd": net_debit, "ev": 100.0, "pnl": pnl,
+                    "rod": pnl / (net_debit * 100),
+                },
             )
-        conn.commit()
-    finally:
-        conn.close()
 
 
 def test_toml_strategy_backtest_deterministic_metrics(tmp_db_path, monkeypatch):

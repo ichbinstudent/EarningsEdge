@@ -89,10 +89,10 @@ def test_repair_drive_raises_hist_coverage(tmp_db_path, monkeypatch):
         _seed(conn, "LIQ2", "2026-07-30", has_options=1, usable_outcome=False)
         _seed(conn, "OTC1", "2026-07-30", has_options=0, usable_outcome=False)
 
-        before = hist_move_coverage(conn)
+        before = hist_move_coverage()
         assert before["universe"] == 3 and before["covered"] == 0
 
-        candidates = repair_candidates(conn, liquid_only=True)
+        candidates = repair_candidates(liquid_only=True)
         assert set(candidates) == {"LIQ1", "LIQ2"}  # OTC tail excluded
         assert candidates[0] == "LIQ1"  # most existing outcomes first
 
@@ -101,11 +101,11 @@ def test_repair_drive_raises_hist_coverage(tmp_db_path, monkeypatch):
         assert result["failed"] == 0
         delta = result["coverage_after"]["covered"] - result["coverage_before"]["covered"]
         assert delta > 0
-        after = hist_move_coverage(conn)
+        after = hist_move_coverage()
         # both liquid names now pass the gate; OTC1 was never touched
         assert after["covered"] == 2 and after["universe"] == 3
-        assert "LIQ1" not in repair_candidates(conn, liquid_only=True)
-        assert "LIQ2" not in repair_candidates(conn, liquid_only=True)
+        assert "LIQ1" not in repair_candidates(liquid_only=True)
+        assert "LIQ2" not in repair_candidates(liquid_only=True)
         # repaired rows are usable for the FF ladder gate
         rms, n = ffl.hist_rms_move(ticker="LIQ2")
         assert rms is not None and n >= 3
