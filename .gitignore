@@ -46,6 +46,16 @@ cli_scanner/data/sqlite3
 cli_scanner/data/sqlite3_analyzer
 cli_scanner/data/sqldiff
 cli_scanner/data/trading-bot.lock
+cli_scanner/data/subscribers.json
+cli_scanner/data/strategy_subscribers.json
+
+# Local-only docs and build artifacts
+cli_scanner/earnings_edge.egg-info/
+cli_scanner/docs/weekly_reviews/
+cli_scanner/docs/superpowers/
+cli_scanner/docs/kimi_handoff_*.md
+cli_scanner/e2e_report.md
+cli_scanner/scripts/archive/
 
 # AI agent / coding-assistant tooling — local only, never project deliverables
 .claude/
