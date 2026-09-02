@@ -458,71 +458,20 @@ class TradingBot:
     # ── Command handlers ───────────────────────────────────────────────
 
     async def _cmd_start(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        kb = _main_reply_kb()
-        from dashboard.tg_auth import webapp_url
-        url = webapp_url()
-        desk = ("• Open desk — Mini App book / inbox / halt\n" if url else "")
-        await self._send_panel(update, 
-            "🚀 <b>Trading desk</b>\n\n"
-            "Six keys stay put. Open a panel, tap a button — the same "
-            "message updates (no need to reopen Positions after Adopt).\n\n"
-            "• Status — scan / equity / broker / orphans\n"
-            "• Positions — live book: adopt / ignore / close\n"
-            "• Signals — mute + approval vs auto\n"
-            "• Pending — entry / exit / orphan inbox\n"
-            "• Picks & Designer — strategy picks and scenario modeling\n"
-            "• Jobs — scheduled run history\n"
-            "• Settings — halt / resume / restart\n"
-            f"{desk}",
-            reply_markup=kb, parse_mode=HTML,
-        )
-        ikb = _desk_webapp_markup()
-        if ikb:
-            await update.message.reply_text(
-                "Open the web desk from this button (not by pasting the URL):",
-                reply_markup=ikb,
-            )
+        from earnings_edge.handlers import cmd_start
+        await cmd_start(self, update, ctx)
 
     async def _cmd_help(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        kb = _main_reply_kb()
-        lines = [
-            "🆘 <b>Trading desk help</b>\n",
-            "Keyboard: Status · Positions · Signals · Pending · Jobs · Settings\n",
-            "• /start — main menu",
-            "• /run — scan on demand then build cards",
-            "• /pending — inbox (entries, exits, orphans, failed jobs)",
-            "• /propose — build proposals from the latest scan",
-            "• /signals — notifications + execution mode",
-            "• /setups — what each strategy trades",
-            "• /status — dashboard (scan/equity/reconcile/broker)",
-            "• /monitor — live ops panel",
-            "• /positions — broker-truth book + actions",
-            "• /jobs — scheduled job history",
-            "• /picks — top picks from the latest scan",
-            "• /designer <ticker> <legs> — position designer & rv scenarios",
-            "• /settings — halt / resume / lifecycle / restart",
-            "• /scanners and /subscriptions alias /signals\n",
-            "⏰ Schedules:",
-        ]
-        from dashboard.tg_auth import webapp_url
-        if webapp_url():
-            lines.insert(-1, "• Open desk — Mini App book / inbox / halt")
-        for name, sc in self.scanners.items():
-            lines.append(f"• {name}: {sc.schedule}")
-        lines += [
-            "\n📱 Use the keyboard at the bottom for quick access!",
-        ]
-        await self._send_panel(update, 
-            "\n".join(lines), reply_markup=kb, parse_mode=HTML,
-        )
+        from earnings_edge.handlers import cmd_help
+        await cmd_help(self, update, ctx)
 
     async def _cmd_scanners(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        # Deprecated surface — folded into /signals (unified signal surface).
-        await self._cmd_signals(update, ctx)
+        from earnings_edge.handlers import cmd_scanners
+        await cmd_scanners(self, update, ctx)
 
     async def _cmd_subscriptions(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        # Deprecated surface — folded into /signals.
-        await self._cmd_signals(update, ctx)
+        from earnings_edge.handlers import cmd_subscriptions
+        await cmd_subscriptions(self, update, ctx)
 
     # ── Signal subscriptions (/signals) + trade setups (/setups) ───────
 
@@ -568,17 +517,12 @@ class TradingBot:
         )
 
     async def _cmd_signals(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        uid = update.effective_user.id
-        modes = await asyncio.to_thread(self._effective_modes_sync)
-        await self._send_panel(update, 
-            self._signals_intro(), reply_markup=self._signals_kb(uid, modes), parse_mode=HTML)
+        from earnings_edge.handlers import cmd_signals
+        await cmd_signals(self, update, ctx)
 
     async def _cmd_setups(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        from earnings_edge.bot_views import SETUP_STRATEGIES, setup_menu_text
-        ikb = [[InlineKeyboardButton(name, callback_data=f"setup_{name}")]
-               for name in SETUP_STRATEGIES]
-        await self._send_panel(update, 
-            setup_menu_text(), reply_markup=InlineKeyboardMarkup(ikb), parse_mode=HTML)
+        from earnings_edge.handlers import cmd_setups
+        await cmd_setups(self, update, ctx)
 
     def _run_panel(self) -> tuple[str, InlineKeyboardMarkup]:
         msg = ("🔄 <b>Run scanner</b>\n\n"
@@ -591,8 +535,8 @@ class TradingBot:
         return msg, InlineKeyboardMarkup(ikb)
 
     async def _cmd_run(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        msg, ikb = self._run_panel()
-        await self._send_panel(update, msg, reply_markup=ikb, parse_mode=HTML)
+        from earnings_edge.handlers import cmd_run
+        await cmd_run(self, update, ctx)
 
     # ── Callback handler ───────────────────────────────────────────────
 
@@ -1600,29 +1544,24 @@ class TradingBot:
         return sorted(set(registry.configs) | set(states)), states
 
     async def _cmd_halt(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        if not self._risk_authorized(update.effective_chat.id):
-            await update.message.reply_text(auth_message())
-            return
-        await asyncio.to_thread(self._halt_sync, "operator")
-        await self._flush_alerts()
-        await update.message.reply_text("🛑 KILL SWITCH TRIPPED — no orders will submit until /resume.")
+        from earnings_edge.handlers import cmd_halt
+        await cmd_halt(self, update, ctx)
 
     async def _cmd_resume(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        if not self._risk_authorized(update.effective_chat.id):
-            await update.message.reply_text(auth_message())
-            return
-        await asyncio.to_thread(self._resume_sync, "operator")
-        await update.message.reply_text("✅ Kill switch released — order submission re-enabled.")
+        from earnings_edge.handlers import cmd_resume
+        await cmd_resume(self, update, ctx)
 
     async def _cmd_risk(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        text = await asyncio.to_thread(self._risk_status_sync)
-        await update.message.reply_text(text, parse_mode=HTML)
+        from earnings_edge.handlers import cmd_risk
+        await cmd_risk(self, update, ctx)
 
     async def _cmd_promote(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        await self._cmd_set_lifecycle(update, promote=True)
+        from earnings_edge.handlers import cmd_promote
+        await cmd_promote(self, update, ctx)
 
     async def _cmd_demote(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        await self._cmd_set_lifecycle(update, promote=False)
+        from earnings_edge.handlers import cmd_demote
+        await cmd_demote(self, update, ctx)
 
     async def _cmd_set_lifecycle(self, update: Update, promote: bool):
         if not self._risk_authorized(update.effective_chat.id):
@@ -1653,8 +1592,8 @@ class TradingBot:
         ])
 
     async def _cmd_settings(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        await self._send_panel(update, "🛠 <b>Settings</b>", parse_mode=HTML,
-                                        reply_markup=self._settings_kb())
+        from earnings_edge.handlers import cmd_settings
+        await cmd_settings(self, update, ctx)
 
     @staticmethod
     def _lifecycle_kb(names: list[str], states: dict) -> InlineKeyboardMarkup:
@@ -1809,9 +1748,8 @@ class TradingBot:
     # ── Live monitor (/monitor) ────────────────────────────────────────
 
     async def _cmd_monitor(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        chat_id = update.effective_chat.id
-        await self._stop_monitor(chat_id)
-        self._monitors[chat_id] = asyncio.create_task(self._monitor_loop(chat_id))
+        from earnings_edge.handlers import cmd_monitor
+        await cmd_monitor(self, update, ctx)
 
     async def _stop_monitor(self, chat_id: int) -> None:
         task = self._monitors.pop(chat_id, None)
@@ -1872,10 +1810,8 @@ class TradingBot:
             self._monitors.pop(chat_id, None)
 
     async def _cmd_status(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        text = await asyncio.to_thread(self._status_text_sync)
-        await self._flush_alerts()
-        await self._send_panel(update, 
-            text, reply_markup=self._desk_refresh_kb("st"), parse_mode=HTML)
+        from earnings_edge.handlers import cmd_status
+        await cmd_status(self, update, ctx)
 
     def _status_text_sync(self) -> str:
         from earnings_edge import trade_approval
@@ -1917,35 +1853,32 @@ class TradingBot:
             await query.answer()
 
     async def _cmd_positions(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        text, rows = await asyncio.to_thread(self._positions_panel_sync)
-        await self._flush_alerts()
-        markup = InlineKeyboardMarkup(rows) if rows else None
-        # One message: book + actions. Reply keyboard stays MAIN_KB.
-        await self._send_panel(update, text, reply_markup=markup, parse_mode=HTML)
+        from earnings_edge.handlers import cmd_positions
+        await cmd_positions(self, update, ctx)
 
     def _orders_text_sync(self) -> str:
         from earnings_edge.bot_views import orders_view
         return orders_view()
 
     async def _cmd_orders(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        text = await asyncio.to_thread(self._orders_text_sync)
-        await self._send_panel(update, text, reply_markup=self._desk_refresh_kb("or"), parse_mode=HTML)
+        from earnings_edge.handlers import cmd_orders
+        await cmd_orders(self, update, ctx)
 
     def _jobs_text_sync(self) -> str:
         from earnings_edge.bot_views import jobs_view
         return jobs_view()
 
     async def _cmd_jobs(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        text = await asyncio.to_thread(self._jobs_text_sync)
-        await self._send_panel(update, text, reply_markup=self._desk_refresh_kb("jb"), parse_mode=HTML)
+        from earnings_edge.handlers import cmd_jobs
+        await cmd_jobs(self, update, ctx)
 
     def _equity_text_sync(self) -> str:
         from earnings_edge.bot_views import equity_view
         return equity_view()
 
     async def _cmd_equity(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        text = await asyncio.to_thread(self._equity_text_sync)
-        await self._send_panel(update, text, reply_markup=self._desk_refresh_kb("eq"), parse_mode=HTML)
+        from earnings_edge.handlers import cmd_equity
+        await cmd_equity(self, update, ctx)
 
     def _strategies_panel_sync(self):
         from earnings_edge.bot_views import strategies_view
@@ -1957,21 +1890,12 @@ class TradingBot:
         return text, ikb
 
     async def _cmd_strategies(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        text, ikb = await asyncio.to_thread(self._strategies_panel_sync)
-        await self._send_panel(update, text, reply_markup=InlineKeyboardMarkup(ikb))
+        from earnings_edge.handlers import cmd_strategies
+        await cmd_strategies(self, update, ctx)
 
     async def _cmd_exits(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        def gather():
-            from earnings_edge.bot_views import pending_exits
-            return pending_exits()
-        rows = await asyncio.to_thread(gather)
-        if not rows:
-            await update.message.reply_text("🚪 No pending exit proposals.")
-            return
-        counts = {s: len(r) for s, r in cards.group_by_strategy(rows).items()}
-        await update.message.reply_text(
-            cards.batch_overview(counts, "exit"), parse_mode=HTML)
-        await self._push_batches(update.effective_chat.id, rows, "exit")
+        from earnings_edge.handlers import cmd_exits
+        await cmd_exits(self, update, ctx)
 
     def _strategy_enabled(self, name: str) -> bool:
         """Effective on/off for a strategy: TOML flag + operator override."""
@@ -2076,24 +2000,12 @@ class TradingBot:
         await self._refresh_pending_query(query, banner)
 
     async def _cmd_pending(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        text, rows = await asyncio.to_thread(self._pending_panel_sync)
-        await self._send_panel(update, 
-            text, parse_mode=HTML, reply_markup=InlineKeyboardMarkup(rows))
+        from earnings_edge.handlers import cmd_pending
+        await cmd_pending(self, update, ctx)
 
     async def _cmd_propose(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        pm = ProgressMessage(self.application.bot, update.effective_chat.id,
-                             "Building trade proposals")
-        await pm.start()
-        try:
-            await pm.set_stage("live signals → legs → risk gates → persist")
-            await self._propose_and_push()
-            from earnings_edge import trade_approval
-            funnel = funnel_line(trade_approval.LAST_FUNNEL)
-            tail = f"\n{funnel}" if funnel else ""
-            await pm.finish(f"✅ Proposals built and pushed.{tail}")
-        except Exception as exc:
-            logger.exception("manual proposal build failed")
-            await pm.finish(f"❌ Proposal build failed: {exc}")
+        from earnings_edge.handlers import cmd_propose
+        await cmd_propose(self, update, ctx)
 
     async def _send_rich_table_message(self, chat_id: int, as_of: str, picks: dict, format_picks_df) -> bool:
         import httpx
