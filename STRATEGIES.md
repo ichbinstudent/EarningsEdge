@@ -1,6 +1,6 @@
 # EarningsEdge Strategy Architecture
 
-This document outlines the core strategies available in the `cli_scanner` framework. 
+This document outlines the core strategies available in the Earnings Edge framework. 
 Strategies are configured via `.toml` files in the `strategies/` directory and executed either asynchronously via limits (`ff_ladder`) or as immediate paper/live orders via the `trade_approval` pipeline.
 
 ## 1. `ff_ladder` (Forward-Factor Limit Ladder)

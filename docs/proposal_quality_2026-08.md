@@ -4,7 +4,7 @@ Question: do the bot's operator-approved trade proposals beat the expected move
 against realized outcomes? Measured, not assumed. Rerunnable:
 
 ```bash
-cd cli_scanner
+cd .
 .venv/bin/python3.12 scripts/proposal_quality.py                      # offline, DB only
 .venv/bin/python3.12 scripts/proposal_quality.py --fetch-exit-prices  # + Polygon event moves & exit marks
 ```
@@ -101,8 +101,8 @@ themselves is a separate change to `OutcomeService.outcome_from_bars`.
 
 ## Artifacts
 
-- Script: `cli_scanner/scripts/proposal_quality.py` (rerunnable; offline by
+- Script: `scripts/proposal_quality.py` (rerunnable; offline by
   default, `--fetch-exit-prices` adds Polygon event moves + exit marks at
   13s pacing)
-- Full JSON: `cli_scanner/docs/proposal_quality_2026-08-07.json`
+- Full JSON: `docs/proposal_quality_2026-08-07.json`
 - Tests: `tests/integration/test_proposal_quality.py` (3), `tests/e2e/test_proposal_quality_e2e.py` (1)

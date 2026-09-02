@@ -5,17 +5,17 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/david/EarningsEdgeDetection/cli_scanner
-ExecStart=/home/david/EarningsEdgeDetection/cli_scanner/.venv/bin/python3.12 crash_alert.py
+WorkingDirectory=/home/david/EarningsEdgeDetection
+ExecStart=/home/david/EarningsEdgeDetection/.venv/bin/python3.12 crash_alert.py
 Restart=always
 RestartSec=10
 Environment=PYTHONUNBUFFERED=1
-EnvironmentFile=-/home/david/EarningsEdgeDetection/cli_scanner/.env
+EnvironmentFile=-/home/david/EarningsEdgeDetection/.env
 
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/home/david/EarningsEdgeDetection/cli_scanner/data /home/david/EarningsEdgeDetection/cli_scanner/logs
+ReadWritePaths=/home/david/EarningsEdgeDetection/data /home/david/EarningsEdgeDetection/logs
 PrivateTmp=true
 
 [Install]

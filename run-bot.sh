@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# DEPRECATED supervisor loop. Prefer systemd unit trading-bot.service
-# (deploy/trading-bot.service). Running this *and* systemd double-polls
+# Supervisor loop for the Telegram trading bot. Prefer systemd user units
+# (deploy/trading-bot.user.service). Running this *and* systemd double-polls
 # Telegram (409 Conflict). This script refuses if the instance lock is held.
 set -euo pipefail
 
-LOCK="$HOME/EarningsEdgeDetection/cli_scanner/data/trading-bot.lock"
+LOCK="$HOME/EarningsEdgeDetection/data/trading-bot.lock"
 if [[ -f "$LOCK" ]] && kill -0 "$(cat "$LOCK" 2>/dev/null)" 2>/dev/null; then
-    echo "trading-bot already running (lock $LOCK pid $(cat "$LOCK")). Use: sudo systemctl restart trading-bot" >&2
+    echo "trading-bot already running (lock $LOCK pid $(cat "$LOCK")). Use: systemctl --user restart trading-bot" >&2
     exit 1
 fi
 
-BOT_DIR="$HOME/EarningsEdgeDetection/cli_scanner"
+BOT_DIR="$HOME/EarningsEdgeDetection"
 PYTHON="$BOT_DIR/.venv/bin/python3.12"
 LOG_DIR="$BOT_DIR/logs"
 

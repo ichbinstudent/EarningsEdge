@@ -2,7 +2,7 @@
 
 Paper-trading system for US earnings options, driven by a Telegram bot. Independent of the original EarningsEdgeDetection scanner; this tree is the live bot, strategy layer, and ML pipeline.
 
-Python 3.12. Package metadata lives in `cli_scanner/pyproject.toml`.
+Python 3.12. Package metadata lives in `pyproject.toml` at the repo root.
 
 ## What it does
 
@@ -16,7 +16,7 @@ Alpaca paper only. Resting limits at computed prices; no live cash.
 
 ## Strategies
 
-TOML in `cli_scanner/strategies/`. Details: `cli_scanner/STRATEGIES.md`.
+TOML in `strategies/`. Details: `STRATEGIES.md`.
 
 | Name | Idea | Execution |
 |---|---|---|
@@ -33,13 +33,13 @@ TOML in `cli_scanner/strategies/`. Details: `cli_scanner/STRATEGIES.md`.
 
 ```bash
 git clone https://github.com/ichbinstudent/EarningsEdge.git
-cd EarningsEdge/cli_scanner
+cd EarningsEdge
 uv sync --group dev
 ```
 
 Python 3.12. `uv` is required (CI uses the same). Do not `pip install -e .` without the setuptools include list in `pyproject.toml`; the tree is a flat layout (`earnings_edge`, `framework`, …).
 
-Copy secrets to `cli_scanner/.env` (gitignored):
+Copy secrets to `.env` (gitignored):
 
 ```
 TELEGRAM_BOT_TOKEN=
@@ -81,18 +81,13 @@ Optional crash-alert knobs (defaults in parentheses): `GERMAN_CRASH_THRESHOLD` (
 ## Layout
 
 ```
-cli_scanner/
-  bot.py                 Telegram entry
-  scanner.py             CLI scan
-  earnings_edge/         scanners, live signals, FF math, collectors
-  framework/             risk, sizing, orders, exits
-  strategies/*.toml      live strategy configs
-  tests/
-  data/                  SQLite + models (not in git)
+bot.py                 Telegram entry
+scanner.py             CLI scan
+earnings_edge/         scanners, live signals, FF math, collectors
+framework/             risk, sizing, orders, exits
+strategies/*.toml      live strategy configs
+tests/
+data/                  SQLite + models (not in git)
 ```
 
 Pricing: LSE primary when `LSE_API_KEY` is set, then Yahoo, then Polygon (`EARNINGS_PRICE_PROVIDER=auto`).
-
-## License
-
-MIT. See `LICENSE`.

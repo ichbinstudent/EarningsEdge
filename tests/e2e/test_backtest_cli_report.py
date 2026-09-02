@@ -18,7 +18,7 @@ import pytest
 
 pytestmark = pytest.mark.e2e
 
-CLI_ROOT = Path(__file__).resolve().parents[2]  # cli_scanner/
+CLI_ROOT = Path(__file__).resolve().parents[2]  # repo root
 EARNINGS_DATE = date(2026, 7, 15)
 SCAN_DATE = date(2026, 7, 14)
 N_TICKERS = 35  # CalendarCallStrategy.min_rows default is 30 — clear it

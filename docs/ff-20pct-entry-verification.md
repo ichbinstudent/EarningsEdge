@@ -87,7 +87,7 @@ realized events from `snapshots`), with self-healing coverage via
 
 ## Test status at verification
 
-`cd cli_scanner && .venv/bin/python -m pytest tests/ -q`:
+`cd /path/to/repo && .venv/bin/python -m pytest tests/ -q`:
 **346 passed, 17 failed.** All 17 failures are the known env-dependent
 baseline recorded 2026-07-31 (14 `test_fwd_factor_ladder.py` runner-mechanics
 tests + 3 `test_framework_wiring.py` ladder wiring tests, sensitive to live

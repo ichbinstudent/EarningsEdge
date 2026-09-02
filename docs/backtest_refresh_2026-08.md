@@ -9,7 +9,7 @@ post-framework baseline.
 Rerun commands:
 
 ```bash
-cd cli_scanner
+cd .
 .venv/bin/python backtest.py --all --output /tmp/backtest.json   # report
 # metrics below: same engine, full trade lists (no 100-trade truncation),
 # per-strategy max drawdown from date-ordered cumulative P&L

@@ -1,32 +1,23 @@
 # Logs
 logs/
 *.log
- 
+
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
- 
+.pytest_cache/
+
 # Virtual Environment
 venv/
 env/
 ENV/
- 
-# IDE specific files
-.idea/
-.vscode/
-*.swp
-*.swo
- 
-# OS specific files
-.DS_Store
-Thumbs.db
- 
-# Generated files
-recommended_*.txt
-cli_scanner/.env
+.venv/
+
+# Secrets — never track
+.env
 oquants.env
 
 # SQLite databases (contain live trading data / account balances) — never track
@@ -37,25 +28,25 @@ oquants.env
 *.sqlite3
 
 # Runtime, salvage, and vendor binaries sitting under data/
-cli_scanner/data/backups/
-cli_scanner/data/gettex_quotes/
-cli_scanner/data/*.sql
-cli_scanner/data/sqlite-tools*/
-cli_scanner/data/sqlite-tools*.zip
-cli_scanner/data/sqlite3
-cli_scanner/data/sqlite3_analyzer
-cli_scanner/data/sqldiff
-cli_scanner/data/trading-bot.lock
-cli_scanner/data/subscribers.json
-cli_scanner/data/strategy_subscribers.json
+data/backups/
+data/gettex_quotes/
+data/*.sql
+data/sqlite-tools*/
+data/sqlite-tools*.zip
+data/sqlite3
+data/sqlite3_analyzer
+data/sqldiff
+data/trading-bot.lock
+data/subscribers.json
+data/strategy_subscribers.json
 
 # Local-only docs and build artifacts
-cli_scanner/earnings_edge.egg-info/
-cli_scanner/docs/weekly_reviews/
-cli_scanner/docs/superpowers/
-cli_scanner/docs/kimi_handoff_*.md
-cli_scanner/e2e_report.md
-cli_scanner/scripts/archive/
+earnings_edge.egg-info/
+docs/weekly_reviews/
+docs/superpowers/
+docs/kimi_handoff_*.md
+e2e_report.md
+scripts/archive/
 
 # AI agent / coding-assistant tooling — local only, never project deliverables
 .claude/
@@ -72,4 +63,3 @@ AGENTS.md
 CLAUDE.md
 opencode.json
 vexp.toml
-

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # German crash alerts — separate from trading-bot. Survives Hermes SIGTERM
-# only if launched with setsid (see README). Do not long-poll Telegram.
+# only if launched with setsid (see README). Does not long-poll Telegram.
 set -euo pipefail
-BOT_DIR="$HOME/EarningsEdgeDetection/cli_scanner"
+BOT_DIR="$HOME/EarningsEdgeDetection"
 PYTHON="$BOT_DIR/.venv/bin/python3.12"
 LOG_DIR="$BOT_DIR/logs"
 mkdir -p "$LOG_DIR"

@@ -18,7 +18,7 @@ are intentionally unmarked — they are the default.
 ## Running
 
 ```bash
-cd cli_scanner
+cd .
 
 # everything (default; all layers are fast and hermetic)
 .venv/bin/python -m pytest tests/ -q
@@ -33,7 +33,7 @@ cd cli_scanner
 ```
 
 Use `.venv/bin/python -m pytest`, never `uv run pytest` — the package is not
-pip-installed into the venv, so only the `python -m` form puts `cli_scanner/`
+pip-installed into the venv, so only the `python -m` form puts the repo root
 on `sys.path`.
 
 ## Rules for new code

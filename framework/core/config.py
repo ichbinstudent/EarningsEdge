@@ -1,6 +1,6 @@
 """Strategy configuration files (TOML, stdlib ``tomllib``).
 
-One file per strategy under ``cli_scanner/strategies/``. Loaded and validated
+One file per strategy under ``strategies/``. Loaded and validated
 at bot startup; a bad file disables that strategy and alerts, but never stops
 the bot. Consumed by the risk manager (limits/sizer), the scheduler (schedule,
 execution_mode) and the lifecycle manager (lifecycle).

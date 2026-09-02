@@ -1,0 +1,14 @@
+[Unit]
+Description=Earnings Edge live dashboard (websocket, port 8503)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/EarningsEdgeDetection
+ExecStart=%h/EarningsEdgeDetection/.venv/bin/python3.12 -m uvicorn dashboard.server:app --host 127.0.0.1 --port 8503 --log-level warning
+EnvironmentFile=-%h/EarningsEdgeDetection/.env
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
