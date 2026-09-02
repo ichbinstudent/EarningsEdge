@@ -10,7 +10,7 @@ import pytest
 from framework.execution.lifecycle import LifecycleManager
 from framework.execution.managed import open_positions, record_open_positions
 from framework.execution.order_manager import (
-    LimitWalkPolicy, MarketPolicy, MidPricePolicy, OrderManager,
+    LimitWalkPolicy, MidPricePolicy, OrderManager,
 )
 from framework.execution.reconcile import Reconciler
 from sqlalchemy import text
@@ -81,9 +81,8 @@ def test_limit_walk_sell_walks_down_from_mid():
     assert prices == [10.0, 9.95, 9.9]
 
 
-def test_mid_and_market_policies():
+def test_mid_policy():
     assert MidPricePolicy().walk(10.0, "buy") == [10.0]
-    assert MarketPolicy().walk(10.0, "buy") == [None]
 
 
 # ── Order manager -----------------------------------------------------------
@@ -118,12 +117,13 @@ def test_execute_no_quote_is_error():
     assert mo.state == "error" and broker.submit_count == 0
 
 
-def test_execute_market_policy_submits_market():
+def test_execute_refuses_market_when_no_limit_price():
     broker = StubBroker(fill_on_submit=1)
-    mo = _manager(broker).execute(LEGS, 1, MarketPolicy(), lambda: 10.0)
-    assert mo.state == "filled"
-    order = broker.orders[mo.order_ids[0]]
-    assert order["filled_avg_price"] is None  # market: no limit price passed
+    # No mid available -> execute() errors out before any submit: the
+    # manager must never fall back to a market order.
+    mo = _manager(broker).execute(LEGS, 1, MidPricePolicy(), lambda: None)
+    assert mo.state == "error" and broker.submit_count == 0
+    assert mo.order_ids == []  # nothing was ever submitted
 
 
 # ── Reconcile --------------------------------------------------------------

@@ -60,6 +60,16 @@ def store(tmp_path):
 def mock_bridge():
     client = MagicMock()
     client.position_symbols.return_value = set()
+    # preflight_combo needs a live-looking Alpaca book per leg symbol.
+    # Calendar legs arrive as (near sell, far buy): make the far leg pricier
+    # so the net debit mid is positive (0.50) and the spread passes the gate.
+    def _bulk(*symbols):
+        out = {}
+        for i, s in enumerate(symbols):
+            mid = 5.04 if i == 0 else 5.54
+            out[s] = {"latestQuote": {"bp": round(mid - 0.04, 2), "ap": round(mid + 0.04, 2)}}
+        return out
+    client.get_option_snapshots_bulk.side_effect = _bulk
     bridge = StrategyBridge(client=client, config=BridgeConfig(dry_run=False))
     return bridge
 

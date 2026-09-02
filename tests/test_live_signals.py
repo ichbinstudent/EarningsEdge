@@ -101,6 +101,16 @@ def test_latest_scan_frame_stale_returns_empty(scan_db):
 def _bridge():
     client = MagicMock()
     client.position_symbols.return_value = set()
+    # preflight_combo requires a live Alpaca book per leg; calendar legs are
+    # (near sell, far buy) — price the far leg above the near leg so the
+    # net debit mid is positive.
+    def _bulk(*symbols):
+        out = {}
+        for i, s in enumerate(symbols):
+            mid = 5.04 if i == 0 else 5.54
+            out[s] = {"latestQuote": {"bp": round(mid - 0.04, 2), "ap": round(mid + 0.04, 2)}}
+        return out
+    client.get_option_snapshots_bulk.side_effect = _bulk
     return StrategyBridge(client=client, config=BridgeConfig(dry_run=False))
 
 

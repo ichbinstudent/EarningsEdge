@@ -137,6 +137,56 @@ def resolved_keeps_strike(requested: float, resolved_symbol: str, tol: float = 0
         return False
     return abs(float(got) - float(requested)) <= tol
 
+
+def preflight_combo(
+    bridge: "StrategyBridge",
+    trade: "Trade",
+    legs: list[dict],
+    *,
+    max_spread_vs_mid: float = MAX_SPREAD_VS_MID,
+) -> tuple[Optional[str], Optional[float]]:
+    """Proposal-time check of a combo against the EXECUTION venue's book.
+
+    The scan layer prices candidates from LSEG marks; execution goes to
+    Alpaca. These two disagree: LSEG lists strikes Alpaca does not carry
+    (e.g. PL 19.5 -> AlpacaError 422 invalid legs) and thin Alpaca books
+    make LSEG-priced debits unexecutable at last-look. Running the same
+    existence + spread checks BEFORE a card is pushed means the approval
+    card is executable at the price it shows.
+
+    Returns (veto_reason, alpaca_mid). veto_reason is None when the combo
+    is tradable on Alpaca right now; alpaca_mid is the live combo mid
+    (None when no two-sided book).
+    """
+    symbols = [leg["symbol"] for leg in legs]
+    try:
+        raw = bridge.client.get_option_snapshots_bulk(*symbols)
+    except Exception as exc:
+        return f"preflight: snapshot request failed ({exc})", None
+    if not isinstance(raw, dict):
+        return "preflight: snapshot response not a dict", None
+    for leg in legs:
+        snap = raw.get(leg["symbol"])
+        if snap is None:
+            return f"preflight: {leg['symbol']} not on Alpaca", None
+        q = snap.get("latestQuote") or {}
+        try:
+            bid, ask = float(q.get("bp") or 0), float(q.get("ap") or 0)
+        except (TypeError, ValueError):
+            return f"preflight: {leg['symbol']} unreadable quote", None
+        if bid <= 0 or ask <= 0 or ask < bid:
+            return f"preflight: {leg['symbol']} no two-sided book", None
+    q = combo_quotes(legs, raw)
+    if q is None:
+        return "preflight: no two-sided combo book", None
+    mid, spread = q["mid"], q["spread"]
+    if mid > 0 and spread / mid > max_spread_vs_mid:
+        return (
+            f"preflight: spread {spread:.2f} > {max_spread_vs_mid:.0%} of mid {mid:.2f}",
+            mid,
+        )
+    return None, mid
+
 # Tail-stress multiple applied to the market-implied earnings move when
 # pricing max loss for UNDEFINED-risk short premium (naked straddle/strangle):
 # proxy max loss = EARNINGS_STRESS_MULTIPLE x expected_move_dollars x 100.

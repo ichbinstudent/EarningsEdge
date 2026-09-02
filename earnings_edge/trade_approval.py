@@ -24,7 +24,12 @@ from pathlib import Path
 from typing import Any, Optional
 
 from earnings_edge import cards, live_signals
-from earnings_edge.alpaca_bridge import BridgeConfig, StrategyBridge, _resolve_strategy
+from earnings_edge.alpaca_bridge import (
+    BridgeConfig,
+    StrategyBridge,
+    _resolve_strategy,
+    preflight_combo,
+)
 from earnings_edge.alpaca_trading import create_client
 from earnings_edge.db import (
     configure,
@@ -496,10 +501,12 @@ def build_proposals(
             "legs_ok": 0,
             "dte_ok": 0,
             "position_ok": 0,
+            "preflight_ok": 0,
             "proposals_created": 0,
             "reject_model_skip": 0,
             "reject_no_quote": 0,
             "reject_dte": 0,
+            "reject_preflight": 0,
         }
         try:
             trades = trade_source(name)
@@ -532,6 +539,18 @@ def build_proposals(
                 if any(leg["symbol"] in positions for leg in legs):
                     continue
             stage["position_ok"] += 1
+            # Execution-venue pre-flight: the card must be tradable on Alpaca
+            # at the price it shows (LSEG marks and Alpaca books disagree).
+            veto, alpaca_mid = preflight_combo(bridge, trade, legs)
+            if veto:
+                stage["reject_preflight"] += 1
+                logger.info("%s %s rejected at proposal: %s", name, trade.ticker, veto)
+                continue
+            stage["preflight_ok"] += 1
+            if alpaca_mid is not None and alpaca_mid > 0:
+                # Show the execution venue's mid, not the scan-layer debit —
+                # the card becomes executable at the price it displays.
+                trade.entry_price = alpaca_mid
             candidates.append((trade, legs))
         funnel[name] = stage
 

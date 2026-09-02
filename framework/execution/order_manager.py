@@ -38,15 +38,6 @@ class PricingPolicy:
         raise NotImplementedError
 
 
-class MarketPolicy(PricingPolicy):
-    """Single market order (None = no limit price)."""
-
-    name = "market"
-
-    def walk(self, mid: float, side: str) -> list[Optional[float]]:
-        return [None]
-
-
 class MidPricePolicy(PricingPolicy):
     """One passive limit at the mid, take it or leave it."""
 
@@ -169,19 +160,25 @@ class OrderManager:
     # -- internals -----------------------------------------------------------
 
     def _submit(self, legs, qty, price, cid, tif) -> str:
+        # Never market: resting limit orders at computed prices only
+        # (DEFAULT_ORDER_TYPE="limit" invariant, enforced framework-side).
+        if price is None:
+            logger.warning("refusing market submit: no limit price for %s",
+                           legs[0]["symbol"] if legs else "?")
+            raise ValueError("no limit price — refusing to submit a market order")
         for attempt in range(1, 4):
             try:
                 if len(legs) == 1:
                     leg = legs[0]
                     order = self.client.submit_order(
                         symbol=leg["symbol"], qty=qty * leg.get("ratio_qty", 1), side=leg["side"],
-                        order_type="limit" if price is not None else "market",
+                        order_type="limit",
                         limit_price=price, time_in_force=tif, client_order_id=cid,
                     )
                 else:
                     order = self.client.submit_multi_leg_order(
                         legs=legs, qty=qty,
-                        order_type="limit" if price is not None else "market",
+                        order_type="limit",
                         limit_price=price, time_in_force=tif, client_order_id=cid,
                     )
                 return order["id"]
@@ -191,7 +188,6 @@ class OrderManager:
                 logger.warning("submit API error (attempt %d/3): %s", attempt, exc)
                 self._sleep(1.0 * (2 ** (attempt - 1)))
         raise RuntimeError("Submit failed")
-
     def _poll_fill(self, order_id: str) -> Optional[tuple[float, Optional[float]]]:
         """(filled_qty, avg_price) once any fill is seen, else None.
         Calculates net price from legs if the parent order is empty."""
