@@ -17,9 +17,10 @@ LIVE_STRATEGIES (mapped):
     own filter-only fallback when the model artifact is absent)
 
 NOT mapped:
-  - earnings_quality is a POST-event strategy (trades the surprise after the
-    move is known, LONG/SHORT stock). No pre-event live mapping exists; it
-    stays backtest-only until someone designs the post-event entry path.
+  - earnings_quality is POST-event (backtest-only).
+  - debit_size_exploit is disabled (not in LIVE_STRATEGIES).
+  - option magnitude/direction models are backtest-only; live short_straddle
+    / vol_risk_premium are IV/RV filter gates, not those heads.
 """
 from __future__ import annotations
 

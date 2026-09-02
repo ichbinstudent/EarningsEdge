@@ -14,10 +14,11 @@ valid samples are required. A bounce that recovers before the latest print
 does not alert.
 
 Price used: last trade when it sits within 25% of the live mid and the
-trade is fresh; otherwise the bid/ask mid (so a book crash without a print
-still counts; Tradegate index JSON has no last). Quotes without a live
+trade is fresh; otherwise the bid/ask mid. Quotes without a live
 two-sided, uncrossed book are rejected (fail closed). Zero / NaN / stale
-snapshots are rejected.
+snapshots are rejected. Relative spread wider than ``max_spread`` (default 10%) is rejected.
+A last trade older than ``trade_max_age_secs`` (default 10 minutes), or a missing
+print, is rejected so alerts require actual trading activity.
 
 Alerts only — this module never places orders.
 """
@@ -29,7 +30,7 @@ import logging
 import os
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
@@ -105,6 +106,10 @@ class CrashAlertConfig:
     snapshot_open: bool = True
     enabled: bool = True
     last_vs_mid_max: float = _LAST_VS_MID_MAX
+    # Reject placeholder/illiquid books (Xetra stub bids like 0.0001 vs a real ask).
+    max_spread: float = 0.10
+    # Alert only if a print exists inside this age (default 10 minutes).
+    trade_max_age_secs: int = 600
 
     @classmethod
     def from_env(cls) -> "CrashAlertConfig":
@@ -118,6 +123,8 @@ class CrashAlertConfig:
             tradegate_enabled=_env_bool("GERMAN_CRASH_TRADEGATE", True),
             snapshot_open=_env_bool("GERMAN_CRASH_SNAPSHOT", True),
             enabled=_env_bool("GERMAN_CRASH_ENABLED", True),
+            max_spread=_env_float("GERMAN_CRASH_MAX_SPREAD", 0.10),
+            trade_max_age_secs=_env_int("GERMAN_CRASH_TRADE_MAX_AGE_SECS", 600),
         )
 
 
@@ -268,17 +275,24 @@ def validate_quote(
     source: str = "",
     trade_ts: Optional[datetime] = None,
 ) -> Optional[GermanQuote]:
-    """Fail closed: live two-sided uncrossed book, finite price, not stale.
+    """Fail closed: live book, recent print, finite price, not stale.
 
-    ``ts`` is observation time (when we captured the quote). A stale
-    observation is rejected. An old last-trade print against a live book
-    falls back to mid so a dumped book still alerts.
+    ``ts`` is observation time. A quote with no last trade, or a last
+    trade older than ``trade_max_age_secs`` (default 10 minutes), is
+    rejected so a book-only wobble cannot alert. Price may still be mid
+    when last is far from the book.
     """
     if not ticker:
         return None
     now = _aware(now)
     ts = _aware(ts)
     if now - ts > timedelta(seconds=cfg.stale_secs):
+        return None
+    if last is None or last <= 0 or last != last:
+        return None
+    if trade_ts is None:
+        return None
+    if now - _aware(trade_ts) > timedelta(seconds=cfg.trade_max_age_secs):
         return None
     if bid is None or ask is None:
         return None
@@ -288,6 +302,9 @@ def validate_quote(
         return None
     mid = (bid + ask) / 2.0
     if mid <= 0 or mid != mid:
+        return None
+    spread = (ask - bid) / mid
+    if spread > cfg.max_spread:
         return None
     price = mid
     used_last = last if (last is not None and last > 0 and last == last) else None
@@ -411,7 +428,7 @@ class CrashDetector:
 
 
 class Cooldown:
-    """Per-ticker suppress window. Optional JSON persistence across restarts."""
+    """Per (ticker, venue) suppress window. Optional JSON persistence across restarts."""
 
     def __init__(self, cooldown_secs: int, path: Optional[str] = None):
         self.cooldown = timedelta(seconds=cooldown_secs)
@@ -459,15 +476,16 @@ class Cooldown:
         return True
 
     def filter(self, alerts: list[CrashAlert], now: datetime) -> list[CrashAlert]:
-        """Keep the largest drop per ticker, then apply cooldown."""
-        best: dict[str, CrashAlert] = {}
+        """Keep the largest drop per (ticker, venue), then apply per-venue cooldown."""
+        best: dict[tuple[str, str], CrashAlert] = {}
         for a in alerts:
-            cur = best.get(a.ticker)
+            key = (a.ticker, a.venue)
+            cur = best.get(key)
             if cur is None or a.drop_pct > cur.drop_pct:
-                best[a.ticker] = a
+                best[key] = a
         out: list[CrashAlert] = []
-        for ticker, a in best.items():
-            if self.allow(ticker, now):
+        for a in best.values():
+            if self.allow(f"{a.ticker}|{a.venue}", now):
                 out.append(a)
         out.sort(key=lambda a: a.drop_pct, reverse=True)
         return out
@@ -509,6 +527,15 @@ def in_open_snapshot_window(now: datetime) -> bool:
     )
 
 
+def in_crash_poll_window(now: datetime) -> bool:
+    """True weekdays 07:30–23:00 Europe/Berlin inclusive."""
+    local = _aware(now).astimezone(BERLIN)
+    if local.weekday() >= 5:
+        return False
+    t = local.time()
+    return time(7, 30) <= t <= time(23, 0)
+
+
 @dataclass
 class CrashMonitor:
     """One poll: fetch German quotes, detect drops, apply cooldown."""
@@ -542,6 +569,8 @@ class CrashMonitor:
         if not self.cfg.enabled:
             return {"skipped": "disabled", "alerts": []}
         now = _aware(now or datetime.now(timezone.utc))
+        if not in_crash_poll_window(now):
+            return {"skipped": "outside_window", "alerts": []}
         n_fetched = 0
         valid: list[GermanQuote] = []
         raw_lseg: list[dict] = []
@@ -560,6 +589,14 @@ class CrashMonitor:
                     q = quote_from_lseg(row, now, self.cfg)
                     if q:
                         valid.append(q)
+                fetched_rics = {
+                    str(row.get("q.RIC") or "").strip()
+                    for row in raw_lseg
+                    if isinstance(row, dict)
+                }
+                fetched_rics.discard("")
+                if fetched_rics:
+                    self._watch_rics = fetched_rics
             except Exception as exc:
                 logger.error("LSEG german quotes failed: %s", exc)
 
@@ -573,8 +610,6 @@ class CrashMonitor:
                         valid.append(q)
             except Exception as exc:
                 logger.error("Tradegate quotes failed: %s", exc)
-
-        self._watch_rics = {q.ric for q in valid if q.source == "lseg" and q.ric}
 
         if (
             self.cfg.snapshot_open
@@ -596,6 +631,7 @@ class CrashMonitor:
             "n_raw_alerts": len(raw_alerts),
             "n_alerts": len(alerts),
             "tickers": [a.ticker for a in alerts],
+            "venues": [a.venue for a in alerts],
             "alerts": alerts,
         }
 

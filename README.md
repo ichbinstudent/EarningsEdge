@@ -9,7 +9,7 @@ Python 3.12. Package metadata lives in `cli_scanner/pyproject.toml`.
 - **Earnings calendar scan** weekdays at 14:00 ET (20:00 Berlin). IV/RV, term structure, calendar quotes, ML TAKE/SKIP.
 - **Proposal cards** on Telegram: approve or skip. Auto mode is per-strategy and still risk-gated.
 - **Forward-factor ladders** (`ff_ladder`, `forward_factor_arb`): patient MLEG limit entry 14:00–15:45 ET.
-- **German crash alerts**: Gettex/Xetra/Frankfurt + Tradegate. Poll every 2 minutes 07:30–21:58 CET; Telegram if a name drops more than 20% in 5 minutes. Not a realtime stream.
+- **German crash alerts**: separate process (`crash_alert.py` / `run-crash.sh`). Poll every 2 minutes 07:30–23:00 Europe/Berlin weekdays. Telegram if a name drops more than 20% in 5 minutes (tight book + print ≤10 min). Not a realtime stream.
 - **Ops**: `/status` `/positions` `/orders` `/jobs` `/equity` `/signals` `/picks` `/halt` `/resume`. Kill switch and per-strategy pause.
 
 Alpaca paper only. Resting limits at computed prices; no live cash.
@@ -57,8 +57,12 @@ FINNHUB_API_KEY=
 ## Run
 
 ```bash
-# Telegram bot (foreground)
-uv run python bot.py
+# Telegram bot (foreground). Prefer systemd trading-bot if sudo is available.
+# If starting from Hermes, use setsid so SIGTERM to the agent does not kill it:
+setsid ./run-bot.sh </dev/null >/dev/null 2>&1 &
+
+# German crash alerts (own process — do not put this back in bot.py)
+setsid ./run-crash.sh </dev/null >/dev/null 2>&1 &
 
 # Health
 curl -s http://127.0.0.1:8502/health
@@ -72,7 +76,7 @@ uv run python -m pytest tests -q --tb=short
 
 No sudo on the usual host: kill the **python** `bot.py` PID, not a bash wrapper, then relaunch. Wait 3–5s so Telegram polling can drop the old getUpdates lock.
 
-Optional crash-alert knobs (defaults in parentheses): `GERMAN_CRASH_THRESHOLD` (0.20), `GERMAN_CRASH_WINDOW_SECS` (300), `GERMAN_CRASH_COOLDOWN_SECS` (1800), `GERMAN_CRASH_ENABLED` (1).
+Optional crash-alert knobs (defaults in parentheses): `GERMAN_CRASH_THRESHOLD` (0.20), `GERMAN_CRASH_WINDOW_SECS` (300), `GERMAN_CRASH_COOLDOWN_SECS` (1800), `GERMAN_CRASH_MAX_SPREAD` (0.10), `GERMAN_CRASH_TRADE_MAX_AGE_SECS` (600), `GERMAN_CRASH_ENABLED` (1).
 
 ## Layout
 

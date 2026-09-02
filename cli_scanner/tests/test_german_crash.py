@@ -15,6 +15,7 @@ from earnings_edge.german_crash import (
     CrashDetector,
     CrashMonitor,
     format_alert,
+    in_crash_poll_window,
     in_open_snapshot_window,
     parse_lseg_number,
     parse_tg_number,
@@ -41,6 +42,7 @@ def _q(**over):
     base = dict(
         ticker="SAPG", venue="Gettex", last=100.0, bid=99.8, ask=100.2,
         ts=NOW, now=NOW, cfg=CFG, ric="SAPG.GTX", name="SAP SE", source="lseg",
+        trade_ts=NOW,
     )
     base.update(over)
     return validate_quote(**base)
@@ -114,12 +116,18 @@ def test_reject_below_min_price():
     assert _q(last=0.5, bid=0.49, ask=0.51) is None
 
 
-def test_stale_last_falls_back_to_mid_when_book_live():
-    trade = NOW - timedelta(seconds=600)
-    q = _q(last=100.0, bid=80.0, ask=80.4, trade_ts=trade)
-    # last is 25%+ away from mid → use mid (book crash, no print)
+def test_stale_last_far_from_mid_uses_mid_if_trade_recent():
+    trade = NOW - timedelta(seconds=120)
+    q = _q(last=100.0, bid=70.0, ask=70.4, trade_ts=trade)
     assert q is not None
-    assert q.price == pytest.approx(80.2)
+    assert q.price == pytest.approx(70.2)
+
+
+def test_require_print_within_10_minutes():
+    assert _q(trade_ts=None) is None
+    assert _q(last=None, trade_ts=NOW) is None
+    assert _q(trade_ts=NOW - timedelta(seconds=601)) is None
+    assert _q(trade_ts=NOW - timedelta(seconds=600)) is not None
 
 
 def test_fresh_last_near_mid_is_used():
@@ -144,15 +152,13 @@ def test_quote_from_lseg_and_tradegate():
     )
     assert lseg is not None and lseg.ticker == "SAPG" and lseg.venue == "Gettex"
 
+    # Tradegate index JSON has no last print → no alert input
     tg = quote_from_tradegate(
         {"isin": "DE0007164600", "name": "SAP SE", "bid": 99.8, "ask": 100.2},
         captured_at=NOW,
         cfg=CFG,
     )
-    assert tg is not None
-    assert tg.ticker == "DE0007164600"
-    assert tg.venue == "Tradegate"
-    assert tg.price == pytest.approx(100.0)
+    assert tg is None
 
 
 def test_lseg_garbage_zero_book_no_quote():
@@ -166,6 +172,29 @@ def test_lseg_garbage_zero_book_no_quote():
         captured_at=NOW,
         cfg=CFG,
     ) is None
+
+
+def test_reject_xetra_stub_bid():
+    # Live false alert 2026-09-02: LNC.DE bid=0.0001 ask=38.03
+    assert _q(last=37.0, bid=0.0001, ask=38.03) is None
+
+
+def test_reject_wide_spread_book():
+    # Live false alert: CUFR.DE bid=71 ask=140
+    assert _q(last=141.5, bid=71.0, ask=140.0) is None
+
+
+def test_stub_book_does_not_create_false_crash():
+    det = CrashDetector(CFG)
+    t0 = NOW - timedelta(seconds=120)
+    det.ingest([_px("LNC", "Xetra", 37.0, t0)], t0)
+    stub = _q(ticker="LNC", venue="Xetra", last=37.0, bid=0.0001, ask=38.03, ric="LNC.DE")
+    assert stub is None
+    alerts = det.ingest([], NOW)  # no new valid quote
+    assert alerts == []
+    # even if someone ingested a raw mid of the stub, validate already blocked it
+    alerts = det.ingest([_px("LNC", "Xetra", 37.0, NOW)], NOW)
+    assert alerts == []
 
 
 # ── drop definition: peak-to-trough, strictly > 20% ──────────────────────
@@ -250,7 +279,7 @@ def test_book_dump_without_print_uses_mid_and_alerts():
     det.ingest([_px("SAPG", "Gettex", 100.0, t0)], t0)
     q = _q(
         ticker="SAPG", venue="Gettex", last=100.0, bid=69.8, ask=70.2,
-        ts=NOW, ric="SAPG.GTX",
+        ts=NOW, ric="SAPG.GTX", trade_ts=NOW - timedelta(seconds=60),
     )
     assert q is not None
     assert q.price == pytest.approx(70.0)
@@ -291,16 +320,16 @@ def test_cooldown_suppresses_same_ticker():
     assert len(later) == 1
 
 
-def test_cooldown_keeps_largest_drop_per_ticker():
+def test_cooldown_is_per_venue_not_per_ticker():
     cd = Cooldown(cooldown_secs=1800)
     a1 = CrashAlert(ticker="SAPG", venue="Gettex", drop_pct=0.21, high=100, last=79,
                     window_secs=300, ts=NOW)
     a2 = CrashAlert(ticker="SAPG", venue="Xetra", drop_pct=0.40, high=100, last=60,
                     window_secs=300, ts=NOW)
     out = cd.filter([a1, a2], NOW)
-    assert len(out) == 1
-    assert out[0].venue == "Xetra"
-    assert out[0].drop_pct == pytest.approx(0.40)
+    assert {a.venue for a in out} == {"Gettex", "Xetra"}
+    again = cd.filter([a2], NOW + timedelta(seconds=60))
+    assert again == []
 
 
 def test_cooldown_persists_to_disk(tmp_path):
@@ -365,10 +394,12 @@ def test_monitor_poll_emits_and_cools_down(tmp_path):
     lseg_t0 = [{
         "q.RIC": "SAPG.GTX", "q._TRDPRC_1": "+100", "q._BID": "+99.8",
         "q._ASK": "+100.2", "q._DSPLY_NAME": "SAP SE",
+        "q._TRADE_DATE": "01 SEP 2026", "q._TRDTIM_1": "17:58:00",
     }]
     lseg_t1 = [{
         "q.RIC": "SAPG.GTX", "q._TRDPRC_1": "+70", "q._BID": "+69.8",
         "q._ASK": "+70.2", "q._DSPLY_NAME": "SAP SE",
+        "q._TRADE_DATE": "01 SEP 2026", "q._TRDTIM_1": "18:00:00",
     }]
     fake = _FakeGettex(lseg_t0)
     mon = CrashMonitor(
@@ -418,22 +449,49 @@ def test_in_open_snapshot_window():
     assert not in_open_snapshot_window(berlin_0900)
 
 
+def test_in_crash_poll_window_0730_to_2300_berlin_weekdays():
+    # Tue 2026-09-01 is CEST (UTC+2)
+    assert in_crash_poll_window(datetime(2026, 9, 1, 5, 30, tzinfo=timezone.utc))  # 07:30
+    assert in_crash_poll_window(datetime(2026, 9, 1, 21, 0, tzinfo=timezone.utc))   # 23:00
+    assert not in_crash_poll_window(datetime(2026, 9, 1, 5, 29, tzinfo=timezone.utc))  # 07:29
+    assert not in_crash_poll_window(datetime(2026, 9, 1, 21, 0, 1, tzinfo=timezone.utc))  # 23:00:01
+    # Saturday
+    assert not in_crash_poll_window(datetime(2026, 9, 5, 10, 0, tzinfo=timezone.utc))
+
+
+def test_poll_skips_outside_berlin_window():
+    collector = MagicMock()
+    tradegate = MagicMock()
+    mon = CrashMonitor(cfg=CFG, collector=collector, tradegate=tradegate)
+    out = mon.poll(datetime(2026, 9, 1, 5, 0, tzinfo=timezone.utc))  # 07:00 CEST
+    assert out["skipped"] == "outside_window"
+    assert out["alerts"] == []
+    collector.fetch_quotes.assert_not_called()
+    tradegate.fetch_index_quotes.assert_not_called()
+
+
 # ── bot wiring (real callers, not just the library) ──────────────────────
 
 
-def test_bot_registers_german_crash_jobs_and_telegram_send():
+def test_bot_does_not_register_german_crash_jobs():
     import bot as bot_mod
 
     src = inspect.getsource(bot_mod.TradingBot._setup_scheduler)
-    assert "_german_crash_sync" in src
+    assert "german_crash" not in src
+    assert not hasattr(bot_mod.TradingBot, "_german_crash_sync")
+
+
+def test_crash_alert_process_owns_the_scheduler():
+    import crash_alert as ca
+    import inspect as ins
+
+    src = ins.getsource(ca.main)
     assert 'id="german_crash"' in src
     assert 'id="german_crash_pre"' in src
-    poll = inspect.getsource(bot_mod.TradingBot._german_crash_poll)
-    assert "build_monitor" in poll
-    assert "format_alert" in poll
-    assert "_push_risk_alert" in poll
-    assert "run_job" in poll
-    assert "german_crash" in poll
+    assert 'id="german_crash_close"' in src
+    assert "*/2 8-22 * * mon-fri" in src
+    assert "0 23 * * mon-fri" in src
+    assert "poll_once" in ins.getsource(ca.tick)
 
 
 def test_gettex_collector_write_snapshot_and_batching(tmp_path):
@@ -466,8 +524,4 @@ def test_gettex_collector_write_snapshot_and_batching(tmp_path):
     assert "A.GTX" in text
 
 
-def test_gettex_capture_alias_still_calls_crash_poll():
-    import bot as bot_mod
 
-    src = inspect.getsource(bot_mod.TradingBot._gettex_capture_sync)
-    assert "_german_crash_sync" in src

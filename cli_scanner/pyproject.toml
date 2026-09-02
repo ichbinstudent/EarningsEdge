@@ -19,7 +19,9 @@ dependencies = [
     "scipy>=1.15",
     "selenium>=4.15",
     "sqlalchemy>=2.0",
+    "starlette>=0.40",
     "tqdm>=4.66",
+    "uvicorn>=0.30",
     "webdriver-manager>=4.0",
     "websocket-client>=1.7",
     "yfinance>=0.2.54",
@@ -37,6 +39,7 @@ trading-bot = "bot:main"
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "httpx>=0.27",
 ]
 
 [tool.pytest.ini_options]

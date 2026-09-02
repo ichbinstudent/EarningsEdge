@@ -43,8 +43,8 @@ def main() -> int:
         _line(True, "ALPACA_LIVE", "unset (paper)")
 
     reg = get_registry()
-    v1_on = {"calendar_call_ml", "debit_size_exploit", "ff_ladder"}
-    v1_off = {"short_straddle", "vol_risk_premium", "earnings_quality"}
+    v1_on = {"calendar_call_ml", "ff_ladder", "forward_factor_arb"}
+    v1_off = {"debit_size_exploit", "earnings_quality"}
     for name in v1_on:
         enabled = reg.is_enabled(name)
         mode = reg.execution_mode(name)

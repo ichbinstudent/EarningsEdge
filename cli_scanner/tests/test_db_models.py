@@ -15,7 +15,8 @@ def _live_schema(db_file) -> dict:
     try:
         out = {}
         tables = [r[0] for r in con.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name != 'sqlite_sequence'")]
+            "SELECT name FROM sqlite_master WHERE type='table' AND name != 'sqlite_sequence'"
+            " AND name != 'lost_and_found'")]  # DBCC salvage table from the 2026-08-31 recovery
         for t in tables:
             # Full tuple: (name, type, notnull, dflt_value, pk). dflt_value is
             # compared verbatim — the generator emits server_default=text(...) so

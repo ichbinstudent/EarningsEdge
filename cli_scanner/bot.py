@@ -2,9 +2,8 @@
 """
 Unified Telegram bot for the Earnings Edge trading scanners.
 
-Runs both the US Earnings Calendar scanner and the Eurex Forward Volatility
-scanner on configurable cron schedules, pushing results to subscribers via
-Telegram. Also supports on-demand /run and keyboard-driven interaction.
+US earnings-options Telegram bot (scan, proposals, FF ladder, risk).
+German crash alerts run in crash_alert.py — not here.
 """
 
 import asyncio
@@ -1204,38 +1203,6 @@ class TradingBot:
 
     def _exit_eval_sync(self):
         self._dispatch(self._exit_eval())
-
-    def _german_crash_sync(self):
-        self._dispatch(self._german_crash_poll())
-
-    def _gettex_capture_sync(self):
-        """Kept as an alias so the original 07:30 CET capture job name still works."""
-        self._german_crash_sync()
-
-    async def _german_crash_poll(self):
-        """Poll German venues for a >20% drop in 5 minutes; Telegram alert only."""
-        from earnings_edge.german_crash import build_monitor, format_alert
-        from framework.jobs import run_job
-
-        monitor = getattr(self, "_german_crash_monitor", None)
-        if monitor is None:
-            data_dir = os.path.join(os.path.dirname(__file__), "data", "gettex_quotes")
-            monitor = build_monitor(data_dir)
-            self._german_crash_monitor = monitor
-
-        def work():
-            return monitor.poll()
-
-        try:
-            result = await asyncio.to_thread(lambda: run_job("german_crash", work))
-        except Exception as exc:
-            logger.error("German crash poll failed: %s", exc)
-            return
-        for alert in (result or {}).get("alerts") or []:
-            try:
-                await self._push_risk_alert(format_alert(alert))
-            except Exception as exc:
-                logger.error("German crash alert push failed: %s", exc)
 
     # ── Forward-factor ladder ──────────────────────────────────────────
 
@@ -2600,22 +2567,6 @@ class TradingBot:
                 trigger=CronTrigger.from_crontab("5 * * * *", timezone=tz),
                 id="db_health_check", name="SQLite integrity check",
             )
-            # German-venue crash alerts (Gettex/Xetra/Frankfurt + Tradegate).
-            # Every 2 min 07:30–21:58 CET weekdays; jsonl snapshot still written
-            # during the original 07:30–08:00 CET capture slot.
-            crash_kw = dict(max_instances=1, coalesce=True, misfire_grace_time=90)
-            self.scheduler.add_job(
-                self._german_crash_sync,
-                trigger=CronTrigger.from_crontab("30-59/2 7 * * mon-fri", timezone=tz),
-                id="german_crash_pre", name="German crash alert (7:30-7:58)",
-                **crash_kw,
-            )
-            self.scheduler.add_job(
-                self._german_crash_sync,
-                trigger=CronTrigger.from_crontab("*/2 8-21 * * mon-fri", timezone=tz),
-                id="german_crash", name="German crash alert (8:00-21:58)",
-                **crash_kw,
-            )
             # Pre-market picks pipeline: 07:00 ET (13:00 Berlin) weekdays —
             # refresh chains + signals, generate and persist today's picks.
             self.scheduler.add_job(
@@ -2629,7 +2580,7 @@ class TradingBot:
                 trigger=CronTrigger.from_crontab("5 15-22 * * mon-fri", timezone=tz),
                 id="chain_cache", name="Hourly Alpaca chain cache",
             )
-            logger.info("Scheduled framework jobs: equity */15, reconcile */30, guard 15:45 ET, exits */15, backup 06:15, chain cache hourly, german crash */2 7:30-22 CET")
+            logger.info("Scheduled framework jobs: equity */15, reconcile */30, guard 15:45 ET, exits */15, backup 06:15, chain cache hourly")
         except Exception as exc:
             logger.error("Failed to schedule framework jobs: %s", exc)
 

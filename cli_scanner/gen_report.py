@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate paper trade report: all candidates have earnings today (DTE=0), correctly filtered."""
+"""DEPRECATED fallback for the old paper-trade CLI. Daily path is bot.py."""
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))

@@ -608,18 +608,6 @@ _SETUP_BODY = {
         "the report (IV crush differential). The backtest exits on the first "
         "option close after earnings — this is not a hold-to-expiry trade."
     ),
-    "debit_size_exploit": (
-        "Structure: LONG call calendar into earnings (same legs as "
-        "calendar_call_ml).\n"
-        "  SELL 1x <near expiry> ATM call\n"
-        "  BUY  1x <far expiry> ATM call (~+28 days)\n"
-        "Entry rule: NO ML gate — take any scanner candidate whose combo ask "
-        "debit is <= 3% of the stock price (cheap-vol names where the "
-        "calendar costs little relative to the underlying).\n"
-        "Sizing: pct_portfolio — 3% of equity per trade.\n"
-        "Thesis: small debits give asymmetric payoff when the post-earnings "
-        "move lands near the strike; backtest #1 (+$7.0k, 24.9% avg RoD)."
-    ),
     "vol_risk_premium": (
         "Structure: SHORT straddle into earnings (UNDEFINED RISK).\n"
         "  SELL 1x <near expiry> ATM call\n"

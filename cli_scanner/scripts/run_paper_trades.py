@@ -1,16 +1,7 @@
 #!/usr/bin/env python3
-"""
-Production paper-trading entry point — LIVE orders submitted directly to Alpaca paper API.
+"""DEPRECATED. Daily operation is bot.py trade-approval cards, not this CLI.
 
-Usage:
-    python scripts/run_paper_trades.py --strategies short_straddle vol_risk_premium
-    python scripts/run_paper_trades.py --notify 2565658666
-
-Notes:
-- Overlap guard: /tmp/paper_trade.lock prevents concurrent runs (a fresh lock
-  skips the run; a lock older than 30 min is treated as stale and replaced).
-- Telegram delivery verifies the bot token BEFORE the scan (recurring 401s)
-  and sends plain text — Markdown around '$' amounts breaks parsing.
+The Hermes cron that called this is paused. Do not wire it back as the live path.
 """
 from __future__ import annotations
 
