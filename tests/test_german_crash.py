@@ -77,6 +77,9 @@ def test_ric_parts_and_trade_ts():
     ts = parse_trade_ts("01 SEP 2026", "17:47:33", NOW)
     assert ts is not None
     assert ts.tzinfo is not None
+    # LSEG trade time is UTC: 17:47:33 == 17:47:33 UTC, not Berlin local.
+    assert ts.utcoffset().total_seconds() == 0
+    assert ts.hour == 17
     assert parse_trade_ts("01 SEP 2026", "17:40", NOW) is not None
     assert parse_trade_ts(None, "17:40", NOW) is None
 

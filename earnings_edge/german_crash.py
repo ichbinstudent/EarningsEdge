@@ -238,7 +238,13 @@ def parse_trade_ts(
     trade_time: Optional[str],
     captured_at: datetime,
 ) -> Optional[datetime]:
-    """Parse ``01 SEP 2026`` + ``17:47:33`` as Europe/Berlin. None on failure."""
+    """Parse ``01 SEP 2026`` + ``17:47:33`` as UTC.
+
+    The LSEG widget's ``q._TRDTIM_1`` is exchange feed time in UTC — verified
+    live 2026-09-02: a trade stamped 17:13:52 arrived in a poll that started
+    17:13:50 UTC. Parsing it as Europe/Berlin shifted every trade 2h into the
+    past and the staleness gate rejected 100% of quotes (blind crash monitor).
+    """
     if not trade_date or not trade_time:
         return None
     date_s = str(trade_date).strip()
@@ -248,7 +254,7 @@ def parse_trade_ts(
     for fmt in ("%d %b %Y %H:%M:%S", "%d %B %Y %H:%M:%S"):
         try:
             naive = datetime.strptime(f"{date_s} {time_s}", fmt)
-            return naive.replace(tzinfo=BERLIN).astimezone(timezone.utc)
+            return naive.replace(tzinfo=timezone.utc)
         except ValueError:
             continue
     return None
