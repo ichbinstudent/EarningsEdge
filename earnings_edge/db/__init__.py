@@ -117,6 +117,8 @@ from .repositories import (  # noqa: F401
     snapshots_missing_atm_iv,
     snapshots_optionable_universe,
     snapshots_earnings_on_date,
+    snapshots_arb_universe,
+    snapshots_next_earnings_date,
     snapshots_outcome_moves_df,
     snapshots_outcome_row,
     snapshots_queue_df,

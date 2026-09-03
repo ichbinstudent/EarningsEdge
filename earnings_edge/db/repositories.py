@@ -388,6 +388,38 @@ def snapshots_optionable_universe(max_tickers: int) -> list[str]:
     return out
 
 
+def snapshots_arb_universe(max_tickers: int = 200, today: Optional[str] = None) -> list[str]:
+    """Optionable, liquid names: has_options=1, earnings_date >= today
+    (the snapshot row is CURRENT, not tied to a specific event date),
+    ordered by avg_volume_30d desc. Distinct tickers."""
+    today_str = today or date.today().isoformat()
+    rows = _fetchall(
+        "SELECT ticker, MAX(avg_volume_30d) as vol "
+        "FROM snapshots "
+        "WHERE has_options = 1 AND earnings_date >= :today "
+        "GROUP BY ticker "
+        "ORDER BY vol DESC "
+        "LIMIT :max_tickers",
+        {"max_tickers": max_tickers, "today": today_str},
+    )
+    return [r["ticker"] for r in rows if r["ticker"]]
+
+
+def snapshots_next_earnings_date(ticker: str, today: Optional[str] = None) -> Optional[str]:
+    """Get the next earnings date for a ticker."""
+    today_str = today or date.today().isoformat()
+    rows = _fetchall(
+        "SELECT earnings_date FROM snapshots "
+        "WHERE ticker = :ticker AND earnings_date >= :today "
+        "ORDER BY earnings_date ASC LIMIT 1",
+        {"ticker": ticker, "today": today_str}
+    )
+    return rows[0]["earnings_date"] if rows else None
+
+
+
+
+
 _CALENDAR_CALL_TRADE_COLS = [
     "snapshot_id", "ticker", "earnings_date", "scan_date",
     "near_expiry", "far_expiry", "strike",

@@ -158,6 +158,24 @@ def test_pending_trades_list_pending_score_desc():
     assert [r["ticker"] for r in rows] == ["HIGH", "LOW", "NONE"]
 
 
+def test_snapshots_arb_universe(tmp_db_path):
+    from earnings_edge.db.repositories import insert_snapshot, snapshots_arb_universe
+    # Not optionable
+    insert_snapshot({"ticker": "NO_OPTS", "has_options": 0, "avg_volume_30d": 1000, "earnings_date": "2027-01-01", "scan_date": "2026-01-01"})
+    # Optionable, earnings past
+    insert_snapshot({"ticker": "PAST", "has_options": 1, "avg_volume_30d": 2000, "earnings_date": "1999-01-01", "scan_date": "2026-01-01"})
+    # Optionable, valid earnings (future), multiple rows (take max vol)
+    insert_snapshot({"ticker": "AAPL", "has_options": 1, "avg_volume_30d": 500, "earnings_date": "2030-01-01", "scan_date": "2026-01-01"})
+    insert_snapshot({"ticker": "AAPL", "has_options": 1, "avg_volume_30d": 1500, "earnings_date": "2030-01-01", "scan_date": "2026-01-02"})
+    # Another valid optionable
+    insert_snapshot({"ticker": "MSFT", "has_options": 1, "avg_volume_30d": 1000, "earnings_date": "2030-01-01", "scan_date": "2026-01-01"})
+    
+    universe = snapshots_arb_universe(max_tickers=10, today="2026-01-01")
+    assert universe == ["AAPL", "MSFT"]  # AAPL has max vol 1500, MSFT 1000
+    
+    assert snapshots_arb_universe(max_tickers=1, today="2026-01-01") == ["AAPL"]
+
+
 def test_pending_trades_update_card_and_mark_decided():
     pid = _insert_pending()
     pending_trades_update_card(pid, "new card")

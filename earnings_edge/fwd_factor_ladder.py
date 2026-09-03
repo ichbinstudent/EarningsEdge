@@ -284,6 +284,40 @@ def ensure_hist_moves(
     return total
 
 
+def _pick_pair_tenor(chain: dict[str, dict], spot: float, today: date, *, t1_min_days: int = 30, t1_max_days: int = 60, t2_gap_days: int = 30) -> tuple[Optional[dict], Optional[dict]]:
+    """T1: expiry in [t1_min_days, t1_max_days] (closest to 45 if several).
+    T2: expiry ~t2_gap_days days after T1 (closest wins). Strike: closest
+    to spot at each expiry. Calls only, as today."""
+    by_expiry: dict[date, list[tuple[str, dict]]] = {}
+    for sym, q in chain.items():
+        p = occ_parse(sym)
+        if p["option_type"] != "call":
+            continue
+        if p["expiry"] < today:
+            continue
+        by_expiry.setdefault(p["expiry"], []).append((sym, p))
+
+    def atm(entries):
+        sym, p = min(entries, key=lambda e: abs(e[1]["strike"] - spot))
+        return {"symbol": sym, "strike": p["strike"], "expiry": p["expiry"]}
+
+    t1_cands = [e for e in by_expiry if t1_min_days <= (e - today).days <= t1_max_days]
+    if not t1_cands:
+        return None, None
+    
+    t1_exp = min(t1_cands, key=lambda e: abs((e - today).days - 45))
+
+    t2_cands = sorted(
+        (abs((e - t1_exp).days - t2_gap_days), e)
+        for e in by_expiry if (e - t1_exp).days > 0
+    )
+    if not t2_cands:
+        return None, None
+    t2_exp = t2_cands[0][1]
+
+    return atm(by_expiry[t1_exp]), atm(by_expiry[t2_exp])
+
+
 def _pick_pair(chain: dict[str, dict], spot: float, today: date, event_date: Optional[date] = None) -> tuple[Optional[dict], Optional[dict]]:
     """T1: The next option expiration on or after the event_date.
     T2: Expiry ~30 days after T1.

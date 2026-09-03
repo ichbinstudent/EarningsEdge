@@ -130,6 +130,25 @@ def test_pick_pair_selects_first_expiry_on_or_after_event():
     assert t1["strike"] == SPOT
 
 
+def test_pick_pair_tenor_selects_within_window():
+    from earnings_edge.fwd_factor_ladder import _pick_pair_tenor
+    chain = dict(FakeAlpaca().chain)  # has 45 DTE + 73 DTE at ATM
+    for d in (10, 32, 58, 61, 95):
+        sym = occ_symbol("TEST", TODAY + timedelta(days=d), SPOT)
+        chain[sym] = {"bid": 1, "ask": 1}
+    
+    # closest to 45 in [30, 60] -> 45 wins (already in FakeAlpaca chain)
+    t1, t2 = _pick_pair_tenor(chain, SPOT, TODAY)
+    assert t1["expiry"] == TODAY + timedelta(days=45)
+    # T2 approx 30d after T1 (73 DTE is 28d after T1)
+    assert t2["expiry"] == TODAY + timedelta(days=73)
+
+    # Empty window -> None
+    t1_none, t2_none = _pick_pair_tenor(chain, SPOT, TODAY, t1_min_days=100, t1_max_days=200)
+    assert t1_none is None
+
+
+
 def test_hist_rms_move(conn):
     rms, n = hist_rms_move(ticker="TEST")
     assert n == 5

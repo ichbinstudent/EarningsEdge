@@ -1079,7 +1079,7 @@ class TradingBot:
         from earnings_edge.trade_approval import build_ff_proposals
         from earnings_edge.fwd_factor_ladder import build_candidate as build_ff_candidate
         from earnings_edge.forward_factor_arb import build_candidate as build_arb_candidate
-        from earnings_edge.db import snapshots_earnings_on_date
+        from earnings_edge.db import snapshots_earnings_on_date, snapshots_arb_universe
         from earnings_edge.models import EarningsCandidate
 
         alpaca = create_client()
@@ -1110,15 +1110,19 @@ class TradingBot:
 
         # Build candidates for forward_factor_arb
         arb_candidates = []
-        if earnings:
-            for cand in earnings:
+        arb_tickers = await asyncio.to_thread(snapshots_arb_universe)
+        if arb_tickers:
+            for ticker in arb_tickers:
                 try:
-                    c = build_arb_candidate(alpaca, cand.ticker, target)
+                    # to_thread: each build does live Alpaca chain+spot fetches;
+                    # run sync-network work off the application event loop
+                    # (see the 2026-07-31 starvation postmortem).
+                    c = await asyncio.to_thread(build_arb_candidate, alpaca, ticker)
                     if not c.skip_reason:
                         c.strategy_override = "forward_factor_arb"
                         arb_candidates.append(c)
                 except Exception as exc:
-                    logger.info("ARB: candidate %s failed: %s", cand.ticker, exc)
+                    logger.info("ARB: candidate %s failed: %s", ticker, exc)
                     
         arb_candidates.sort(key=lambda c: c.mid_debit / c.d_cap)
         arb_candidates = arb_candidates[:10]
