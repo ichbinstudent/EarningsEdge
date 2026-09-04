@@ -7,6 +7,7 @@ auto-trade path.
 """
 
 from __future__ import annotations
+from framework.risk.killswitch import record_event
 
 import logging
 from dataclasses import dataclass, field
@@ -96,7 +97,10 @@ class RiskManager:
             try:
                 from earnings_edge.alpaca_mode import alpaca_live_enabled
                 live_broker = alpaca_live_enabled()
-            except Exception:
+            except Exception as exc:
+                # exc-policy: keep broad, fallback if import fails
+                record_event("silent_failure", f"manager alpaca_live_enabled import: {exc}")
+                logger.error("manager live_broker check failed", exc_info=True)
                 live_broker = False
 
         if lifecycle == "probation":

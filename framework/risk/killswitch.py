@@ -1,3 +1,5 @@
+from __future__ import annotations
+import sqlite3
 """Kill switch: persisted halt of all order submission.
 
 Tripped automatically by the risk manager (daily loss limit, repeated broker
@@ -6,7 +8,7 @@ still built and tagged but no order reaches the broker. State survives
 restarts because it lives in the ``risk_state`` table.
 """
 
-from __future__ import annotations
+
 
 import logging
 from datetime import datetime, timezone

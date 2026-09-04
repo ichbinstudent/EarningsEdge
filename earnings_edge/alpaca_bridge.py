@@ -9,6 +9,7 @@ Supports sizing (Kelly fraction or fixed), pre-submission validation,
 dry-run mode, and order-result tracking.
 """
 from __future__ import annotations
+from framework.risk.killswitch import record_event
 
 import logging
 import os
@@ -133,7 +134,8 @@ def resolved_keeps_strike(requested: float, resolved_symbol: str, tol: float = 0
     try:
         from earnings_edge.fwd_factor import occ_parse
         got = occ_parse(resolved_symbol)["strike"]
-    except Exception:
+    except (ValueError, TypeError, KeyError):
+        # exc-policy: narrowed to parsing errors
         return False
     return abs(float(got) - float(requested)) <= tol
 
@@ -162,6 +164,9 @@ def preflight_combo(
     try:
         raw = bridge.client.get_option_snapshots_bulk(*symbols)
     except Exception as exc:
+        # exc-policy: keep broad, ensure visibility
+        record_event('silent_failure', f'alpaca_bridge: {exc}')
+        import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
         return f"preflight: snapshot request failed ({exc})", None
     if not isinstance(raw, dict):
         return "preflight: snapshot response not a dict", None
@@ -458,6 +463,9 @@ class StrategyBridge:
                 self.risk_manager.record_broker_rejection(trade.strategy, str(e))
             return None
         except Exception as e:
+            # exc-policy: keep broad, ensure visibility
+            record_event('silent_failure', f'alpaca_bridge: {e}')
+            import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
             logger.exception("Execution error on %s %s: %s", trade.strategy, trade.ticker, e)
             self.skip_reasons["error"] += 1
             return None
@@ -513,6 +521,9 @@ class StrategyBridge:
             try:
                 self._account = self.client.get_account()
             except Exception as exc:
+                # exc-policy: keep broad, ensure visibility
+                record_event('silent_failure', f'alpaca_bridge: {exc}')
+                import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
                 logger.warning("account fetch failed (%s)", exc)
                 self._account = {}
         return self._account or None
@@ -543,6 +554,9 @@ class StrategyBridge:
                 max_loss_per_unit=unit_cost,
             ))
         except Exception as exc:
+            # exc-policy: keep broad, ensure visibility
+            record_event('silent_failure', f'alpaca_bridge: {exc}')
+            import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
             logger.warning("sizer for %s failed (%s) — falling back to qty=1",
                            trade.strategy, exc)
             return 1
@@ -582,6 +596,9 @@ class StrategyBridge:
             try:
                 self._positions_full = self.client.get_positions()
             except Exception as exc:
+                # exc-policy: keep broad, ensure visibility
+                record_event('silent_failure', f'alpaca_bridge: {exc}')
+                import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
                 logger.info("exposure: get_positions failed (%s) — treating as 0", exc)
                 self._positions_full = []
         total = 0.0
@@ -864,7 +881,8 @@ class StrategyBridge:
         if isinstance(val, str):
             try:
                 return date.fromisoformat(val[:10])
-            except Exception:
+            except (TypeError, ValueError):
+                # exc-policy: narrowed to datetime.fromisoformat
                 return None
         return None
 
@@ -882,13 +900,19 @@ class StrategyBridge:
             if isinstance(raw, dict):
                 snaps = raw
         except Exception as exc:
+            # exc-policy: keep broad, ensure visibility
+            record_event('silent_failure', f'alpaca_bridge: {exc}')
+            import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
             logger.info("last_look bulk snapshot failed: %s", exc)
         if not snaps or not any(isinstance(v, dict) for v in snaps.values()):
             snaps = {}
             for leg in legs:
                 try:
                     one = self.client.get_option_snapshot(leg["symbol"]) or {}
-                except Exception:
+                except Exception as exc:
+                    # exc-policy: keep broad, ensure visibility
+                    record_event('silent_failure', f'alpaca_bridge: {exc}')
+                    import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
                     one = {}
                 if isinstance(one, dict):
                     snaps[leg["symbol"]] = one
@@ -901,7 +925,10 @@ class StrategyBridge:
         spot = None
         try:
             spot = self.client.get_stock_latest_trade(trade.ticker)
-        except Exception:
+        except Exception as exc:
+            # exc-policy: keep broad, ensure visibility
+            record_event('silent_failure', f'alpaca_bridge: {exc}')
+            import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
             spot = None
         feat = trade.features or {}
         if not isinstance(spot, (int, float)):
@@ -934,6 +961,9 @@ class StrategyBridge:
             try:
                 fetched = self.client.get_order(oid)
             except Exception as exc:
+                # exc-policy: keep broad, ensure visibility
+                record_event('silent_failure', f'alpaca_bridge: {exc}')
+                import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
                 logger.info("fill poll %s failed: %s", oid, exc)
                 return latest
             if not isinstance(fetched, dict):
@@ -1048,6 +1078,9 @@ def run_auto_trade(
             sizer_resolver=registry.sizer_spec,
         )
     except Exception as exc:
+        # exc-policy: keep broad, ensure visibility
+        record_event('silent_failure', f'alpaca_bridge: {exc}')
+        import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
         logger.warning("risk layer unavailable (%s) — ungated legacy bridge", exc)
         bridge = StrategyBridge(client=create_client(api_key, api_secret))
     results = {}
@@ -1063,6 +1096,9 @@ def run_auto_trade(
             buying_power = fetched
             logger.info("Buying power: $%.2f", buying_power)
     except Exception as e:
+        # exc-policy: keep broad, ensure visibility
+        record_event('silent_failure', f'alpaca_bridge: {e}')
+        import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
         logger.warning("Could not fetch buying power, using default: %s", e)
 
     strategies = strategies or BEST_STRATEGIES
@@ -1126,7 +1162,10 @@ def run_auto_trade(
 
     try:
         buying_power = bridge.account_buying_power() or buying_power
-    except Exception:
+    except Exception as exc:
+        # exc-policy: keep broad, ensure visibility
+        record_event('silent_failure', f'alpaca_bridge: {exc}')
+        import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
         pass
 
     summary = {

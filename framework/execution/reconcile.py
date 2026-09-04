@@ -8,6 +8,7 @@ dashboard panels for both already exist but had no writer until now.
 """
 
 from __future__ import annotations
+from framework.risk.killswitch import record_event
 
 import logging
 from dataclasses import dataclass, field
@@ -67,15 +68,22 @@ class Reconciler:
                     self.client.cancel_order(oid)
                     logger.info("reconcile: cancelled hanging order %s", oid)
                 except Exception as cancel_exc:
-                    logger.warning("reconcile: failed to cancel hanging order %s: %s", oid, cancel_exc)
+                    # exc-policy: keep broad, ensure visibility of orphaned limit orders
+                    record_event("silent_failure", f"reconcile cancel_hanging_orders: {cancel_exc}")
+                    logger.error("reconcile: failed to cancel hanging order %s: %s", oid, cancel_exc, exc_info=True)
         except Exception as exc:
+            # exc-policy: keep broad, ensure visibility of background job errors
+            record_event("silent_failure", f"reconcile cancel_hanging_orders outer: {exc}")
+            logger.error("reconcile cancel_hanging_orders outer failed: %s", exc, exc_info=True)
             report.errors.append(f"cancel_hanging_orders failed: {exc}")
 
         try:
             broker_positions = self.client.get_positions()
         except Exception as exc:
+            # exc-policy: keep broad, ensure visibility
+            record_event("silent_failure", f"reconcile get_positions: {exc}")
+            logger.error("reconcile: get_positions failed: %s", exc, exc_info=True)
             report.errors.append(f"get_positions failed: {exc}")
-            logger.error("reconcile: get_positions failed: %s", exc)
             return report
         report.broker_count = len(broker_positions)
         broker_by_symbol = {p.get("symbol"): p for p in broker_positions if p.get("symbol")}
@@ -183,14 +191,18 @@ class Reconciler:
         import json as _json
         try:
             rows = ff_ladders_recent(80)
-        except Exception:
+        except Exception as exc:
+            # exc-policy: keep broad, database access or JSON parse can fail
+            record_event("silent_failure", f"reconcile ff_ladders_recent: {exc}")
+            logger.error("reconcile: ff_ladders_recent failed", exc_info=True)
             return list(orphans)
         remaining = set(orphans)
         from .managed import record_open_positions
         for row in rows:
             try:
                 cand = _json.loads(row["candidate_json"] or "{}")
-            except Exception:
+            except (TypeError, ValueError):
+                # exc-policy: narrowed to TypeError, ValueError for json.loads
                 continue
             near, far = cand.get("near_symbol"), cand.get("far_symbol")
             hit = [s for s in (near, far) if s in remaining]
@@ -221,7 +233,9 @@ class Reconciler:
                               "adopted_from": "ff_ladders"},
                 )
             except Exception as exc:
-                logger.warning("reconcile: ladder adopt failed %s: %s", hit, exc)
+                # exc-policy: keep broad, record failure
+                record_event("silent_failure", f"reconcile ladder adopt: {exc}")
+                logger.error("reconcile: ladder adopt failed %s: %s", hit, exc, exc_info=True)
                 continue
             for sym in hit:
                 remaining.discard(sym)
@@ -252,7 +266,8 @@ def classify_assignments(broker_positions: list, local_open: list) -> list[str]:
             meta = _json.loads(row["metadata"] or "{}") if isinstance(row, dict) or hasattr(row, "keys") else {}
             if not isinstance(meta, dict):
                 meta = {}
-        except Exception:
+        except (TypeError, ValueError):
+            # exc-policy: narrowed to json.loads errors
             meta = {}
         symbol = row["symbol"] if not isinstance(row, dict) else row.get("symbol")
         side = (meta.get("leg_side") or "").lower()

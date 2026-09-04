@@ -5,6 +5,7 @@ All writes audit ``trade_events``. Broker mutations go through
 ``mark_group_closed`` only after the broker side is gone or the close filled.
 """
 from __future__ import annotations
+from framework.risk.killswitch import record_event
 
 import logging
 from datetime import date
@@ -24,6 +25,9 @@ def close_symbol(client, symbol: str, *, by: str = "operator") -> dict:
     try:
         resp = client.close_position(symbol)
     except Exception as exc:
+        # exc-policy: keep broad, record failure
+        record_event("silent_failure", f"book_actions close_symbol {symbol}: {exc}")
+        logger.error("book_actions close_symbol failed: %s", exc, exc_info=True)
         _event("close_failed", symbol, None, detail=f"{by}: {exc}")
         return {"ok": False, "error": str(exc)}
     # If the local book still has this symbol, leave it — reconcile/next
@@ -50,6 +54,9 @@ def close_group_at_broker(client, group_id: str, *, by: str = "operator") -> dic
     try:
         broker_syms = {p.get("symbol") for p in client.get_positions() if p.get("symbol")}
     except Exception as exc:
+        # exc-policy: keep broad, ensure visibility
+        record_event("silent_failure", f"book_actions get_positions: {exc}")
+        logger.error("book_actions get_positions failed: %s", exc, exc_info=True)
         return {"ok": False, "error": f"get_positions failed: {exc}"}
     for leg in group.legs:
         if leg.symbol not in broker_syms:
