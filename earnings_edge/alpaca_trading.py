@@ -6,6 +6,7 @@ Provides:
 - PositionManager: track fills, open positions, exits, PnL
 """
 from __future__ import annotations
+from framework.risk.killswitch import record_event
 
 import json
 import logging
@@ -110,7 +111,8 @@ class AlpacaTradingClient:
                 if resp.status_code >= 400:
                     try:
                         detail = resp.json().get("message", resp.text)
-                    except Exception:
+                    except ValueError:
+                        # exc-policy: narrowed to ValueError for json parsing
                         detail = resp.text
                     raise AlpacaError(resp.status_code, detail)
                 if resp.status_code == 204:
@@ -452,7 +454,10 @@ class AlpacaTradingClient:
         try:
             return {str(p.get("symbol", "")) for p in self.get_positions()}
         except Exception as e:
-            logger.warning("position fetch failed (treating as empty): %s", e)
+            # exc-policy: keep broad, ensure visibility
+            record_event("silent_failure", f"alpaca_trading get_positions: {e}")
+            import logging
+            logging.getLogger(__name__).error("position fetch failed (treating as empty): %s", e, exc_info=True)
             return set()
 
     def is_optionable(self, symbol: str) -> bool:

@@ -13,6 +13,7 @@ caller owns data-source cost discipline.
 """
 
 from __future__ import annotations
+from framework.risk.killswitch import record_event
 
 import logging
 import time
@@ -140,7 +141,9 @@ class OrderManager:
                 order_id = self._submit(legs, qty, price, cid, time_in_force)
                 mo.order_ids.append(order_id)
             except Exception as exc:
-                logger.warning("managed order submit failed (rung %d): %s", rung, exc)
+                # exc-policy: keep broad, ensure visibility of submit failure
+                record_event("silent_failure", f"order_manager submit failed rung {rung}: {exc}")
+                logger.error("managed order submit failed (rung %d): %s", rung, exc, exc_info=True)
                 mo.state = "error"
                 mo.detail = f"submit failed: {exc}"
                 return mo
@@ -183,6 +186,7 @@ class OrderManager:
                     )
                 return order["id"]
             except Exception as exc:
+                # exc-policy: keep broad, we retry then re-raise which caller handles
                 if attempt == 3:
                     raise
                 logger.warning("submit API error (attempt %d/3): %s", attempt, exc)
@@ -198,7 +202,9 @@ class OrderManager:
             try:
                 order = self.client.get_order(order_id)
             except Exception as exc:
-                logger.warning("get_order API error: %s", exc)
+                # exc-policy: keep broad, ensure visibility of get_order failure
+                record_event("silent_failure", f"order_manager get_order API error: {exc}")
+                logger.error("get_order API error: %s", exc, exc_info=True)
                 continue
                 
             status = (order.get("status") or "").lower()
@@ -230,7 +236,9 @@ class OrderManager:
                     self.client.cancel_order(order_id)
                 return
             except Exception as exc:
+                # exc-policy: keep broad, log loud if terminal cancel fails
                 if attempt == 3:
-                    logger.info("cancel %s failed (non-fatal): %s", order_id, exc)
+                    record_event("silent_failure", f"order_manager cancel {order_id} failed: {exc}")
+                    logger.error("cancel %s failed: %s", order_id, exc, exc_info=True)
                     return
                 self._sleep(0.5)
