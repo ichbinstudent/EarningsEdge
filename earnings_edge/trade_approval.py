@@ -745,8 +745,13 @@ def execute_proposal(
     result = bridge.execute_trade(trade)
     if result is None:
         reasons = dict(bridge.skip_reasons)
-        store.mark(proposal_id, "error", note=f"bridge skip: {reasons}", decided_by=decided_by)
-        return {"ok": False, "error": f"skipped at execution: {reasons or 'bridge rejected'}"}
+        detail = getattr(bridge, "last_skip_detail", "") or ""
+        store.mark(proposal_id, "error", note=f"bridge skip: {reasons} {detail}".strip(), decided_by=decided_by)
+        return {
+            "ok": False,
+            "error": f"skipped at execution: {reasons or 'bridge rejected'}",
+            "skip_detail": detail,
+        }
 
     order = {
         "order_id": result.order_id,

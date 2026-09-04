@@ -1283,7 +1283,10 @@ class TradingBot:
                 footer = (f"✅ Executed — order {result['order_id']} "
                           f"({result['status']})")
         else:
-            footer = f"⚠️ NOT executed: {result.get('error')}"
+            detail = result.get("skip_detail") or ""
+            base = result.get("error") or "bridge rejected"
+            footer = (f"⚠️ NOT executed: {base}\n⛔ {cards.esc(detail)}"
+                      if detail else f"⚠️ NOT executed: {base}")
         return ticker, footer
 
     async def _entry_skip_outcome(self, pid: int, uid: int) -> tuple[str, str]:

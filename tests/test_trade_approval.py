@@ -269,8 +269,12 @@ def test_execute_bridge_rejection_marks_error(store):
     client.position_symbols.return_value = set()
     bridge = StrategyBridge(client=client, config=BridgeConfig(dry_run=False))
     bridge.execute_trade = MagicMock(return_value=None)
+    bridge.skip_reasons = {"last_look": 1}
+    bridge.last_skip_detail = "last_look: spread 0.38 > 40% of mid 0.39"
     result = execute_proposal(store, pid, bridge=bridge)
     assert result["ok"] is False
+    assert result["skip_detail"] == "last_look: spread 0.38 > 40% of mid 0.39"
+    assert "last_look: spread 0.38 > 40% of mid 0.39" in store.get(pid)["note"]
     assert store.get(pid)["status"] == "error"
 
 
