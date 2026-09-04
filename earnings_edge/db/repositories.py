@@ -9,7 +9,54 @@ from __future__ import annotations
 
 import json
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any, Optional, TypedDict, cast
+
+
+
+class TradeEventRow(TypedDict, total=True):
+    id: Optional[int]
+    ts: str
+    event_type: str
+    symbol: Optional[str]
+    strategy: Optional[str]
+    qty: Optional[float]
+    price: Optional[float]
+    detail: Optional[str]
+
+class JobRunRow(TypedDict, total=True):
+    id: Optional[int]
+    job_name: str
+    started_at: str
+    finished_at: Optional[str]
+    success: Optional[int]
+    stats_json: Optional[str]
+    error: Optional[str]
+
+class EquityDailyAvgRow(TypedDict, total=True):
+    d: str
+    e: Optional[float]
+
+class StrategyStateRow(TypedDict, total=True):
+    name: Optional[str]
+    lifecycle: str
+    updated_at: Optional[str]
+    updated_by: Optional[str]
+    enabled: Optional[int]
+    execution_mode: Optional[str]
+
+class ExitProposalRow(TypedDict, total=True):
+    id: Optional[int]
+    created_at: str
+    group_id: str
+    strategy: str
+    ticker: str
+    rule: str
+    reason: Optional[str]
+    card_text: Optional[str]
+    status: str
+    snoozed_until: Optional[str]
+    decided_by: Optional[int]
+    decided_at: Optional[str]
 
 import pandas as pd
 from sqlalchemy import func, select, text, update
@@ -118,18 +165,18 @@ _SCAN_RUN_COLS = [
 ]
 
 
-def _execute(sql: str, params, *, many: bool = False):
+def _execute(sql: str, params: Any, *, many: bool = False) -> Any:
     with session_scope() as s:
         return s.execute(text(sql), params) if not many else s.execute(
             text(sql), params)
 
 
-def _execute_many(sql: str, payload: list[dict]):
+def _execute_many(sql: str, payload: list[dict[str, Any]]) -> Any:
     with session_scope() as s:
         return s.execute(text(sql), payload)
 
 
-def _fetchall(sql: str, params) -> list[dict]:
+def _fetchall(sql: str, params: Any) -> list[dict[str, Any]]:
     with session_scope() as s:
         return [dict(r) for r in s.execute(text(sql), params).mappings().all()]
 
@@ -240,7 +287,7 @@ def insert_options_chain_rows(rows: list[dict]) -> int:
     )
     payload = [{c: r.get(c) for c in _OPTIONS_CHAIN_COLS} for r in rows]
     result = _execute(sql, payload, many=True)
-    return result.rowcount or 0
+    return getattr(result, "rowcount", 0) or 0
 
 
 def fetch_chain_for_ticker(ticker: str, scan_date: str) -> list[dict]:
@@ -274,7 +321,7 @@ def insert_scan_run(row: dict) -> int:
     return _insert_row("scan_runs", _SCAN_RUN_COLS, row)
 
 
-def persist_picks(picks: dict, as_of=None) -> int:
+def persist_picks(picks: dict, as_of: Any=None) -> int:
     """Persist one day's pick lists (insert-or-replace per date/strategy/ticker).
 
     Stores each pick as (pick_date, strategy, rank, ticker, signals_json) so
@@ -303,7 +350,7 @@ def persist_picks(picks: dict, as_of=None) -> int:
         "VALUES (:pick_date, :strategy, :rank, :ticker, :signals_json)"
     )
     result = _execute(sql, payload, many=True)
-    return result.rowcount or 0
+    return getattr(result, "rowcount", 0) or 0
 
 
 def load_picks(pick_date: str, strategy: Optional[str] = None) -> pd.DataFrame:
@@ -327,7 +374,7 @@ def upsert_daily_signals(rows: list[dict]) -> int:
     sql = f"INSERT OR REPLACE INTO daily_signals ({cols}) VALUES ({placeholders})"
     payload = [{c: r.get(c) for c in _DAILY_SIGNAL_COLS} for r in rows]
     result = _execute(sql, payload, many=True)
-    return result.rowcount or 0
+    return getattr(result, "rowcount", 0) or 0
 
 
 def record_snapshot_outcome_failure(snapshot_id: int, max_retries: int) -> None:
@@ -463,11 +510,11 @@ def calendar_call_trades_with_snapshots() -> list[dict]:
 def calendar_call_trades_update_model(
     snapshot_id: int,
     *,
-    model_score,
-    model_recommendation,
-    model_reason,
-    model_name,
-    model_scored_at,
+    model_score: Any,
+    model_recommendation: Any,
+    model_reason: Any,
+    model_name: Any,
+    model_scored_at: Any,
 ) -> None:
     """Write model score fields onto one stored calendar-call trade."""
     _execute(
@@ -514,13 +561,13 @@ def options_chain_latest_contract(
     return rows[0] if rows else None
 
 
-def _row_dict(obj) -> dict:
+def _row_dict(obj: Any) -> Any:
     """Model instance -> dict keyed by SQLite column names (not ORM attrs).
 
     Uses the mapper so ``ManagedPosition.metadata_`` lands under ``"metadata"``
     rather than colliding with ``Base.metadata``.
     """
-    out: dict = {}
+    out: Any = {}
     for prop in class_mapper(type(obj)).column_attrs:
         value = getattr(obj, prop.key)
         for col in prop.columns:
@@ -691,7 +738,7 @@ def exit_proposals_get(proposal_id: int) -> Optional[dict]:
         return _row_dict(obj) if obj is not None else None
 
 
-def exit_proposals_list_pending() -> list[dict]:
+def exit_proposals_list_pending() -> list[ExitProposalRow]:
     """SELECT * FROM exit_proposals WHERE status='pending' ORDER BY id"""
     with session_scope() as s:
         rows = s.execute(
@@ -800,7 +847,7 @@ def managed_positions_close(
                 exit_price=exit_price,
             )
         )
-        return result.rowcount or 0
+        return getattr(result, "rowcount", 0) or 0
 
 
 # ---------------------------------------------------------------------------
@@ -996,7 +1043,7 @@ def equity_snapshots_equities(limit: int = 16) -> list[float]:
     return [float(v) for v in reversed(rows) if v is not None]
 
 
-def equity_snapshots_daily_avg(days: int = 7) -> list[dict]:
+def equity_snapshots_daily_avg(days: int = 7) -> list[EquityDailyAvgRow]:
     """Avg equity per UTC date, newest first, limited to ``days`` days."""
     with session_scope() as s:
         rows = s.execute(
@@ -1006,7 +1053,7 @@ def equity_snapshots_daily_avg(days: int = 7) -> list[dict]:
             ),
             {"n": days},
         ).mappings().all()
-        return [dict(r) for r in rows]
+        return cast(list[EquityDailyAvgRow], [dict(r) for r in rows])
 
 
 # ---------------------------------------------------------------------------
@@ -1020,7 +1067,7 @@ def strategy_state_get(name: str) -> Optional[dict]:
         return _row_dict(obj) if obj is not None else None
 
 
-def strategy_state_list() -> list[dict]:
+def strategy_state_list() -> list[StrategyStateRow]:
     """SELECT * FROM strategy_state ORDER BY name"""
     with session_scope() as s:
         rows = s.execute(
@@ -1226,7 +1273,7 @@ def job_runs_finish(
 
 
 def job_runs_list(*, name: Optional[str] = None, limit: int = 20,
-                  success: Optional[int] = None) -> list[dict]:
+                  success: Optional[int] = None) -> list[JobRunRow]:
     """Recent job_runs, optionally filtered by job_name / success."""
     with session_scope() as s:
         stmt = select(JobRun)
@@ -1238,13 +1285,13 @@ def job_runs_list(*, name: Optional[str] = None, limit: int = 20,
         return [_row_dict(r) for r in s.execute(stmt).scalars().all()]
 
 
-def job_runs_latest(job_name: str, *, success: Optional[int] = None) -> Optional[dict]:
+def job_runs_latest(job_name: str, *, success: Optional[int] = None) -> Optional[JobRunRow]:
     """Most recent row for a job_name."""
     rows = job_runs_list(name=job_name, limit=1, success=success)
     return rows[0] if rows else None
 
 
-def job_runs_failed(limit: int = 10) -> list[dict]:
+def job_runs_failed(limit: int = 10) -> list[JobRunRow]:
     """SELECT ... FROM job_runs WHERE success=0 ORDER BY id DESC LIMIT ?"""
     with session_scope() as s:
         rows = s.execute(
@@ -1350,7 +1397,7 @@ def model_registry_register(
             )
         ).scalar_one_or_none()
         if existing is not None:
-            return int(existing.id)
+            return int(existing.id or 0)
         obj = ModelRegistry(
             name=name,
             path=path,
@@ -1425,7 +1472,7 @@ def trade_events_list(
     *,
     event_type: Optional[str] = None,
     limit: int = 20,
-) -> list[dict]:
+) -> list[TradeEventRow]:
     """SELECT * FROM trade_events [WHERE event_type=?] ORDER BY id DESC LIMIT ?"""
     with session_scope() as s:
         stmt = select(TradeEvent)
@@ -1511,7 +1558,7 @@ def managed_positions_close_by_id(row_id: int, closed_at: Optional[str] = None) 
             .where(ManagedPosition.id == row_id)
             .values(status="closed", closed_at=closed_at or _utcnow())
         )
-        return result.rowcount or 0
+        return getattr(result, "rowcount", 0) or 0
 
 
 def managed_positions_set_exit_by(group_id: str, exit_by: str) -> int:
@@ -1525,7 +1572,7 @@ def managed_positions_set_exit_by(group_id: str, exit_by: str) -> int:
             )
             .values(exit_by=exit_by)
         )
-        return result.rowcount or 0
+        return getattr(result, "rowcount", 0) or 0
 
 
 def managed_positions_set_opened_at(group_id: str, opened_at: str) -> int:
@@ -1536,7 +1583,7 @@ def managed_positions_set_opened_at(group_id: str, opened_at: str) -> int:
             .where(ManagedPosition.group_id == group_id)
             .values(opened_at=opened_at)
         )
-        return result.rowcount or 0
+        return getattr(result, "rowcount", 0) or 0
 
 
 # ---------------------------------------------------------------------------
@@ -1654,7 +1701,7 @@ def scan_runs_recent(limit: int = 10) -> list[dict]:
         rows = s.execute(
             text(
                 "SELECT scan_timestamp, scanner_name, trigger_type, candidate_count, "
-                "take_count, printf('%.0f', duration_secs) AS secs, success "
+                "take_count, printf(\'%.0f\', duration_secs) AS secs, success "
                 "FROM scan_runs ORDER BY id DESC LIMIT :n"
             ),
             {"n": limit},
@@ -1685,7 +1732,7 @@ def scanner_scan_outputs_latest() -> tuple[Optional[str], list[dict]]:
         return latest, [dict(r) for r in rows]
 
 
-def pending_trades_recent(limit: int = 20) -> list[dict]:
+def pending_trades_recent(limit: int = 20) -> list[dict[str, Any]]:
     """Dashboard: recent pending_trades with formatted score."""
     with session_scope() as s:
         rows = s.execute(
@@ -1909,7 +1956,7 @@ def snapshots_reset_outcomes(ids: list[int]) -> int:
             .where(Snapshot.id.in_(ids))
             .values(outcome_fetched_at=None, outcome_attempt_count=0)
         )
-        return result.rowcount or 0
+        return getattr(result, "rowcount", 0) or 0
 
 
 def snapshots_reset_outcomes_view(view: str, *, ticker_filter: str = "") -> int:
@@ -1925,7 +1972,7 @@ def snapshots_reset_outcomes_view(view: str, *, ticker_filter: str = "") -> int:
         params["ticker"] = f"%{ticker_filter}%"
     with session_scope() as s:
         result = s.execute(text(sql), params)
-        return result.rowcount or 0
+        return getattr(result, "rowcount", 0) or 0
 
 
 def ff_backfill_progress() -> dict:
@@ -2101,7 +2148,7 @@ def snapshots_rv_pending_pairs() -> list[dict]:
     )
 
 
-def snapshots_apply_rv(ticker: str, scan_date: str, rv30, hist_vol_3m) -> None:
+def snapshots_apply_rv(ticker: str, scan_date: str, rv30: Any, hist_vol_3m: Any) -> None:
     """Set rv30/hist_vol_3m and recompute iv30_rv30 for one ticker+scan_date."""
     with session_scope() as s:
         s.execute(
@@ -2282,7 +2329,7 @@ def snapshots_clear_iv_since(scan_date: str) -> int:
                 hist_vol_3m=None,
             )
         )
-        return result.rowcount or 0
+        return getattr(result, "rowcount", 0) or 0
 
 
 def snapshots_iv_presence_counts() -> dict:
@@ -2354,7 +2401,7 @@ def snapshots_dedup() -> tuple[int, int]:
                     "ds": g["data_source"],
                 },
             )
-            deleted += result.rowcount or 0
+            deleted += getattr(result, "rowcount", 0) or 0
         remaining = s.execute(
             text(
                 "SELECT COUNT(*) FROM ("
@@ -2395,7 +2442,7 @@ def snapshots_apply_hist_backfill_batch(writes: list[dict]) -> None:
     """
     if not writes:
         return
-    def _write_one(execute, w: dict) -> None:
+    def _write_one(execute: Any, w: dict) -> None:
         outcome = w["outcome"]
         if w.get("existing_id"):
             execute(

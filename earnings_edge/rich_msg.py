@@ -1,10 +1,11 @@
 import html
 import logging
+from typing import Any, Optional
 import httpx
 
 logger = logging.getLogger("rich_msg")
 
-async def send_rich_html(bot, chat_id: int, html_str: str, reply_markup=None) -> bool:
+async def send_rich_html(bot: Any, chat_id: int, html_str: str, reply_markup: Any = None) -> bool:
     """Send a rich HTML message via the raw /sendRichMessage endpoint."""
     url = f"{bot.base_url}/sendRichMessage"
     payload = {
@@ -27,7 +28,7 @@ async def send_rich_html(bot, chat_id: int, html_str: str, reply_markup=None) ->
         logger.error(f"sendRichMessage exception: {e}")
         return False
 
-async def edit_rich_html(bot, chat_id: int, message_id: int, html_str: str, reply_markup=None) -> bool:
+async def edit_rich_html(bot: Any, chat_id: int, message_id: int, html_str: str, reply_markup: Any = None) -> bool:
     """Edit a message with rich HTML via the raw /editMessageText endpoint."""
     url = f"{bot.base_url}/editMessageText"
     payload = {
@@ -51,7 +52,7 @@ async def edit_rich_html(bot, chat_id: int, message_id: int, html_str: str, repl
         logger.error(f"editMessageText (rich) exception: {e}")
         return False
 
-def orders_rich_view(limit=12) -> str:
+def orders_rich_view(limit: int = 12) -> str:
     from earnings_edge.db import trade_events_list
     events = trade_events_list(limit=limit)
     out = ["<h3>ORDERS</h3>"]
@@ -64,12 +65,12 @@ def orders_rich_view(limit=12) -> str:
 
     details = []
     for row in events:
-        ts_short = str(row.get("ts", ""))[:16][5:].replace("T", " ")  # MM-DD HH:MM
-        ev = str(row.get("event_type") or "")
-        st = str(row.get("strategy") or "")
-        sym = str(row.get("symbol") or "")
+        ts_short = str(row["ts"])[:16][5:].replace("T", " ")  # MM-DD HH:MM
+        ev = str(row["event_type"] or "")
+        st = str(row["strategy"] or "")
+        sym = str(row["symbol"] or "")
 
-        price_val = row.get("price")
+        price_val = row["price"]
         price = f"{price_val:.2f}" if price_val is not None else ""
 
         out.append(
@@ -82,7 +83,7 @@ def orders_rich_view(limit=12) -> str:
             f"</tr>"
         )
 
-        detail_val = str(row.get("detail") or "").strip()
+        detail_val = str(row["detail"] or "").strip()
         if detail_val:
             if len(detail_val) > 110:
                 detail_val = detail_val[:107] + "..."
@@ -93,7 +94,7 @@ def orders_rich_view(limit=12) -> str:
     out.extend(details)
     return "\n".join(out)
 
-def jobs_rich_view(limit=12) -> str:
+def jobs_rich_view(limit: int = 12) -> str:
     from earnings_edge.db import job_runs_list
     runs = job_runs_list(limit=limit)
     out = ["<h3>JOB RUNS</h3>"]
@@ -104,16 +105,16 @@ def jobs_rich_view(limit=12) -> str:
     out.append("<table bordered striped compact>")
     out.append("<tr><th>Status</th><th>Job</th><th>Started</th><th>Summary</th></tr>")
     for r in runs:
-        ok = r.get("success", False)
+        ok = bool(r["success"])
         status = "✓" if ok else "✗"
-        job = str(r.get("job_name", ""))
-        ts_str = r.get("started_at", "")[:19].replace("T", " ")
+        job = str(r["job_name"])
+        ts_str = r["started_at"][:19].replace("T", " ")
         
-        err = r.get("error", "")
+        err = r["error"] or ""
         if err:
             summary_val = str(err)
         else:
-            stats = r.get("stats_json")
+            stats = r["stats_json"]
             if stats:
                 import json
                 try:
@@ -138,7 +139,7 @@ def jobs_rich_view(limit=12) -> str:
     out.append("</table>")
     return "\n".join(out)
 
-def equity_rich_view(days=7) -> str:
+def equity_rich_view(days: int = 7) -> str:
     from framework.risk.equity import latest_equity, day_start_equity, daily_pnl
     from earnings_edge.db import equity_snapshots_daily_avg
     
@@ -166,8 +167,8 @@ def equity_rich_view(days=7) -> str:
     out.append("<table bordered striped compact>")
     out.append("<tr><th>Date</th><th>Equity</th></tr>")
     for r in history:
-        date = str(r.get("d", ""))
-        eq = r.get("e")
+        date = str(r["d"])
+        eq = r["e"]
         eq_str = f"${eq:,.2f}" if eq is not None else ""
         out.append(f"<tr><td>{html.escape(date)}</td><td>{html.escape(eq_str)}</td></tr>")
     out.append("</table>")
