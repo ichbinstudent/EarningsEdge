@@ -78,8 +78,10 @@ async def cmd_help(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     from dashboard.tg_auth import webapp_url
     if webapp_url():
         lines.insert(-1, "• Open desk — Mini App book / inbox / halt")
-    for name, sc in bot.scanners.items():
-        lines.append(f"• {name}: {sc.schedule}")
+    from bot import ET_SCHEDULES
+    for name in bot.scanners:
+        cron = ET_SCHEDULES.get(name, "0 14 * * mon-fri")
+        lines.append(f"• {name}: {cron} (ET)")
     lines += [
         "\n📱 Use the keyboard at the bottom for quick access!",
     ]

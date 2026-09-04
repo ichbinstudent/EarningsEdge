@@ -30,14 +30,3 @@ class BaseScanner(ABC):
         """
         pass
 
-    @property
-    @abstractmethod
-    def schedule(self) -> str:
-        """Cron schedule string, e.g. '30 21 * * mon-fri'.
-
-        NOTE: APScheduler numbers weekdays Monday=0 — use names (mon-fri),
-        never '1-5' (that means Tue-Sat and skips Monday)."""
-        pass
-
-    def get_schedule_description(self) -> str:
-        return f"Scanner '{self.name}' runs on schedule: {self.schedule}"
