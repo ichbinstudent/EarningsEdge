@@ -8,6 +8,7 @@ Translates strategy Trade signals into Alpaca option orders:
 Supports sizing (Kelly fraction or fixed), pre-submission validation,
 dry-run mode, and order-result tracking.
 """
+
 from __future__ import annotations
 
 import logging
@@ -95,7 +96,7 @@ def combo_quotes(legs: list[dict], snaps: dict[str, dict]) -> dict | None:
             return None
         sign = -1.0 if leg.get("side") == "sell" else 1.0
         mid += sign * (bid + ask) / 2.0
-        spread += (ask - bid)
+        spread += ask - bid
     if mid <= 0:
         return None
     return {"mid": mid, "spread": spread}
@@ -122,9 +123,7 @@ def last_look_veto(
     if debit > 0 and not debit_within_mid_cap(debit, mid, max_debit_vs_mid):
         return f"last_look: debit {debit:.2f} > {max_debit_vs_mid:.2f}× mid {mid:.2f}"
     if spot and spot > 0 and debit > max_debit_pct_of_spot * spot:
-        return (
-            f"last_look: debit {debit:.2f} > {max_debit_pct_of_spot:.0%} of spot {spot:.2f}"
-        )
+        return f"last_look: debit {debit:.2f} > {max_debit_pct_of_spot:.0%} of spot {spot:.2f}"
     return None
 
 
@@ -132,6 +131,7 @@ def resolved_keeps_strike(requested: float, resolved_symbol: str, tol: float = 0
     """True when an OCC/catalog symbol still has ``requested`` strike."""
     try:
         from earnings_edge.fwd_factor import occ_parse
+
         got = occ_parse(resolved_symbol)["strike"]
     except (ValueError, TypeError, KeyError):
         # exc-policy: narrowed to parsing errors
@@ -164,8 +164,10 @@ def preflight_combo(
         raw = bridge.client.get_option_snapshots_bulk(*symbols)
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
-        record_event('silent_failure', f'alpaca_bridge: {exc}')
-        import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
+        record_event("silent_failure", f"alpaca_bridge: {exc}")
+        import logging
+
+        logging.getLogger(__name__).error("alpaca_bridge broad exception", exc_info=True)
         return f"preflight: snapshot request failed ({exc})", None
     if not isinstance(raw, dict):
         return "preflight: snapshot response not a dict", None
@@ -191,6 +193,7 @@ def preflight_combo(
         )
     return None, mid
 
+
 # Tail-stress multiple applied to the market-implied earnings move when
 # pricing max loss for UNDEFINED-risk short premium (naked straddle/strangle):
 # proxy max loss = EARNINGS_STRESS_MULTIPLE x expected_move_dollars x 100.
@@ -206,6 +209,7 @@ EARNINGS_STRESS_MULTIPLE = 2.0
 @dataclass
 class BridgeConfig:
     """Configuration for the strategy→order bridge."""
+
     dry_run: bool = False
     order_type: str = DEFAULT_ORDER_TYPE
     time_in_force: str = DEFAULT_TIF
@@ -258,6 +262,7 @@ class StrategyBridge:
         self._contracts_cache: dict[tuple[str, str, str], dict] = {}
         # Why trades were skipped — surfaced in the run summary
         from collections import Counter
+
         self.skip_reasons: Counter = Counter()
         self.last_skip_detail: str = ""
 
@@ -295,11 +300,23 @@ class StrategyBridge:
             if min_expiry is not None and trade.earnings_date:
                 dte = (min_expiry - trade.earnings_date).days
                 if dte < self.config.max_dte_min:
-                    logger.debug("%s %s: DTE %d < min %d, skipping", trade.strategy, trade.ticker, dte, self.config.max_dte_min)
+                    logger.debug(
+                        "%s %s: DTE %d < min %d, skipping",
+                        trade.strategy,
+                        trade.ticker,
+                        dte,
+                        self.config.max_dte_min,
+                    )
                     self.skip_reasons["dte"] += 1
                     return None
                 if dte > self.config.max_dte_max:
-                    logger.debug("%s %s: DTE %d > max %d, skipping", trade.strategy, trade.ticker, dte, self.config.max_dte_max)
+                    logger.debug(
+                        "%s %s: DTE %d > max %d, skipping",
+                        trade.strategy,
+                        trade.ticker,
+                        dte,
+                        self.config.max_dte_max,
+                    )
                     self.skip_reasons["dte"] += 1
                     return None
 
@@ -331,12 +348,15 @@ class StrategyBridge:
             if check_px and mid and mid > 0 and not debit_within_mid_cap(check_px, mid):
                 logger.info(
                     "refused-vs-mid %s %s: debit %.2f vs mid %.2f (cap %.2f)",
-                    trade.strategy, trade.ticker, proposed, mid, MAX_DEBIT_VS_MID,
+                    trade.strategy,
+                    trade.ticker,
+                    proposed,
+                    mid,
+                    MAX_DEBIT_VS_MID,
                 )
                 self.skip_reasons["mid_cap"] += 1
                 self.last_skip_detail = (
-                    f"refused-vs-mid: debit {check_px:.2f} > "
-                    f"{MAX_DEBIT_VS_MID:.2f}× mid {mid:.2f}"
+                    f"refused-vs-mid: debit {check_px:.2f} > {MAX_DEBIT_VS_MID:.2f}× mid {mid:.2f}"
                 )
                 return None
 
@@ -352,8 +372,11 @@ class StrategyBridge:
 
             # Framework risk gate (kill switch, portfolio caps, lifecycle).
             if self.risk_manager is not None and unit_cost <= 0:
-                logger.warning("%s %s: cannot estimate cost — skipping (risk gate requires pricing)",
-                               trade.strategy, trade.ticker)
+                logger.warning(
+                    "%s %s: cannot estimate cost — skipping (risk gate requires pricing)",
+                    trade.strategy,
+                    trade.ticker,
+                )
                 self.skip_reasons["risk_unpriced"] += 1
                 return None
 
@@ -369,8 +392,7 @@ class StrategyBridge:
                 # count; 0 is a veto.
                 qty = self._size_qty(trade, unit_cost, account)
                 if qty <= 0:
-                    self.last_skip_detail = size_veto_reason(
-                        trade.strategy, unit_cost)
+                    self.last_skip_detail = size_veto_reason(trade.strategy, unit_cost)
                     logger.info("%s", self.last_skip_detail)
                     self.skip_reasons["size_veto"] += 1
                     return None
@@ -385,10 +407,17 @@ class StrategyBridge:
                 if decision.qty_multiplier != 1.0:
                     qty = max(1, int(qty * decision.qty_multiplier))
                     est_cost = unit_cost * qty
-                    logger.info("%s %s: probation size multiplier %.2f → qty %d",
-                                trade.strategy, trade.ticker, decision.qty_multiplier, qty)
+                    logger.info(
+                        "%s %s: probation size multiplier %.2f → qty %d",
+                        trade.strategy,
+                        trade.ticker,
+                        decision.qty_multiplier,
+                        qty,
+                    )
             # Submit
-            client_order_id = f"{trade.strategy}_{trade.ticker}_{trade.scan_date}_{int(datetime.now(UTC).timestamp())}"
+            client_order_id = (
+                f"{trade.strategy}_{trade.ticker}_{trade.scan_date}_{int(datetime.now(UTC).timestamp())}"
+            )
             exit_by = self._exit_by(legs)
             if self.config.dry_run:
                 logger.info(
@@ -402,7 +431,8 @@ class StrategyBridge:
                 # dry-run returns below — last-look / submit never run
                 dry_run_legs = (
                     [{**leg, "ratio_qty": int(leg.get("ratio_qty", 1)) * qty} for leg in legs]
-                    if qty > 1 else legs
+                    if qty > 1
+                    else legs
                 )
                 return OrderResult(
                     order_id="dry-run",
@@ -445,10 +475,7 @@ class StrategyBridge:
                 # Alpaca's own response shape for that — compute it from what
                 # we know we submitted (base ratio × order-level qty) rather
                 # than re-parsing the broker's response.
-                result.legs = [
-                    {**leg, "ratio_qty": int(leg.get("ratio_qty", 1)) * qty}
-                    for leg in legs
-                ]
+                result.legs = [{**leg, "ratio_qty": int(leg.get("ratio_qty", 1)) * qty} for leg in legs]
             self.submitted.append(result)
             if self.risk_manager is not None and est_cost > 0:
                 self.risk_manager.record_entry(trade.strategy, trade.ticker, est_cost)
@@ -463,8 +490,10 @@ class StrategyBridge:
             return None
         except Exception as e:
             # exc-policy: keep broad, ensure visibility
-            record_event('silent_failure', f'alpaca_bridge: {e}')
-            import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
+            record_event("silent_failure", f"alpaca_bridge: {e}")
+            import logging
+
+            logging.getLogger(__name__).error("alpaca_bridge broad exception", exc_info=True)
             logger.exception("Execution error on %s %s: %s", trade.strategy, trade.ticker, e)
             self.skip_reasons["error"] += 1
             return None
@@ -521,8 +550,10 @@ class StrategyBridge:
                 self._account = self.client.get_account()
             except Exception as exc:
                 # exc-policy: keep broad, ensure visibility
-                record_event('silent_failure', f'alpaca_bridge: {exc}')
-                import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
+                record_event("silent_failure", f"alpaca_bridge: {exc}")
+                import logging
+
+                logging.getLogger(__name__).error("alpaca_bridge broad exception", exc_info=True)
                 logger.warning("account fetch failed (%s)", exc)
                 self._account = {}
         return self._account or None
@@ -541,25 +572,30 @@ class StrategyBridge:
             return 1
         try:
             from framework.risk.sizing import SizeContext, build_sizer
+
             spec = dict(spec)
             sizer = build_sizer(spec.pop("name"), spec)
-            qty = sizer.quantity(SizeContext(
-                equity=float(account.get("equity") or 0),
-                buying_power=float(account.get("buying_power") or 0),
-                price_per_unit=unit_cost,
-                # _structure_cost is already max-loss aware (wing width for
-                # defined-risk, notional proxy for naked) — it is both the
-                # price and the per-unit max loss here.
-                max_loss_per_unit=unit_cost,
-            ))
+            qty = sizer.quantity(
+                SizeContext(
+                    equity=float(account.get("equity") or 0),
+                    buying_power=float(account.get("buying_power") or 0),
+                    price_per_unit=unit_cost,
+                    # _structure_cost is already max-loss aware (wing width for
+                    # defined-risk, notional proxy for naked) — it is both the
+                    # price and the per-unit max loss here.
+                    max_loss_per_unit=unit_cost,
+                )
+            )
         except Exception as exc:
             # exc-policy: keep broad, ensure visibility
-            record_event('silent_failure', f'alpaca_bridge: {exc}')
-            import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
-            logger.warning("sizer for %s failed (%s) — falling back to qty=1",
-                           trade.strategy, exc)
+            record_event("silent_failure", f"alpaca_bridge: {exc}")
+            import logging
+
+            logging.getLogger(__name__).error("alpaca_bridge broad exception", exc_info=True)
+            logger.warning("sizer for %s failed (%s) — falling back to qty=1", trade.strategy, exc)
             return 1
         from earnings_edge.alpaca_mode import live_max_qty
+
         return min(qty, live_max_qty(MAX_CONTRACTS_PER_ORDER))
 
     def _risk_check(self, trade: Trade, est_cost: float, qty: int, account: dict):
@@ -567,8 +603,7 @@ class StrategyBridge:
         equity = float(account.get("equity") or 0)
         bp = float(account.get("buying_power") or 0)
         lifecycle = (
-            self.lifecycle_manager.state(trade.strategy)
-            if self.lifecycle_manager is not None else "live"
+            self.lifecycle_manager.state(trade.strategy) if self.lifecycle_manager is not None else "live"
         )
         limits = self.limits_resolver(trade.strategy) if self.limits_resolver else None
         live_broker = not bool(getattr(self.client, "paper", True))
@@ -596,8 +631,10 @@ class StrategyBridge:
                 self._positions_full = self.client.get_positions()
             except Exception as exc:
                 # exc-policy: keep broad, ensure visibility
-                record_event('silent_failure', f'alpaca_bridge: {exc}')
-                import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
+                record_event("silent_failure", f"alpaca_bridge: {exc}")
+                import logging
+
+                logging.getLogger(__name__).error("alpaca_bridge broad exception", exc_info=True)
                 logger.info("exposure: get_positions failed (%s) — treating as 0", exc)
                 self._positions_full = []
         total = 0.0
@@ -640,13 +677,14 @@ class StrategyBridge:
             resolved_any = False
             for leg in legs:
                 resolved = self._resolve_symbol(
-                    trade.ticker, leg["expiry"], leg["strike"], leg["option_type"])
+                    trade.ticker, leg["expiry"], leg["strike"], leg["option_type"]
+                )
                 if resolved and resolved != leg["symbol"]:
                     if not resolved_keeps_strike(float(leg["strike"]), resolved):
                         from earnings_edge.fwd_factor import occ_parse
+
                         got = occ_parse(resolved)["strike"]
-                        raise StrikeChangedError(
-                            trade.ticker, float(leg["strike"]), resolved, got)
+                        raise StrikeChangedError(trade.ticker, float(leg["strike"]), resolved, got)
                     logger.info("Resolved %s -> %s", leg["symbol"], resolved)
                     leg["symbol"] = resolved
                     resolved_any = True
@@ -726,8 +764,22 @@ class StrategyBridge:
         near_sym = self._occ_symbol(trade.ticker, near_expiry, near_strike, "call")
         far_sym = self._occ_symbol(trade.ticker, far_expiry, far_strike, "call")
         return [
-            {"symbol": near_sym, "ratio_qty": 1, "side": "sell", "strike": near_strike, "expiry": near_expiry, "option_type": "call"},
-            {"symbol": far_sym, "ratio_qty": 1, "side": "buy", "strike": far_strike, "expiry": far_expiry, "option_type": "call"},
+            {
+                "symbol": near_sym,
+                "ratio_qty": 1,
+                "side": "sell",
+                "strike": near_strike,
+                "expiry": near_expiry,
+                "option_type": "call",
+            },
+            {
+                "symbol": far_sym,
+                "ratio_qty": 1,
+                "side": "buy",
+                "strike": far_strike,
+                "expiry": far_expiry,
+                "option_type": "call",
+            },
         ]
 
     def _legs_short_straddle(self, trade: Trade, feat: dict) -> list[dict]:
@@ -736,8 +788,22 @@ class StrategyBridge:
         call_occ = self._occ_symbol(trade.ticker, expiry, strike, "call")
         put_occ = self._occ_symbol(trade.ticker, expiry, strike, "put")
         return [
-            {"symbol": call_occ, "ratio_qty": 1, "side": "sell", "strike": strike, "expiry": expiry, "option_type": "call"},
-            {"symbol": put_occ, "ratio_qty": 1, "side": "sell", "strike": strike, "expiry": expiry, "option_type": "put"},
+            {
+                "symbol": call_occ,
+                "ratio_qty": 1,
+                "side": "sell",
+                "strike": strike,
+                "expiry": expiry,
+                "option_type": "call",
+            },
+            {
+                "symbol": put_occ,
+                "ratio_qty": 1,
+                "side": "sell",
+                "strike": strike,
+                "expiry": expiry,
+                "option_type": "put",
+            },
         ]
 
     def _legs_long_straddle(self, trade: Trade, feat: dict) -> list[dict]:
@@ -746,8 +812,22 @@ class StrategyBridge:
         call_occ = self._occ_symbol(trade.ticker, expiry, strike, "call")
         put_occ = self._occ_symbol(trade.ticker, expiry, strike, "put")
         return [
-            {"symbol": call_occ, "ratio_qty": 1, "side": "buy", "strike": strike, "expiry": expiry, "option_type": "call"},
-            {"symbol": put_occ, "ratio_qty": 1, "side": "buy", "strike": strike, "expiry": expiry, "option_type": "put"},
+            {
+                "symbol": call_occ,
+                "ratio_qty": 1,
+                "side": "buy",
+                "strike": strike,
+                "expiry": expiry,
+                "option_type": "call",
+            },
+            {
+                "symbol": put_occ,
+                "ratio_qty": 1,
+                "side": "buy",
+                "strike": strike,
+                "expiry": expiry,
+                "option_type": "put",
+            },
         ]
 
     def _legs_single(self, trade: Trade, feat: dict, option_type: str, direction: str) -> list[dict]:
@@ -755,7 +835,14 @@ class StrategyBridge:
         expiry = self._parse_date(feat.get("expiry")) or trade.earnings_date
         occ = self._occ_symbol(trade.ticker, expiry, strike, option_type)
         return [
-            {"symbol": occ, "ratio_qty": 1, "side": direction, "strike": strike, "expiry": expiry, "option_type": option_type},
+            {
+                "symbol": occ,
+                "ratio_qty": 1,
+                "side": direction,
+                "strike": strike,
+                "expiry": expiry,
+                "option_type": option_type,
+            },
         ]
 
     def _legs_vertical(self, trade: Trade, feat: dict, option_type: str, kind: str) -> list[dict]:
@@ -767,8 +854,22 @@ class StrategyBridge:
         hi_occ = self._occ_symbol(trade.ticker, expiry, k_high, option_type)
         if kind == "debit":
             return [
-                {"symbol": lo_occ, "ratio_qty": 1, "side": "buy", "strike": k_low, "expiry": expiry, "option_type": option_type},
-                {"symbol": hi_occ, "ratio_qty": 1, "side": "sell", "strike": k_high, "expiry": expiry, "option_type": option_type},
+                {
+                    "symbol": lo_occ,
+                    "ratio_qty": 1,
+                    "side": "buy",
+                    "strike": k_low,
+                    "expiry": expiry,
+                    "option_type": option_type,
+                },
+                {
+                    "symbol": hi_occ,
+                    "ratio_qty": 1,
+                    "side": "sell",
+                    "strike": k_high,
+                    "expiry": expiry,
+                    "option_type": option_type,
+                },
             ]
         return []
 
@@ -779,10 +880,38 @@ class StrategyBridge:
         lp = feat.get("long_put", 0)
         expiry = self._parse_date(feat.get("expiry")) or trade.earnings_date
         return [
-            {"symbol": self._occ_symbol(trade.ticker, expiry, lp, "put"), "ratio_qty": 1, "side": "buy", "strike": lp, "expiry": expiry, "option_type": "put"},
-            {"symbol": self._occ_symbol(trade.ticker, expiry, sp, "put"), "ratio_qty": 1, "side": "sell", "strike": sp, "expiry": expiry, "option_type": "put"},
-            {"symbol": self._occ_symbol(trade.ticker, expiry, sc, "call"), "ratio_qty": 1, "side": "sell", "strike": sc, "expiry": expiry, "option_type": "call"},
-            {"symbol": self._occ_symbol(trade.ticker, expiry, lc, "call"), "ratio_qty": 1, "side": "buy", "strike": lc, "expiry": expiry, "option_type": "call"},
+            {
+                "symbol": self._occ_symbol(trade.ticker, expiry, lp, "put"),
+                "ratio_qty": 1,
+                "side": "buy",
+                "strike": lp,
+                "expiry": expiry,
+                "option_type": "put",
+            },
+            {
+                "symbol": self._occ_symbol(trade.ticker, expiry, sp, "put"),
+                "ratio_qty": 1,
+                "side": "sell",
+                "strike": sp,
+                "expiry": expiry,
+                "option_type": "put",
+            },
+            {
+                "symbol": self._occ_symbol(trade.ticker, expiry, sc, "call"),
+                "ratio_qty": 1,
+                "side": "sell",
+                "strike": sc,
+                "expiry": expiry,
+                "option_type": "call",
+            },
+            {
+                "symbol": self._occ_symbol(trade.ticker, expiry, lc, "call"),
+                "ratio_qty": 1,
+                "side": "buy",
+                "strike": lc,
+                "expiry": expiry,
+                "option_type": "call",
+            },
         ]
 
     def _legs_butterfly(self, trade: Trade, feat: dict) -> list[dict]:
@@ -793,9 +922,30 @@ class StrategyBridge:
         opt_type = feat.get("option_type", "call")
         # 1 long lo, 2 short atm, 1 long hi — for multi-leg Alpaca uses ratio_qty
         return [
-            {"symbol": self._occ_symbol(trade.ticker, expiry, lo, opt_type), "ratio_qty": 1, "side": "buy", "strike": lo, "expiry": expiry, "option_type": opt_type},
-            {"symbol": self._occ_symbol(trade.ticker, expiry, atm, opt_type), "ratio_qty": 2, "side": "sell", "strike": atm, "expiry": expiry, "option_type": opt_type},
-            {"symbol": self._occ_symbol(trade.ticker, expiry, hi, opt_type), "ratio_qty": 1, "side": "buy", "strike": hi, "expiry": expiry, "option_type": opt_type},
+            {
+                "symbol": self._occ_symbol(trade.ticker, expiry, lo, opt_type),
+                "ratio_qty": 1,
+                "side": "buy",
+                "strike": lo,
+                "expiry": expiry,
+                "option_type": opt_type,
+            },
+            {
+                "symbol": self._occ_symbol(trade.ticker, expiry, atm, opt_type),
+                "ratio_qty": 2,
+                "side": "sell",
+                "strike": atm,
+                "expiry": expiry,
+                "option_type": opt_type,
+            },
+            {
+                "symbol": self._occ_symbol(trade.ticker, expiry, hi, opt_type),
+                "ratio_qty": 1,
+                "side": "buy",
+                "strike": hi,
+                "expiry": expiry,
+                "option_type": opt_type,
+            },
         ]
 
     def _legs_risk_reversal(self, trade: Trade, feat: dict) -> list[dict]:
@@ -803,8 +953,22 @@ class StrategyBridge:
         kp = feat.get("put_strike", 0)
         expiry = self._parse_date(feat.get("expiry")) or trade.earnings_date
         return [
-            {"symbol": self._occ_symbol(trade.ticker, expiry, kp, "put"), "ratio_qty": 1, "side": "sell", "strike": kp, "expiry": expiry, "option_type": "put"},
-            {"symbol": self._occ_symbol(trade.ticker, expiry, kc, "call"), "ratio_qty": 1, "side": "buy", "strike": kc, "expiry": expiry, "option_type": "call"},
+            {
+                "symbol": self._occ_symbol(trade.ticker, expiry, kp, "put"),
+                "ratio_qty": 1,
+                "side": "sell",
+                "strike": kp,
+                "expiry": expiry,
+                "option_type": "put",
+            },
+            {
+                "symbol": self._occ_symbol(trade.ticker, expiry, kc, "call"),
+                "ratio_qty": 1,
+                "side": "buy",
+                "strike": kc,
+                "expiry": expiry,
+                "option_type": "call",
+            },
         ]
 
     # ──────────────── Helpers ─────────────────────────────────────────────
@@ -889,8 +1053,9 @@ class StrategyBridge:
         expiries = [leg.get("expiry") for leg in legs if leg.get("expiry") is not None]
         return min(expiries) if expiries else None
 
-    def _last_look(self, trade: Trade, legs: list[dict],
-                   limit_price: float | None) -> tuple[str | None, float | None]:
+    def _last_look(
+        self, trade: Trade, legs: list[dict], limit_price: float | None
+    ) -> tuple[str | None, float | None]:
         """Refresh combo marks immediately before submit. (veto, mid)."""
         symbols = [leg["symbol"] for leg in legs]
         snaps: dict = {}
@@ -900,8 +1065,10 @@ class StrategyBridge:
                 snaps = raw
         except Exception as exc:
             # exc-policy: keep broad, ensure visibility
-            record_event('silent_failure', f'alpaca_bridge: {exc}')
-            import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
+            record_event("silent_failure", f"alpaca_bridge: {exc}")
+            import logging
+
+            logging.getLogger(__name__).error("alpaca_bridge broad exception", exc_info=True)
             logger.info("last_look bulk snapshot failed: %s", exc)
         if not snaps or not any(isinstance(v, dict) for v in snaps.values()):
             snaps = {}
@@ -910,8 +1077,10 @@ class StrategyBridge:
                     one = self.client.get_option_snapshot(leg["symbol"]) or {}
                 except Exception as exc:
                     # exc-policy: keep broad, ensure visibility
-                    record_event('silent_failure', f'alpaca_bridge: {exc}')
-                    import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
+                    record_event("silent_failure", f"alpaca_bridge: {exc}")
+                    import logging
+
+                    logging.getLogger(__name__).error("alpaca_bridge broad exception", exc_info=True)
                     one = {}
                 if isinstance(one, dict):
                     snaps[leg["symbol"]] = one
@@ -926,8 +1095,10 @@ class StrategyBridge:
             spot = self.client.get_stock_latest_trade(trade.ticker)
         except Exception as exc:
             # exc-policy: keep broad, ensure visibility
-            record_event('silent_failure', f'alpaca_bridge: {exc}')
-            import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
+            record_event("silent_failure", f"alpaca_bridge: {exc}")
+            import logging
+
+            logging.getLogger(__name__).error("alpaca_bridge broad exception", exc_info=True)
             spot = None
         feat = trade.features or {}
         if not isinstance(spot, (int, float)):
@@ -961,8 +1132,10 @@ class StrategyBridge:
                 fetched = self.client.get_order(oid)
             except Exception as exc:
                 # exc-policy: keep broad, ensure visibility
-                record_event('silent_failure', f'alpaca_bridge: {exc}')
-                import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
+                record_event("silent_failure", f"alpaca_bridge: {exc}")
+                import logging
+
+                logging.getLogger(__name__).error("alpaca_bridge broad exception", exc_info=True)
                 logger.info("fill poll %s failed: %s", oid, exc)
                 return latest
             if not isinstance(fetched, dict):
@@ -1031,10 +1204,12 @@ def _resolve_strategy(name: str):
     """
     try:
         from earnings_edge.backtest.calendar import get_strategy
+
         return get_strategy(name)
     except KeyError:
         pass
     from earnings_edge.backtest.positional import POSITIONAL_STRATEGIES
+
     if name in POSITIONAL_STRATEGIES:
         cls = POSITIONAL_STRATEGIES[name]
         return cls()
@@ -1067,6 +1242,7 @@ def run_auto_trade(
         from framework.core.registry import get_registry
         from framework.execution.lifecycle import LifecycleManager
         from framework.risk.manager import RiskManager
+
         registry = get_registry()
         bridge = StrategyBridge(
             client=create_client(api_key, api_secret),
@@ -1077,8 +1253,10 @@ def run_auto_trade(
         )
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
-        record_event('silent_failure', f'alpaca_bridge: {exc}')
-        import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
+        record_event("silent_failure", f"alpaca_bridge: {exc}")
+        import logging
+
+        logging.getLogger(__name__).error("alpaca_bridge broad exception", exc_info=True)
         logger.warning("risk layer unavailable (%s) — ungated legacy bridge", exc)
         bridge = StrategyBridge(client=create_client(api_key, api_secret))
     results = {}
@@ -1095,8 +1273,10 @@ def run_auto_trade(
             logger.info("Buying power: $%.2f", buying_power)
     except Exception as e:
         # exc-policy: keep broad, ensure visibility
-        record_event('silent_failure', f'alpaca_bridge: {e}')
-        import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
+        record_event("silent_failure", f"alpaca_bridge: {e}")
+        import logging
+
+        logging.getLogger(__name__).error("alpaca_bridge broad exception", exc_info=True)
         logger.warning("Could not fetch buying power, using default: %s", e)
 
     strategies = strategies or BEST_STRATEGIES
@@ -1127,14 +1307,17 @@ def run_auto_trade(
             if buying_power < min_buying_power:
                 logger.warning(
                     "Buying power $%.2f below minimum $%.2f — stopping orders",
-                    buying_power, min_buying_power,
+                    buying_power,
+                    min_buying_power,
                 )
                 break
 
             # Safety: per-ticker cap
             ticker = trade.ticker
             if ticker_spend.get(ticker, 0) >= max_per_ticker:
-                logger.warning("Ticker %s at $%.2f / $%.2f cap — skipping", ticker, ticker_spend[ticker], max_per_ticker)
+                logger.warning(
+                    "Ticker %s at $%.2f / $%.2f cap — skipping", ticker, ticker_spend[ticker], max_per_ticker
+                )
                 continue
 
             order_result = bridge.execute_trade(trade)
@@ -1162,8 +1345,10 @@ def run_auto_trade(
         buying_power = bridge.account_buying_power() or buying_power
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
-        record_event('silent_failure', f'alpaca_bridge: {exc}')
-        import logging; logging.getLogger(__name__).error('alpaca_bridge broad exception', exc_info=True)
+        record_event("silent_failure", f"alpaca_bridge: {exc}")
+        import logging
+
+        logging.getLogger(__name__).error("alpaca_bridge broad exception", exc_info=True)
         pass
 
     summary = {

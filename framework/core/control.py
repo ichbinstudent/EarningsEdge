@@ -31,11 +31,12 @@ logger = logging.getLogger("framework.core.control")
 def set_enabled(name: str, enabled: bool, by: str = "operator") -> None:
     """Persist an operator enable/disable override for a strategy."""
     strategy_state_set_enabled(name, enabled, updated_by=by)
-    record_event("resume" if enabled else "pause",
-                 f"strategy {'enabled' if enabled else 'disabled'} (by {by})",
-                 strategy=name)
-    logger.warning("strategy %s %s (by %s)", name,
-                   "enabled" if enabled else "disabled", by)
+    record_event(
+        "resume" if enabled else "pause",
+        f"strategy {'enabled' if enabled else 'disabled'} (by {by})",
+        strategy=name,
+    )
+    logger.warning("strategy %s %s (by %s)", name, "enabled" if enabled else "disabled", by)
 
 
 def clear_override(name: str, by: str = "operator") -> None:
@@ -91,16 +92,14 @@ def set_execution_mode(name: str, mode: str, by: str = "operator") -> None:
     if mode not in _EXECUTION_MODES:
         raise ValueError(f"execution mode must be one of {sorted(_EXECUTION_MODES)}")
     strategy_state_set_execution_mode(name, mode, updated_by=by)
-    record_event("execution_mode",
-                 f"execution mode → {mode} (by {by})", strategy=name)
+    record_event("execution_mode", f"execution mode → {mode} (by {by})", strategy=name)
     logger.warning("strategy %s execution mode → %s (by %s)", name, mode, by)
 
 
 def clear_execution_mode_override(name: str, by: str = "operator") -> None:
     """Remove the operator override → the TOML execution_mode decides again."""
     strategy_state_clear_execution_mode(name, updated_by=by)
-    record_event("execution_mode",
-                 f"execution-mode override cleared (by {by})", strategy=name)
+    record_event("execution_mode", f"execution-mode override cleared (by {by})", strategy=name)
 
 
 def execution_mode_overrides() -> dict[str, str]:

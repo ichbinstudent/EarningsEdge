@@ -1,6 +1,7 @@
 """Tests for earnings_edge.cards: the shared HTML card/grouping renderer
 used by trade_approval (entries), framework.positions.manager (exits), and
 bot.py's batched Telegram pushes."""
+
 from __future__ import annotations
 
 from earnings_edge import cards

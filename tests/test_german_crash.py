@@ -40,8 +40,17 @@ CFG = CrashAlertConfig(
 
 def _q(**over):
     base = dict(
-        ticker="SAPG", venue="Gettex", last=100.0, bid=99.8, ask=100.2,
-        ts=NOW, now=NOW, cfg=CFG, ric="SAPG.GTX", name="SAP SE", source="lseg",
+        ticker="SAPG",
+        venue="Gettex",
+        last=100.0,
+        bid=99.8,
+        ask=100.2,
+        ts=NOW,
+        now=NOW,
+        cfg=CFG,
+        ric="SAPG.GTX",
+        name="SAP SE",
+        source="lseg",
         trade_ts=NOW,
     )
     base.update(over)
@@ -165,16 +174,19 @@ def test_quote_from_lseg_and_tradegate():
 
 
 def test_lseg_garbage_zero_book_no_quote():
-    assert quote_from_lseg(
-        {
-            "q.RIC": "JUNK.GTX",
-            "q._TRDPRC_1": "+12.0",
-            "q._BID": "+0",
-            "q._ASK": "+0",
-        },
-        captured_at=NOW,
-        cfg=CFG,
-    ) is None
+    assert (
+        quote_from_lseg(
+            {
+                "q.RIC": "JUNK.GTX",
+                "q._TRDPRC_1": "+12.0",
+                "q._BID": "+0",
+                "q._ASK": "+0",
+            },
+            captured_at=NOW,
+            cfg=CFG,
+        )
+        is None
+    )
 
 
 def test_reject_xetra_stub_bid():
@@ -208,8 +220,14 @@ def _px(ticker, venue, price, ts, bid=None, ask=None):
     ask = price + 0.1 if ask is None else ask
     # Validate as-of `ts` so historical samples are not rejected as stale.
     return _q(
-        ticker=ticker, venue=venue, last=price, bid=bid, ask=ask,
-        ts=ts, now=ts, ric=f"{ticker}.GTX",
+        ticker=ticker,
+        venue=venue,
+        last=price,
+        bid=bid,
+        ask=ask,
+        ts=ts,
+        now=ts,
+        ric=f"{ticker}.GTX",
     )
 
 
@@ -281,8 +299,14 @@ def test_book_dump_without_print_uses_mid_and_alerts():
     t0 = NOW - timedelta(seconds=60)
     det.ingest([_px("SAPG", "Gettex", 100.0, t0)], t0)
     q = _q(
-        ticker="SAPG", venue="Gettex", last=100.0, bid=69.8, ask=70.2,
-        ts=NOW, ric="SAPG.GTX", trade_ts=NOW - timedelta(seconds=60),
+        ticker="SAPG",
+        venue="Gettex",
+        last=100.0,
+        bid=69.8,
+        ask=70.2,
+        ts=NOW,
+        ric="SAPG.GTX",
+        trade_ts=NOW - timedelta(seconds=60),
     )
     assert q is not None
     assert q.price == pytest.approx(70.0)
@@ -294,14 +318,20 @@ def test_book_dump_without_print_uses_mid_and_alerts():
 def test_venues_are_independent():
     det = CrashDetector(CFG)
     t0 = NOW - timedelta(seconds=60)
-    det.ingest([
-        _px("SAPG", "Gettex", 100.0, t0),
-        _px("SAPG", "Xetra", 100.0, t0),
-    ], t0)
-    alerts = det.ingest([
-        _px("SAPG", "Gettex", 70.0, NOW),
-        _px("SAPG", "Xetra", 99.0, NOW),
-    ], NOW)
+    det.ingest(
+        [
+            _px("SAPG", "Gettex", 100.0, t0),
+            _px("SAPG", "Xetra", 100.0, t0),
+        ],
+        t0,
+    )
+    alerts = det.ingest(
+        [
+            _px("SAPG", "Gettex", 70.0, NOW),
+            _px("SAPG", "Xetra", 99.0, NOW),
+        ],
+        NOW,
+    )
     venues = {a.venue for a in alerts}
     assert venues == {"Gettex"}
 
@@ -312,8 +342,13 @@ def test_venues_are_independent():
 def test_cooldown_suppresses_same_ticker():
     cd = Cooldown(cooldown_secs=1800)
     a = CrashAlert(
-        ticker="SAPG", venue="Gettex", drop_pct=0.25, high=100, last=75,
-        window_secs=300, ts=NOW,
+        ticker="SAPG",
+        venue="Gettex",
+        drop_pct=0.25,
+        high=100,
+        last=75,
+        window_secs=300,
+        ts=NOW,
     )
     first = cd.filter([a], NOW)
     assert len(first) == 1
@@ -325,10 +360,8 @@ def test_cooldown_suppresses_same_ticker():
 
 def test_cooldown_is_per_venue_not_per_ticker():
     cd = Cooldown(cooldown_secs=1800)
-    a1 = CrashAlert(ticker="SAPG", venue="Gettex", drop_pct=0.21, high=100, last=79,
-                    window_secs=300, ts=NOW)
-    a2 = CrashAlert(ticker="SAPG", venue="Xetra", drop_pct=0.40, high=100, last=60,
-                    window_secs=300, ts=NOW)
+    a1 = CrashAlert(ticker="SAPG", venue="Gettex", drop_pct=0.21, high=100, last=79, window_secs=300, ts=NOW)
+    a2 = CrashAlert(ticker="SAPG", venue="Xetra", drop_pct=0.40, high=100, last=60, window_secs=300, ts=NOW)
     out = cd.filter([a1, a2], NOW)
     assert {a.venue for a in out} == {"Gettex", "Xetra"}
     again = cd.filter([a2], NOW + timedelta(seconds=60))
@@ -337,8 +370,7 @@ def test_cooldown_is_per_venue_not_per_ticker():
 
 def test_cooldown_persists_to_disk(tmp_path):
     path = str(tmp_path / "cd.json")
-    a = CrashAlert(ticker="NVDA", venue="Gettex", drop_pct=0.3, high=10, last=7,
-                   window_secs=300, ts=NOW)
+    a = CrashAlert(ticker="NVDA", venue="Gettex", drop_pct=0.3, high=10, last=7, window_secs=300, ts=NOW)
     Cooldown(1800, path=path).filter([a], NOW)
     other = Cooldown(1800, path=path)
     assert other.filter([a], NOW + timedelta(seconds=10)) == []
@@ -349,8 +381,17 @@ def test_cooldown_persists_to_disk(tmp_path):
 
 def test_format_alert_has_required_fields():
     a = CrashAlert(
-        ticker="SAPG", venue="Gettex", drop_pct=0.214, high=126.4, last=99.3,
-        window_secs=300, ts=NOW, bid=99.2, ask=99.4, name="SAP SE", ric="SAPG.GTX",
+        ticker="SAPG",
+        venue="Gettex",
+        drop_pct=0.214,
+        high=126.4,
+        last=99.3,
+        window_secs=300,
+        ts=NOW,
+        bid=99.2,
+        ask=99.4,
+        name="SAP SE",
+        ric="SAPG.GTX",
         high_ts=NOW - timedelta(seconds=90),
     )
     text = format_alert(a)
@@ -394,20 +435,35 @@ class _FakeTg:
 
 
 def test_monitor_poll_emits_and_cools_down(tmp_path):
-    lseg_t0 = [{
-        "q.RIC": "SAPG.GTX", "q._TRDPRC_1": "+100", "q._BID": "+99.8",
-        "q._ASK": "+100.2", "q._DSPLY_NAME": "SAP SE",
-        "q._TRADE_DATE": "01 SEP 2026", "q._TRDTIM_1": "17:58:00",
-    }]
-    lseg_t1 = [{
-        "q.RIC": "SAPG.GTX", "q._TRDPRC_1": "+70", "q._BID": "+69.8",
-        "q._ASK": "+70.2", "q._DSPLY_NAME": "SAP SE",
-        "q._TRADE_DATE": "01 SEP 2026", "q._TRDTIM_1": "18:00:00",
-    }]
+    lseg_t0 = [
+        {
+            "q.RIC": "SAPG.GTX",
+            "q._TRDPRC_1": "+100",
+            "q._BID": "+99.8",
+            "q._ASK": "+100.2",
+            "q._DSPLY_NAME": "SAP SE",
+            "q._TRADE_DATE": "01 SEP 2026",
+            "q._TRDTIM_1": "17:58:00",
+        }
+    ]
+    lseg_t1 = [
+        {
+            "q.RIC": "SAPG.GTX",
+            "q._TRDPRC_1": "+70",
+            "q._BID": "+69.8",
+            "q._ASK": "+70.2",
+            "q._DSPLY_NAME": "SAP SE",
+            "q._TRADE_DATE": "01 SEP 2026",
+            "q._TRDTIM_1": "18:00:00",
+        }
+    ]
     fake = _FakeGettex(lseg_t0)
     mon = CrashMonitor(
-        cfg=CFG, collector=fake, tradegate=_FakeTg([]),
-        data_dir=str(tmp_path), cooldown_path=str(tmp_path / "cd.json"),
+        cfg=CFG,
+        collector=fake,
+        tradegate=_FakeTg([]),
+        data_dir=str(tmp_path),
+        cooldown_path=str(tmp_path / "cd.json"),
     )
     t0 = NOW - timedelta(seconds=120)
     r0 = mon.poll(t0)
@@ -435,8 +491,11 @@ def test_monitor_does_not_alert_on_fetch_failure(tmp_path):
             raise RuntimeError("network down")
 
     mon = CrashMonitor(
-        cfg=CFG, collector=Boom(), tradegate=_FakeTg([]),
-        data_dir=str(tmp_path), cooldown_path=str(tmp_path / "cd.json"),
+        cfg=CFG,
+        collector=Boom(),
+        tradegate=_FakeTg([]),
+        data_dir=str(tmp_path),
+        cooldown_path=str(tmp_path / "cd.json"),
     )
     out = mon.poll(NOW)
     assert out["n_alerts"] == 0
@@ -455,7 +514,7 @@ def test_in_open_snapshot_window():
 def test_in_crash_poll_window_0730_to_2300_berlin_weekdays():
     # Tue 2026-09-01 is CEST (UTC+2)
     assert in_crash_poll_window(datetime(2026, 9, 1, 5, 30, tzinfo=UTC))  # 07:30
-    assert in_crash_poll_window(datetime(2026, 9, 1, 21, 0, tzinfo=UTC))   # 23:00
+    assert in_crash_poll_window(datetime(2026, 9, 1, 21, 0, tzinfo=UTC))  # 23:00
     assert not in_crash_poll_window(datetime(2026, 9, 1, 5, 29, tzinfo=UTC))  # 07:29
     assert not in_crash_poll_window(datetime(2026, 9, 1, 21, 0, 1, tzinfo=UTC))  # 23:00:01
     # Saturday
@@ -526,6 +585,3 @@ def test_gettex_collector_write_snapshot_and_batching(tmp_path):
     text = open(path).read()
     assert text.count("\n") == 3
     assert "A.GTX" in text
-
-
-

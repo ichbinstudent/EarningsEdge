@@ -35,7 +35,8 @@ class LifecycleManager:
         strategy_state_upsert(strategy, lifecycle=state, updated_by=by)
         record_event(
             "promote" if LIFECYCLES.index(state) > LIFECYCLES.index(prev) else "demote",
-            f"{prev} → {state} (by {by})", strategy=strategy,
+            f"{prev} → {state} (by {by})",
+            strategy=strategy,
         )
         logger.warning("lifecycle %s: %s → %s (by %s)", strategy, prev, state, by)
 
@@ -46,9 +47,9 @@ class LifecycleManager:
         return {r["name"]: r["lifecycle"] for r in strategy_state_list()}
 
     @staticmethod
-    def eligible_for_promotion(stats: dict, min_closed_trades: int = 20,
-                               min_win_rate: float = 0.50,
-                               max_drawdown_pct: float = 0.10) -> bool:
+    def eligible_for_promotion(
+        stats: dict, min_closed_trades: int = 20, min_win_rate: float = 0.50, max_drawdown_pct: float = 0.10
+    ) -> bool:
         """Evaluate promotion criteria against a strategy's closed-trade stats."""
         if stats.get("closed_trades", 0) < min_closed_trades:
             return False

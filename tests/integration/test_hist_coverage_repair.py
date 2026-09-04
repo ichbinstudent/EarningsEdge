@@ -32,12 +32,21 @@ def _ms(d: date) -> int:
 def _fake_bars(ed: date, pre_close: float = 100.0, post_close: float = 112.0):
     """Three bars around the event: pre / earnings-day / post."""
     return [
-        {"t": _ms(ed - timedelta(days=1)), "c": pre_close, "h": pre_close * 1.01,
-         "l": pre_close * 0.99, "v": 1_000_000},
-        {"t": _ms(ed), "c": post_close, "h": post_close * 1.05,
-         "l": pre_close * 0.98, "v": 5_000_000},
-        {"t": _ms(ed + timedelta(days=1)), "c": post_close * 1.01,
-         "h": post_close * 1.02, "l": post_close * 0.99, "v": 2_000_000},
+        {
+            "t": _ms(ed - timedelta(days=1)),
+            "c": pre_close,
+            "h": pre_close * 1.01,
+            "l": pre_close * 0.99,
+            "v": 1_000_000,
+        },
+        {"t": _ms(ed), "c": post_close, "h": post_close * 1.05, "l": pre_close * 0.98, "v": 5_000_000},
+        {
+            "t": _ms(ed + timedelta(days=1)),
+            "c": post_close * 1.01,
+            "h": post_close * 1.02,
+            "l": post_close * 0.99,
+            "v": 2_000_000,
+        },
     ]
 
 

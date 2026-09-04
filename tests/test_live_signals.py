@@ -1,4 +1,5 @@
 """Tests for the live signal layer (scan session -> executable Trades)."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -40,35 +41,102 @@ def scan_db(tmp_path):
         "model_expected_return, model_decision"
     )
 
-    def ins(ts, ticker, ed, tier, passed, price, strike, n, f, debit, ask, mid,
-            iv_rv, em_pct, em_usd, score, decision):
+    def ins(
+        ts,
+        ticker,
+        ed,
+        tier,
+        passed,
+        price,
+        strike,
+        n,
+        f,
+        debit,
+        ask,
+        mid,
+        iv_rv,
+        em_pct,
+        em_usd,
+        score,
+        decision,
+    ):
         conn.execute(
             f"INSERT INTO scanner_scan_outputs ({cols}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (ts, ticker, str(ed), tier, passed, price, strike, str(n), str(f),
-             debit, ask, mid, iv_rv, em_pct, em_usd, score, decision),
+            (
+                ts,
+                ticker,
+                str(ed),
+                tier,
+                passed,
+                price,
+                strike,
+                str(n),
+                str(f),
+                debit,
+                ask,
+                mid,
+                iv_rv,
+                em_pct,
+                em_usd,
+                score,
+                decision,
+            ),
         )
 
     # fresh session
-    ins(fresh, "TAKECO", earn, 1, 1, 100.0, 100.0, near, far, 1.50, 1.80, 1.60,
-        1.10, 5.0, 5.0, 0.25, "TAKE")
-    ins(fresh, "SKIPCO", earn, 2, 1, 50.0, 50.0, near, far, 2.00, 2.40, 2.10,
-        1.05, 4.0, 2.0, -0.10, "SKIP")
-    ins(fresh, "CHEAP", earn, 1, 1, 40.0, 40.0, near, far, 0.90, 1.10, 1.00,
-        1.08, 5.5, 2.2, None, "SKIP")  # cheap debit: 1.10/40 = 2.75% <= 3%
-    ins(fresh, "EXPENSIVE", earn, 1, 1, 200.0, 200.0, near, far, 8.00, 9.00, 8.50,
-        1.06, 4.5, 9.0, None, "SKIP")  # 9/200 = 4.5% > 3%
-    ins(fresh, "RICHVOL", earn, 1, 1, 80.0, 80.0, near, far, 3.00, 3.50, 3.20,
-        1.60, 8.0, 6.4, None, "SKIP")   # iv_rv 1.6, EM 8% -> straddle candidate
-    ins(fresh, "MIDVOL", earn, 1, 1, 60.0, 60.0, near, far, 2.00, 2.50, 2.20,
-        1.30, 7.0, 4.2, None, "SKIP")   # iv_rv 1.3: short_straddle only
-    ins(fresh, "PASTCO", earn - timedelta(days=10), 1, 1, 30.0, 30.0, near, far,
-        1.00, 1.20, 1.10, 1.20, 6.0, 1.8, 0.30, "TAKE")  # earnings in the past
+    ins(fresh, "TAKECO", earn, 1, 1, 100.0, 100.0, near, far, 1.50, 1.80, 1.60, 1.10, 5.0, 5.0, 0.25, "TAKE")
+    ins(fresh, "SKIPCO", earn, 2, 1, 50.0, 50.0, near, far, 2.00, 2.40, 2.10, 1.05, 4.0, 2.0, -0.10, "SKIP")
+    ins(
+        fresh, "CHEAP", earn, 1, 1, 40.0, 40.0, near, far, 0.90, 1.10, 1.00, 1.08, 5.5, 2.2, None, "SKIP"
+    )  # cheap debit: 1.10/40 = 2.75% <= 3%
+    ins(
+        fresh,
+        "EXPENSIVE",
+        earn,
+        1,
+        1,
+        200.0,
+        200.0,
+        near,
+        far,
+        8.00,
+        9.00,
+        8.50,
+        1.06,
+        4.5,
+        9.0,
+        None,
+        "SKIP",
+    )  # 9/200 = 4.5% > 3%
+    ins(
+        fresh, "RICHVOL", earn, 1, 1, 80.0, 80.0, near, far, 3.00, 3.50, 3.20, 1.60, 8.0, 6.4, None, "SKIP"
+    )  # iv_rv 1.6, EM 8% -> straddle candidate
+    ins(
+        fresh, "MIDVOL", earn, 1, 1, 60.0, 60.0, near, far, 2.00, 2.50, 2.20, 1.30, 7.0, 4.2, None, "SKIP"
+    )  # iv_rv 1.3: short_straddle only
+    ins(
+        fresh,
+        "PASTCO",
+        earn - timedelta(days=10),
+        1,
+        1,
+        30.0,
+        30.0,
+        near,
+        far,
+        1.00,
+        1.20,
+        1.10,
+        1.20,
+        6.0,
+        1.8,
+        0.30,
+        "TAKE",
+    )  # earnings in the past
     # duplicate ticker in same session: passed=0 row must lose the dedupe
-    ins(fresh, "TAKECO", earn, 3, 0, 100.0, 100.0, near, far, 9.99, 9.99, 9.99,
-        1.01, 1.0, 1.0, None, "SKIP")
+    ins(fresh, "TAKECO", earn, 3, 0, 100.0, 100.0, near, far, 9.99, 9.99, 9.99, 1.01, 1.0, 1.0, None, "SKIP")
     # stale session: must never leak into the frame
-    ins(stale, "STALE", earn, 1, 1, 70.0, 70.0, near, far, 1.00, 1.20, 1.10,
-        1.50, 8.0, 5.6, 0.40, "TAKE")
+    ins(stale, "STALE", earn, 1, 1, 70.0, 70.0, near, far, 1.00, 1.20, 1.10, 1.50, 8.0, 5.6, 0.40, "TAKE")
 
     conn.execute(
         "INSERT INTO live_calendar_candidates "
@@ -102,6 +170,7 @@ def test_latest_scan_frame_stale_returns_empty(scan_db):
 def _bridge():
     client = MagicMock()
     client.position_symbols.return_value = set()
+
     # preflight_combo requires a live Alpaca book per leg; calendar legs are
     # (near sell, far buy) — price the far leg above the near leg so the
     # net debit mid is positive.
@@ -111,6 +180,7 @@ def _bridge():
             mid = 5.04 if i == 0 else 5.54
             out[s] = {"latestQuote": {"bp": round(mid - 0.04, 2), "ap": round(mid + 0.04, 2)}}
         return out
+
     client.get_option_snapshots_bulk.side_effect = _bulk
     return StrategyBridge(client=client, config=BridgeConfig(dry_run=False))
 

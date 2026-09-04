@@ -10,6 +10,7 @@ every function here does that via `esc()`, so callers never need to.
 
 Pure string building; no Telegram imports (unit-testable).
 """
+
 from __future__ import annotations
 
 import html
@@ -39,8 +40,8 @@ def header(emoji: str, title: str) -> str:
 
 # ── single-card scaffold ────────────────────────────────────────────────
 
-def card_frame(emoji: str, title: str, subtitle: str, body_lines: list[str],
-               footer: str = "") -> str:
+
+def card_frame(emoji: str, title: str, subtitle: str, body_lines: list[str], footer: str = "") -> str:
     """Common visual scaffold for entry/exit/FF cards: bold emoji header,
     a plain (already HTML-safe) subtitle line, pre-built HTML-safe body
     lines, and an optional footer. Callers escape their own dynamic values
@@ -48,6 +49,7 @@ def card_frame(emoji: str, title: str, subtitle: str, body_lines: list[str],
     lines = [header(emoji, title)]
     try:
         from earnings_edge.alpaca_mode import alpaca_live_enabled
+
         if alpaca_live_enabled():
             lines.append("🔴 <b>LIVE</b>")
     except Exception:
@@ -61,6 +63,7 @@ def card_frame(emoji: str, title: str, subtitle: str, body_lines: list[str],
 
 
 # ── grouping (batched per-strategy messages) ────────────────────────────
+
 
 def group_by_strategy(rows: list[dict]) -> dict[str, list[dict]]:
     """Preserve first-seen order; group proposal/exit rows by strategy."""
@@ -106,8 +109,7 @@ def group_message(strategy: str, rows: list[dict], kind: str) -> str:
     return "\n".join(lines)
 
 
-def batch_overview(strategy_counts: dict, kind: str = "entry",
-                    extra: str | None = None) -> str:
+def batch_overview(strategy_counts: dict, kind: str = "entry", extra: str | None = None) -> str:
     """Top-of-cycle summary across every strategy in one push cycle."""
     emoji = _GROUP_EMOJI[kind]
     noun = _GROUP_NOUN[kind]

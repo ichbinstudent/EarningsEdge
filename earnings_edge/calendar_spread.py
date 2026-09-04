@@ -24,9 +24,7 @@ def select_calendar_expiries(
 
     near_expiry = ordered[0]
     preferred_far = [
-        expiry
-        for expiry in ordered[1:]
-        if min_far_days <= (expiry - near_expiry).days <= max_far_days
+        expiry for expiry in ordered[1:] if min_far_days <= (expiry - near_expiry).days <= max_far_days
     ]
     if preferred_far:
         far_expiry = min(preferred_far, key=lambda expiry: abs((expiry - near_expiry).days - target_far_days))

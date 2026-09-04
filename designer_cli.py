@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """CLI entrypoint for Position Designer (designer.py)."""
+
 import argparse
 import sys
 from datetime import datetime
@@ -29,8 +30,10 @@ def parse_leg(s: str) -> Leg:
 
     return Leg(action, kind, strike, expiry, qty, price, iv)
 
-def print_risk_curve(title: str, grid: np.ndarray, pnl: np.ndarray, spot: float,
-                     breakevens: list[float] | None = None) -> None:
+
+def print_risk_curve(
+    title: str, grid: np.ndarray, pnl: np.ndarray, spot: float, breakevens: list[float] | None = None
+) -> None:
     print("\n" + "=" * 50)
     print(title)
     print("=" * 50)
@@ -51,13 +54,18 @@ def print_risk_curve(title: str, grid: np.ndarray, pnl: np.ndarray, spot: float,
 def main() -> int:
     parser = argparse.ArgumentParser(description="Options Position Designer")
     parser.add_argument("--spot", type=float, required=True, help="Underlying spot price")
-    parser.add_argument("--leg", action="append", required=True,
-                        help="Leg format: 'action kind strike expiry qty price iv' (can be repeated)")
+    parser.add_argument(
+        "--leg",
+        action="append",
+        required=True,
+        help="Leg format: 'action kind strike expiry qty price iv' (can be repeated)",
+    )
     parser.add_argument("--forecast-rv", type=float, help="Forecast RV for simulation (e.g. 0.45)")
     parser.add_argument("--r", type=float, default=0.045, help="Risk free rate (default 0.045)")
     parser.add_argument("--ticker", help="Underlying ticker — required when a leg uses 'auto'")
-    parser.add_argument("--db", default=None,
-                        help="Path to earnings_ml.db for 'auto' price/iv (default: data/earnings_ml.db)")
+    parser.add_argument(
+        "--db", default=None, help="Path to earnings_ml.db for 'auto' price/iv (default: data/earnings_ml.db)"
+    )
     args = parser.parse_args()
 
     try:
@@ -83,11 +91,14 @@ def main() -> int:
             if l.price == "auto" or l.iv == "auto":
                 expiry_iso = l.expiry.isoformat() if hasattr(l.expiry, "isoformat") else str(l.expiry)
                 row = options_chain_latest_contract(
-                    args.ticker, l.kind, float(l.strike), expiry_iso, as_of,
+                    args.ticker,
+                    l.kind,
+                    float(l.strike),
+                    expiry_iso,
+                    as_of,
                 )
                 if row is None:
-                    print(f"Error: no chain data for {args.ticker} {l.kind} "
-                          f"{l.strike} {l.expiry}")
+                    print(f"Error: no chain data for {args.ticker} {l.kind} {l.strike} {l.expiry}")
                     return 1
                 mid, close, stored_iv = row["midpoint"], row["close"], row["implied_volatility"]
                 m_price = mid if mid is not None else close
@@ -96,18 +107,24 @@ def main() -> int:
                     T = max((l.expiry - date_cls.today()).days, 0) / 365.0
                     if T > 0:
                         from earnings_edge.option_math import implied_volatility
+
                         solved = implied_volatility(
-                            float(m_price), args.spot, float(l.strike), T, args.r, l.kind,
+                            float(m_price),
+                            args.spot,
+                            float(l.strike),
+                            T,
+                            args.r,
+                            l.kind,
                         )
-                        if solved is not None and not (
-                            isinstance(solved, float) and np.isnan(solved)
-                        ):
+                        if solved is not None and not (isinstance(solved, float) and np.isnan(solved)):
                             m_iv = float(solved)
                 price = m_price if l.price == "auto" else l.price
                 iv = m_iv if l.iv == "auto" else l.iv
                 if price is None or iv is None:
-                    print(f"Error: chain row for {args.ticker} {l.kind} {l.strike} "
-                          f"{l.expiry} lacks {'price' if price is None else 'iv'}")
+                    print(
+                        f"Error: chain row for {args.ticker} {l.kind} {l.strike} "
+                        f"{l.expiry} lacks {'price' if price is None else 'iv'}"
+                    )
                     return 1
                 l = Leg(l.action, l.kind, l.strike, l.expiry, l.quantity, price, iv)
             resolved.append(l)
@@ -129,6 +146,7 @@ def main() -> int:
             print(f"{k}: {v}")
 
     from datetime import date as _date
+
     grid = np.linspace(args.spot * 0.8, args.spot * 1.2, 41)
     breakevens = summary.get("breakevens") or []
     expiries = {l.expiry for l in legs if l.is_option}
@@ -137,10 +155,8 @@ def main() -> int:
         # the meaningful risk profile; final-expiry curve shown for reference.
         front = min(expiries)
         pnl_front = pnl_at_front_expiry(legs, grid, args.r, _date.today())
-        print_risk_curve(f"RISK CURVE (P&L AT FRONT EXPIRY {front})", grid, pnl_front,
-                         args.spot, breakevens)
-    print_risk_curve("RISK CURVE (P&L AT EXPIRATION)", grid, pnl_at_expiry(legs, grid),
-                     args.spot, breakevens)
+        print_risk_curve(f"RISK CURVE (P&L AT FRONT EXPIRY {front})", grid, pnl_front, args.spot, breakevens)
+    print_risk_curve("RISK CURVE (P&L AT EXPIRATION)", grid, pnl_at_expiry(legs, grid), args.spot, breakevens)
 
     if args.forecast_rv:
         print("\n" + "=" * 50)
@@ -154,6 +170,7 @@ def main() -> int:
                 print(f"{k}: {v}")
 
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

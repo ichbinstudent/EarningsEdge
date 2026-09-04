@@ -22,6 +22,7 @@ class TradeEventRow(TypedDict, total=True):
     price: float | None
     detail: str | None
 
+
 class JobRunRow(TypedDict, total=True):
     id: int | None
     job_name: str
@@ -31,9 +32,11 @@ class JobRunRow(TypedDict, total=True):
     stats_json: str | None
     error: str | None
 
+
 class EquityDailyAvgRow(TypedDict, total=True):
     d: str
     e: float | None
+
 
 class StrategyStateRow(TypedDict, total=True):
     name: str | None
@@ -42,6 +45,7 @@ class StrategyStateRow(TypedDict, total=True):
     updated_by: str | None
     enabled: int | None
     execution_mode: str | None
+
 
 class ExitProposalRow(TypedDict, total=True):
     id: int | None
@@ -56,6 +60,7 @@ class ExitProposalRow(TypedDict, total=True):
     snoozed_until: str | None
     decided_by: int | None
     decided_at: str | None
+
 
 import pandas as pd
 from sqlalchemy import func, select, text, update
@@ -91,83 +96,202 @@ from .models import (
 logger = get_logger("db")
 
 _DAILY_SIGNAL_COLS = [
-    "ticker", "signal_date", "option_volume", "atm_iv", "skew_25d",
-    "skew_zscore", "skew_mean", "iv_pctl_1y", "ts_momentum", "relative_momentum",
+    "ticker",
+    "signal_date",
+    "option_volume",
+    "atm_iv",
+    "skew_25d",
+    "skew_zscore",
+    "skew_mean",
+    "iv_pctl_1y",
+    "ts_momentum",
+    "relative_momentum",
 ]
 
 _SNAPSHOT_COLS = [
-    "ticker", "earnings_date", "scan_date", "timing",
-    "price", "avg_volume_30d", "market_cap",
-    "has_options", "nearest_expiry", "days_to_expiry", "total_open_interest",
-    "atm_iv_near", "rv30", "iv30_rv30", "hist_vol_3m",
-    "term_slope", "term_structure_valid",
-    "expected_move_pct", "expected_move_dollars", "straddle_price",
-    "atm_call_delta", "atm_put_delta", "atm_call_iv", "atm_put_iv",
-    "sigma_baseline_1y", "sigma_short_leg", "sigma_short_leg_fair", "actual_to_fair_ratio",
+    "ticker",
+    "earnings_date",
+    "scan_date",
+    "timing",
+    "price",
+    "avg_volume_30d",
+    "market_cap",
+    "has_options",
+    "nearest_expiry",
+    "days_to_expiry",
+    "total_open_interest",
+    "atm_iv_near",
+    "rv30",
+    "iv30_rv30",
+    "hist_vol_3m",
+    "term_slope",
+    "term_structure_valid",
+    "expected_move_pct",
+    "expected_move_dollars",
+    "straddle_price",
+    "atm_call_delta",
+    "atm_put_delta",
+    "atm_call_iv",
+    "atm_put_iv",
+    "sigma_baseline_1y",
+    "sigma_short_leg",
+    "sigma_short_leg_fair",
+    "actual_to_fair_ratio",
     "recommendation",
-    "mc_win_rate", "mc_quarters",
+    "mc_win_rate",
+    "mc_quarters",
     "collection_error",
     "data_source",
 ]
 
 _LIVE_CANDIDATE_COLS = [
-    "scan_timestamp", "ticker", "earnings_date",
-    "tier", "passed", "near_miss", "scanner_reason", "display_status",
-    "price", "volume", "market_cap",
-    "strike", "near_expiry", "far_expiry",
-    "days_to_expiry", "total_open_interest",
-    "near_bid", "near_ask", "far_bid", "far_ask",
-    "near_entry", "far_entry",
-    "net_debit", "net_debit_bid", "net_debit_mid", "net_debit_ask",
-    "atm_iv_near", "sigma_baseline_1y", "sigma_short_leg", "sigma_short_leg_fair",
-    "actual_to_fair_ratio", "iv_rv_ratio", "hist_vol_3m",
-    "term_slope", "term_structure_valid",
-    "expected_move_pct", "expected_move_dollars", "straddle_price",
-    "atm_call_delta", "atm_put_delta", "atm_call_iv", "atm_put_iv",
-    "win_rate", "win_quarters",
-    "model_expected_return", "model_decision", "model_rejection_reasons",
-    "selected_by_bot", "features_json",
-    "exit_value", "pnl_dollars", "return_on_debit", "outcome_fetched_at",
+    "scan_timestamp",
+    "ticker",
+    "earnings_date",
+    "tier",
+    "passed",
+    "near_miss",
+    "scanner_reason",
+    "display_status",
+    "price",
+    "volume",
+    "market_cap",
+    "strike",
+    "near_expiry",
+    "far_expiry",
+    "days_to_expiry",
+    "total_open_interest",
+    "near_bid",
+    "near_ask",
+    "far_bid",
+    "far_ask",
+    "near_entry",
+    "far_entry",
+    "net_debit",
+    "net_debit_bid",
+    "net_debit_mid",
+    "net_debit_ask",
+    "atm_iv_near",
+    "sigma_baseline_1y",
+    "sigma_short_leg",
+    "sigma_short_leg_fair",
+    "actual_to_fair_ratio",
+    "iv_rv_ratio",
+    "hist_vol_3m",
+    "term_slope",
+    "term_structure_valid",
+    "expected_move_pct",
+    "expected_move_dollars",
+    "straddle_price",
+    "atm_call_delta",
+    "atm_put_delta",
+    "atm_call_iv",
+    "atm_put_iv",
+    "win_rate",
+    "win_quarters",
+    "model_expected_return",
+    "model_decision",
+    "model_rejection_reasons",
+    "selected_by_bot",
+    "features_json",
+    "exit_value",
+    "pnl_dollars",
+    "return_on_debit",
+    "outcome_fetched_at",
 ]
 
 _SCANNER_OUTPUT_COLS = [
-    "scan_timestamp", "ticker", "earnings_date",
-    "tier", "passed", "near_miss", "scanner_reason", "display_status",
-    "price", "volume", "market_cap",
-    "strike", "near_expiry", "far_expiry",
-    "days_to_expiry", "total_open_interest",
-    "net_debit", "net_debit_bid", "net_debit_mid", "net_debit_ask",
-    "atm_iv_near", "sigma_baseline_1y", "sigma_short_leg", "sigma_short_leg_fair",
-    "actual_to_fair_ratio", "iv_rv_ratio",
-    "term_slope", "term_structure_valid",
-    "expected_move_pct", "expected_move_dollars",
-    "win_rate", "win_quarters",
-    "model_expected_return", "model_decision", "model_rejection_reasons",
-    "selected_by_bot", "features_json",
-    "exit_value", "pnl_dollars", "return_on_debit", "outcome_fetched_at",
+    "scan_timestamp",
+    "ticker",
+    "earnings_date",
+    "tier",
+    "passed",
+    "near_miss",
+    "scanner_reason",
+    "display_status",
+    "price",
+    "volume",
+    "market_cap",
+    "strike",
+    "near_expiry",
+    "far_expiry",
+    "days_to_expiry",
+    "total_open_interest",
+    "net_debit",
+    "net_debit_bid",
+    "net_debit_mid",
+    "net_debit_ask",
+    "atm_iv_near",
+    "sigma_baseline_1y",
+    "sigma_short_leg",
+    "sigma_short_leg_fair",
+    "actual_to_fair_ratio",
+    "iv_rv_ratio",
+    "term_slope",
+    "term_structure_valid",
+    "expected_move_pct",
+    "expected_move_dollars",
+    "win_rate",
+    "win_quarters",
+    "model_expected_return",
+    "model_decision",
+    "model_rejection_reasons",
+    "selected_by_bot",
+    "features_json",
+    "exit_value",
+    "pnl_dollars",
+    "return_on_debit",
+    "outcome_fetched_at",
 ]
 
 _OPTIONS_CHAIN_COLS = [
-    "collector_run_id", "ticker", "scan_date", "contract_ticker",
-    "underlying", "expiry", "strike", "contract_type", "style",
-    "bid", "ask", "bid_size", "ask_size", "midpoint",
-    "close", "open_price", "high", "low",
-    "trade_count", "volume", "vwap",
-    "implied_volatility", "delta", "gamma", "theta", "vega",
-    "captured_at", "captured_hour",
+    "collector_run_id",
+    "ticker",
+    "scan_date",
+    "contract_ticker",
+    "underlying",
+    "expiry",
+    "strike",
+    "contract_type",
+    "style",
+    "bid",
+    "ask",
+    "bid_size",
+    "ask_size",
+    "midpoint",
+    "close",
+    "open_price",
+    "high",
+    "low",
+    "trade_count",
+    "volume",
+    "vwap",
+    "implied_volatility",
+    "delta",
+    "gamma",
+    "theta",
+    "vega",
+    "captured_at",
+    "captured_hour",
 ]
 
 _SCAN_RUN_COLS = [
-    "scan_timestamp", "scanner_name", "trigger_type",
-    "candidate_count", "tier1_count", "tier2_count", "take_count",
-    "duration_secs", "success", "error_message",
+    "scan_timestamp",
+    "scanner_name",
+    "trigger_type",
+    "candidate_count",
+    "tier1_count",
+    "tier2_count",
+    "take_count",
+    "duration_secs",
+    "success",
+    "error_message",
 ]
 
 
 def _execute(sql: str, params: Any, *, many: bool = False) -> Any:
     with session_scope() as s:
-        return s.execute(text(sql), params) if not many else s.execute(
-            text(sql), params)
+        return s.execute(text(sql), params) if not many else s.execute(text(sql), params)
 
 
 def _execute_many(sql: str, payload: list[dict[str, Any]]) -> Any:
@@ -194,7 +318,8 @@ def insert_snapshot(row: dict) -> int:
     if rid == 0:
         logger.debug(
             "Skipping duplicate snapshot for %s @ %s",
-            row.get("ticker"), row.get("scan_date"),
+            row.get("ticker"),
+            row.get("scan_date"),
         )
     return rid
 
@@ -243,20 +368,22 @@ def update_live_candidate_move(cid: int, outcome: dict) -> None:
 
 def record_live_candidate_failure(cid: int, max_retries: int) -> None:
     """Bump attempt_count; mark unavailable once retries are exhausted."""
-    rows = _fetchall("SELECT outcome_attempt_count FROM live_calendar_candidates WHERE id = :id",
+    rows = _fetchall(
+        "SELECT outcome_attempt_count FROM live_calendar_candidates WHERE id = :id",
         {"id": cid},
     )
     attempt_count = (rows[0]["outcome_attempt_count"] if rows else None) or 0
     attempt_count += 1
     if attempt_count >= max_retries:
-        _execute("UPDATE live_calendar_candidates "
+        _execute(
+            "UPDATE live_calendar_candidates "
             "SET outcome_fetched_at = 'unavailable', "
             "outcome_attempt_count = :n WHERE id = :id",
             {"n": attempt_count, "id": cid},
         )
     else:
-        _execute("UPDATE live_calendar_candidates "
-            "SET outcome_attempt_count = :n WHERE id = :id",
+        _execute(
+            "UPDATE live_calendar_candidates SET outcome_attempt_count = :n WHERE id = :id",
             {"n": attempt_count, "id": cid},
         )
 
@@ -280,10 +407,7 @@ def insert_options_chain_rows(rows: list[dict]) -> int:
     if not rows:
         return 0
     placeholders = ", ".join(f":{c}" for c in _OPTIONS_CHAIN_COLS)
-    sql = (
-        f"INSERT OR IGNORE INTO options_chain ({', '.join(_OPTIONS_CHAIN_COLS)}) "
-        f"VALUES ({placeholders})"
-    )
+    sql = f"INSERT OR IGNORE INTO options_chain ({', '.join(_OPTIONS_CHAIN_COLS)}) VALUES ({placeholders})"
     payload = [{c: r.get(c) for c in _OPTIONS_CHAIN_COLS} for r in rows]
     result = _execute(sql, payload, many=True)
     return getattr(result, "rowcount", 0) or 0
@@ -291,7 +415,8 @@ def insert_options_chain_rows(rows: list[dict]) -> int:
 
 def fetch_chain_for_ticker(ticker: str, scan_date: str) -> list[dict]:
     """Return all options_chain rows for one ticker/scan_date."""
-    return _fetchall("SELECT * FROM options_chain WHERE ticker = :ticker AND scan_date = :scan_date",
+    return _fetchall(
+        "SELECT * FROM options_chain WHERE ticker = :ticker AND scan_date = :scan_date",
         {"ticker": ticker, "scan_date": scan_date},
     )
 
@@ -303,7 +428,8 @@ def fetch_chain_for_ticker_date(date: str) -> list:
 
 def update_outcome(snapshot_id: int, outcome: dict) -> None:
     """Write outcome data back to a snapshot row."""
-    _execute("""UPDATE snapshots SET
+    _execute(
+        """UPDATE snapshots SET
             pre_earnings_close = :pre_earnings_close,
             post_earnings_close = :post_earnings_close,
             actual_move_pct = :actual_move_pct,
@@ -320,7 +446,7 @@ def insert_scan_run(row: dict) -> int:
     return _insert_row("scan_runs", _SCAN_RUN_COLS, row)
 
 
-def persist_picks(picks: dict, as_of: Any=None) -> int:
+def persist_picks(picks: dict, as_of: Any = None) -> int:
     """Persist one day's pick lists (insert-or-replace per date/strategy/ticker).
 
     Stores each pick as (pick_date, strategy, rank, ticker, signals_json) so
@@ -331,16 +457,17 @@ def persist_picks(picks: dict, as_of: Any=None) -> int:
     for strategy, df in picks.items():
         for rank, (_, row) in enumerate(df.iterrows(), start=1):
             signals = {
-                k: (None if pd.isna(v) else v.item() if hasattr(v, "item") else v)
-                for k, v in row.items()
+                k: (None if pd.isna(v) else v.item() if hasattr(v, "item") else v) for k, v in row.items()
             }
-            payload.append({
-                "pick_date": pick_date,
-                "strategy": strategy,
-                "rank": rank,
-                "ticker": str(row["ticker"]),
-                "signals_json": json.dumps(signals, default=str),
-            })
+            payload.append(
+                {
+                    "pick_date": pick_date,
+                    "strategy": strategy,
+                    "rank": rank,
+                    "ticker": str(row["ticker"]),
+                    "signals_json": json.dumps(signals, default=str),
+                }
+            )
     if not payload:
         return 0
     sql = (
@@ -378,20 +505,22 @@ def upsert_daily_signals(rows: list[dict]) -> int:
 
 def record_snapshot_outcome_failure(snapshot_id: int, max_retries: int) -> None:
     """Bump snapshots.outcome_attempt_count; mark unavailable once retries are exhausted."""
-    rows = _fetchall("SELECT outcome_attempt_count FROM snapshots WHERE id = :id",
+    rows = _fetchall(
+        "SELECT outcome_attempt_count FROM snapshots WHERE id = :id",
         {"id": snapshot_id},
     )
     attempt_count = (rows[0]["outcome_attempt_count"] if rows else None) or 0
     attempt_count += 1
     if attempt_count >= max_retries:
-        _execute("UPDATE snapshots "
+        _execute(
+            "UPDATE snapshots "
             "SET outcome_fetched_at = 'unavailable', "
             "outcome_attempt_count = :n WHERE id = :id",
             {"n": attempt_count, "id": snapshot_id},
         )
     else:
-        _execute("UPDATE snapshots "
-            "SET outcome_attempt_count = :n WHERE id = :id",
+        _execute(
+            "UPDATE snapshots SET outcome_attempt_count = :n WHERE id = :id",
             {"n": attempt_count, "id": snapshot_id},
         )
 
@@ -400,7 +529,8 @@ def snapshots_earnings_on_date(earnings_date: str) -> list[tuple[str, str]]:
     """(ticker, timing) pairs with earnings on exactly ``earnings_date``,
     optionable only. Used by the FF ladder/arb proposal builder to source
     tomorrow's earnings names without re-running the full scan pipeline."""
-    rows = _fetchall("SELECT DISTINCT ticker, timing FROM snapshots "
+    rows = _fetchall(
+        "SELECT DISTINCT ticker, timing FROM snapshots "
         "WHERE has_options = 1 AND earnings_date = :earnings_date",
         {"earnings_date": earnings_date},
     )
@@ -409,15 +539,15 @@ def snapshots_earnings_on_date(earnings_date: str) -> list[tuple[str, str]]:
 
 def snapshots_optionable_universe(max_tickers: int) -> list[str]:
     """Upcoming optionable earnings first, then recently-optionable names."""
-    upcoming_rows = _fetchall("SELECT DISTINCT ticker FROM snapshots "
+    upcoming_rows = _fetchall(
+        "SELECT DISTINCT ticker FROM snapshots "
         "WHERE has_options = 1 "
         "AND earnings_date >= date('now') "
         "AND earnings_date <= date('now', '+21 days')",
         {},
     )
-    recent_rows = _fetchall("SELECT DISTINCT ticker FROM snapshots "
-        "WHERE has_options = 1 "
-        "ORDER BY rowid DESC LIMIT :max_tickers",
+    recent_rows = _fetchall(
+        "SELECT DISTINCT ticker FROM snapshots WHERE has_options = 1 ORDER BY rowid DESC LIMIT :max_tickers",
         {"max_tickers": max_tickers},
     )
     upcoming = [r["ticker"] for r in upcoming_rows]
@@ -458,22 +588,34 @@ def snapshots_next_earnings_date(ticker: str, today: str | None = None) -> str |
         "SELECT earnings_date FROM snapshots "
         "WHERE ticker = :ticker AND earnings_date >= :today "
         "ORDER BY earnings_date ASC LIMIT 1",
-        {"ticker": ticker, "today": today_str}
+        {"ticker": ticker, "today": today_str},
     )
     return rows[0]["earnings_date"] if rows else None
 
 
-
-
-
 _CALENDAR_CALL_TRADE_COLS = [
-    "snapshot_id", "ticker", "earnings_date", "scan_date",
-    "near_expiry", "far_expiry", "strike",
-    "near_call_ticker", "far_call_ticker",
-    "near_entry", "far_entry", "near_exit", "far_exit",
-    "net_debit", "exit_value", "pnl_dollars", "return_on_debit",
-    "model_score", "model_recommendation", "model_reason",
-    "model_name", "model_scored_at",
+    "snapshot_id",
+    "ticker",
+    "earnings_date",
+    "scan_date",
+    "near_expiry",
+    "far_expiry",
+    "strike",
+    "near_call_ticker",
+    "far_call_ticker",
+    "near_entry",
+    "far_entry",
+    "near_exit",
+    "far_exit",
+    "net_debit",
+    "exit_value",
+    "pnl_dollars",
+    "return_on_debit",
+    "model_score",
+    "model_recommendation",
+    "model_reason",
+    "model_name",
+    "model_scored_at",
 ]
 
 
@@ -490,7 +632,7 @@ def calendar_call_trades_upsert(row: dict) -> None:
 def calendar_call_trades_list() -> list[dict]:
     """All calendar-call trades ordered by earnings_date, ticker."""
     return _fetchall(
-                "SELECT * FROM calendar_call_trades ORDER BY earnings_date, ticker",
+        "SELECT * FROM calendar_call_trades ORDER BY earnings_date, ticker",
         {},
     )
 
@@ -498,7 +640,7 @@ def calendar_call_trades_list() -> list[dict]:
 def calendar_call_trades_with_snapshots() -> list[dict]:
     """Calendar-call trades LEFT JOINed to snapshot features."""
     return _fetchall(
-                "SELECT c.*, s.*, c.snapshot_id AS trade_snapshot_id "
+        "SELECT c.*, s.*, c.snapshot_id AS trade_snapshot_id "
         "FROM calendar_call_trades c "
         "LEFT JOIN snapshots s ON s.id = c.snapshot_id "
         "ORDER BY c.earnings_date, c.ticker",
@@ -517,7 +659,7 @@ def calendar_call_trades_update_model(
 ) -> None:
     """Write model score fields onto one stored calendar-call trade."""
     _execute(
-                "UPDATE calendar_call_trades "
+        "UPDATE calendar_call_trades "
         "SET model_score = :model_score, "
         "    model_recommendation = :model_recommendation, "
         "    model_reason = :model_reason, "
@@ -544,7 +686,7 @@ def options_chain_latest_contract(
 ) -> dict | None:
     """Latest options_chain quote for one contract on or before ``as_of``."""
     rows = _fetchall(
-                "SELECT midpoint, close, implied_volatility, delta, scan_date "
+        "SELECT midpoint, close, implied_volatility, delta, scan_date "
         "FROM options_chain "
         "WHERE ticker = :ticker AND contract_type = :kind AND strike = :strike "
         "AND expiry = :expiry AND scan_date <= :as_of "
@@ -577,6 +719,7 @@ def _row_dict(obj: Any) -> Any:
 # ---------------------------------------------------------------------------
 # pending_trades
 # ---------------------------------------------------------------------------
+
 
 def pending_trades_insert(
     *,
@@ -618,11 +761,7 @@ def pending_trades_insert(
 def pending_trades_update_card(proposal_id: int, card_text: str) -> None:
     """UPDATE pending_trades SET card_text=? WHERE id=?"""
     with session_scope() as s:
-        s.execute(
-            update(PendingTrade)
-            .where(PendingTrade.id == proposal_id)
-            .values(card_text=card_text)
-        )
+        s.execute(update(PendingTrade).where(PendingTrade.id == proposal_id).values(card_text=card_text))
 
 
 def pending_trades_get(proposal_id: int) -> dict | None:
@@ -635,11 +774,15 @@ def pending_trades_get(proposal_id: int) -> dict | None:
 def pending_trades_list_pending() -> list[dict]:
     """Pending rows ordered by model_score DESC, id ASC."""
     with session_scope() as s:
-        rows = s.execute(
-            select(PendingTrade)
-            .where(PendingTrade.status == "pending")
-            .order_by(PendingTrade.model_score.desc(), PendingTrade.id.asc())
-        ).scalars().all()
+        rows = (
+            s.execute(
+                select(PendingTrade)
+                .where(PendingTrade.status == "pending")
+                .order_by(PendingTrade.model_score.desc(), PendingTrade.id.asc())
+            )
+            .scalars()
+            .all()
+        )
         return [_row_dict(r) for r in rows]
 
 
@@ -693,6 +836,7 @@ def proposal_funnel_insert(
 # exit_proposals
 # ---------------------------------------------------------------------------
 
+
 def exit_proposals_insert(
     *,
     group_id: str,
@@ -740,11 +884,13 @@ def exit_proposals_get(proposal_id: int) -> dict | None:
 def exit_proposals_list_pending() -> list[ExitProposalRow]:
     """SELECT * FROM exit_proposals WHERE status='pending' ORDER BY id"""
     with session_scope() as s:
-        rows = s.execute(
-            select(ExitProposal)
-            .where(ExitProposal.status == "pending")
-            .order_by(ExitProposal.id.asc())
-        ).scalars().all()
+        rows = (
+            s.execute(
+                select(ExitProposal).where(ExitProposal.status == "pending").order_by(ExitProposal.id.asc())
+            )
+            .scalars()
+            .all()
+        )
         return [_row_dict(r) for r in rows]
 
 
@@ -776,6 +922,7 @@ def exit_proposals_mark(
 # managed_positions
 # ---------------------------------------------------------------------------
 
+
 def managed_positions_open(
     legs: list[dict],
     strategy: str,
@@ -792,13 +939,16 @@ def managed_positions_open(
     exit_by_s = exit_by.isoformat() if exit_by else None
     with session_scope() as s:
         for leg in legs:
-            meta = json.dumps({
-                **base_meta,
-                "leg_side": leg.get("side"),
-                "option_type": leg.get("option_type"),
-                "strike": leg.get("strike"),
-                "expiry": str(leg.get("expiry")),
-            }, default=str)
+            meta = json.dumps(
+                {
+                    **base_meta,
+                    "leg_side": leg.get("side"),
+                    "option_type": leg.get("option_type"),
+                    "strike": leg.get("strike"),
+                    "expiry": str(leg.get("expiry")),
+                },
+                default=str,
+            )
             obj = ManagedPosition(
                 symbol=leg["symbol"],
                 strategy=strategy,
@@ -853,6 +1003,7 @@ def managed_positions_close(
 # snapshots / scan_runs (bot helpers)
 # ---------------------------------------------------------------------------
 
+
 def snapshots_max_scan_date() -> str | None:
     """SELECT MAX(scan_date) FROM snapshots"""
     with session_scope() as s:
@@ -863,10 +1014,7 @@ def scan_runs_latest_success() -> str | None:
     """scan_timestamp of the latest successful scan_run, else None."""
     with session_scope() as s:
         return s.execute(
-            select(ScanRun.scan_timestamp)
-            .where(ScanRun.success == 1)
-            .order_by(ScanRun.id.desc())
-            .limit(1)
+            select(ScanRun.scan_timestamp).where(ScanRun.success == 1).order_by(ScanRun.id.desc()).limit(1)
         ).scalar_one_or_none()
 
 
@@ -891,6 +1039,7 @@ def table_exists(name: str) -> bool:
 # ---------------------------------------------------------------------------
 # risk_state
 # ---------------------------------------------------------------------------
+
 
 def risk_state_get(*, ensure: bool = True) -> dict:
     """Singleton risk_state row (id=1). Inserts halted=0 if missing (unless ensure=False)."""
@@ -932,6 +1081,7 @@ def risk_state_set_halted(
 # ---------------------------------------------------------------------------
 # risk_events
 # ---------------------------------------------------------------------------
+
 
 def risk_events_insert(
     event_type: str,
@@ -979,6 +1129,7 @@ def risk_events_list(
 # ---------------------------------------------------------------------------
 # equity_snapshots
 # ---------------------------------------------------------------------------
+
 
 def equity_snapshots_insert(
     *,
@@ -1034,30 +1185,35 @@ def equity_snapshots_day_start(on: date | None = None) -> float | None:
 def equity_snapshots_equities(limit: int = 16) -> list[float]:
     """Most recent `limit` equity values, oldest first (sparkline)."""
     with session_scope() as s:
-        rows = s.execute(
-            select(EquitySnapshot.equity)
-            .order_by(EquitySnapshot.id.desc())
-            .limit(limit)
-        ).scalars().all()
+        rows = (
+            s.execute(select(EquitySnapshot.equity).order_by(EquitySnapshot.id.desc()).limit(limit))
+            .scalars()
+            .all()
+        )
     return [float(v) for v in reversed(rows) if v is not None]
 
 
 def equity_snapshots_daily_avg(days: int = 7) -> list[EquityDailyAvgRow]:
     """Avg equity per UTC date, newest first, limited to ``days`` days."""
     with session_scope() as s:
-        rows = s.execute(
-            text(
-                "SELECT substr(ts, 1, 10) AS d, AVG(equity) AS e "
-                "FROM equity_snapshots GROUP BY d ORDER BY d DESC LIMIT :n"
-            ),
-            {"n": days},
-        ).mappings().all()
+        rows = (
+            s.execute(
+                text(
+                    "SELECT substr(ts, 1, 10) AS d, AVG(equity) AS e "
+                    "FROM equity_snapshots GROUP BY d ORDER BY d DESC LIMIT :n"
+                ),
+                {"n": days},
+            )
+            .mappings()
+            .all()
+        )
         return cast(list[EquityDailyAvgRow], [dict(r) for r in rows])
 
 
 # ---------------------------------------------------------------------------
 # strategy_state
 # ---------------------------------------------------------------------------
+
 
 def strategy_state_get(name: str) -> dict | None:
     """SELECT * FROM strategy_state WHERE name=?"""
@@ -1069,9 +1225,7 @@ def strategy_state_get(name: str) -> dict | None:
 def strategy_state_list() -> list[StrategyStateRow]:
     """SELECT * FROM strategy_state ORDER BY name"""
     with session_scope() as s:
-        rows = s.execute(
-            select(StrategyState).order_by(StrategyState.name.asc())
-        ).scalars().all()
+        rows = s.execute(select(StrategyState).order_by(StrategyState.name.asc())).scalars().all()
         return [_row_dict(r) for r in rows]
 
 
@@ -1113,12 +1267,14 @@ def strategy_state_insert_ignore(
     with session_scope() as s:
         if s.get(StrategyState, name) is not None:
             return 0
-        s.add(StrategyState(
-            name=name,
-            lifecycle=lifecycle,
-            updated_at=updated_at or _utcnow(),
-            updated_by=updated_by,
-        ))
+        s.add(
+            StrategyState(
+                name=name,
+                lifecycle=lifecycle,
+                updated_at=updated_at or _utcnow(),
+                updated_by=updated_by,
+            )
+        )
         return 1
 
 
@@ -1173,8 +1329,7 @@ def strategy_state_enabled_overrides() -> dict[str, bool]:
     """name -> bool for rows where enabled IS NOT NULL."""
     with session_scope() as s:
         rows = s.execute(
-            select(StrategyState.name, StrategyState.enabled)
-            .where(StrategyState.enabled.is_not(None))
+            select(StrategyState.name, StrategyState.enabled).where(StrategyState.enabled.is_not(None))
         ).all()
         return {r[0]: bool(r[1]) for r in rows}
 
@@ -1230,8 +1385,9 @@ def strategy_state_execution_mode_overrides() -> dict[str, str]:
     """name -> mode for rows where execution_mode IS NOT NULL."""
     with session_scope() as s:
         rows = s.execute(
-            select(StrategyState.name, StrategyState.execution_mode)
-            .where(StrategyState.execution_mode.is_not(None))
+            select(StrategyState.name, StrategyState.execution_mode).where(
+                StrategyState.execution_mode.is_not(None)
+            )
         ).all()
         return {r[0]: r[1] for r in rows}
 
@@ -1239,6 +1395,7 @@ def strategy_state_execution_mode_overrides() -> dict[str, str]:
 # ---------------------------------------------------------------------------
 # job_runs
 # ---------------------------------------------------------------------------
+
 
 def job_runs_start(job_name: str, *, started_at: str | None = None) -> int:
     """INSERT INTO job_runs (job_name, started_at). Returns id."""
@@ -1271,8 +1428,7 @@ def job_runs_finish(
         )
 
 
-def job_runs_list(*, name: str | None = None, limit: int = 20,
-                  success: int | None = None) -> list[JobRunRow]:
+def job_runs_list(*, name: str | None = None, limit: int = 20, success: int | None = None) -> list[JobRunRow]:
     """Recent job_runs, optionally filtered by job_name / success."""
     with session_scope() as s:
         stmt = select(JobRun)
@@ -1293,18 +1449,18 @@ def job_runs_latest(job_name: str, *, success: int | None = None) -> JobRunRow |
 def job_runs_failed(limit: int = 10) -> list[JobRunRow]:
     """SELECT ... FROM job_runs WHERE success=0 ORDER BY id DESC LIMIT ?"""
     with session_scope() as s:
-        rows = s.execute(
-            select(JobRun)
-            .where(JobRun.success == 0)
-            .order_by(JobRun.id.desc())
-            .limit(limit)
-        ).scalars().all()
+        rows = (
+            s.execute(select(JobRun).where(JobRun.success == 0).order_by(JobRun.id.desc()).limit(limit))
+            .scalars()
+            .all()
+        )
         return [_row_dict(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
 # data_catalog
 # ---------------------------------------------------------------------------
+
 
 def data_catalog_upsert(
     dataset: str,
@@ -1380,6 +1536,7 @@ def data_catalog_latest(dataset: str, symbol: str | None = None) -> dict | None:
 # model_registry
 # ---------------------------------------------------------------------------
 
+
 def model_registry_register(
     name: str,
     path: str,
@@ -1441,6 +1598,7 @@ def model_registry_list() -> list[dict]:
 # trade_events
 # ---------------------------------------------------------------------------
 
+
 def trade_events_insert(
     event_type: str,
     *,
@@ -1485,13 +1643,18 @@ def trade_events_list(
 # adopted_positions / alpaca_positions
 # ---------------------------------------------------------------------------
 
+
 def adopted_positions_insert(symbol: str, adopted_at: str | None = None) -> None:
     """INSERT OR IGNORE INTO adopted_positions."""
     with session_scope() as s:
-        stmt = sqlite_insert(AdoptedPosition).values(
-            symbol=symbol,
-            adopted_at=adopted_at or _utcnow(),
-        ).on_conflict_do_nothing(index_elements=["symbol"])
+        stmt = (
+            sqlite_insert(AdoptedPosition)
+            .values(
+                symbol=symbol,
+                adopted_at=adopted_at or _utcnow(),
+            )
+            .on_conflict_do_nothing(index_elements=["symbol"])
+        )
         s.execute(stmt)
 
 
@@ -1539,15 +1702,16 @@ def alpaca_positions_insert(
 def alpaca_positions_list(limit: int = 20) -> list[dict]:
     """SELECT * FROM alpaca_positions ORDER BY id DESC LIMIT ?"""
     with session_scope() as s:
-        rows = s.execute(
-            select(AlpacaPosition).order_by(AlpacaPosition.id.desc()).limit(limit)
-        ).scalars().all()
+        rows = (
+            s.execute(select(AlpacaPosition).order_by(AlpacaPosition.id.desc()).limit(limit)).scalars().all()
+        )
         return [_row_dict(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
 # managed_positions extras
 # ---------------------------------------------------------------------------
+
 
 def managed_positions_close_by_id(row_id: int, closed_at: str | None = None) -> int:
     """Mark one managed_positions row closed by id."""
@@ -1578,9 +1742,7 @@ def managed_positions_set_opened_at(group_id: str, opened_at: str) -> int:
     """UPDATE managed_positions SET opened_at=? WHERE group_id=? (tests/backfill)."""
     with session_scope() as s:
         result = s.execute(
-            update(ManagedPosition)
-            .where(ManagedPosition.group_id == group_id)
-            .values(opened_at=opened_at)
+            update(ManagedPosition).where(ManagedPosition.group_id == group_id).values(opened_at=opened_at)
         )
         return getattr(result, "rowcount", 0) or 0
 
@@ -1588,6 +1750,7 @@ def managed_positions_set_opened_at(group_id: str, opened_at: str) -> int:
 # ---------------------------------------------------------------------------
 # ff_ladders
 # ---------------------------------------------------------------------------
+
 
 def ff_ladders_recent(limit: int = 80) -> list[dict]:
     """SELECT id, ticker, candidate_json, status, order_id FROM ff_ladders ORDER BY id DESC."""
@@ -1623,9 +1786,8 @@ def ff_ladders_count_armed() -> int:
     """SELECT COUNT(*) FROM ff_ladders WHERE status='armed'."""
     with session_scope() as s:
         return int(
-            s.execute(
-                select(func.count()).select_from(FfLadder).where(FfLadder.status == "armed")
-            ).scalar() or 0
+            s.execute(select(func.count()).select_from(FfLadder).where(FfLadder.status == "armed")).scalar()
+            or 0
         )
 
 
@@ -1694,54 +1856,65 @@ def ff_ladders_update_state(
 # live ops dashboard analytics
 # ---------------------------------------------------------------------------
 
+
 def scan_runs_recent(limit: int = 10) -> list[dict]:
     """Latest scan_runs for the dashboard table."""
     with session_scope() as s:
-        rows = s.execute(
-            text(
-                "SELECT scan_timestamp, scanner_name, trigger_type, candidate_count, "
-                "take_count, printf(\'%.0f\', duration_secs) AS secs, success "
-                "FROM scan_runs ORDER BY id DESC LIMIT :n"
-            ),
-            {"n": limit},
-        ).mappings().all()
+        rows = (
+            s.execute(
+                text(
+                    "SELECT scan_timestamp, scanner_name, trigger_type, candidate_count, "
+                    "take_count, printf('%.0f', duration_secs) AS secs, success "
+                    "FROM scan_runs ORDER BY id DESC LIMIT :n"
+                ),
+                {"n": limit},
+            )
+            .mappings()
+            .all()
+        )
         return [dict(r) for r in rows]
 
 
 def scanner_scan_outputs_latest() -> tuple[str | None, list[dict]]:
     """Rows for the latest scan_timestamp in scanner_scan_outputs."""
     with session_scope() as s:
-        latest = s.execute(
-            select(func.max(ScannerScanOutput.scan_timestamp))
-        ).scalar()
+        latest = s.execute(select(func.max(ScannerScanOutput.scan_timestamp))).scalar()
         if not latest:
             return None, []
-        rows = s.execute(
-            text(
-                "SELECT ticker, earnings_date, tier, display_status, "
-                "printf('%.2f', price) AS price "
-                "FROM scanner_scan_outputs "
-                "WHERE scan_timestamp = :ts "
-                "ORDER BY CASE tier WHEN 'TAKE' THEN 0 WHEN 'tier1' THEN 1 "
-                "WHEN 'tier2' THEN 2 ELSE 3 END, ticker "
-                "LIMIT 30"
-            ),
-            {"ts": latest},
-        ).mappings().all()
+        rows = (
+            s.execute(
+                text(
+                    "SELECT ticker, earnings_date, tier, display_status, "
+                    "printf('%.2f', price) AS price "
+                    "FROM scanner_scan_outputs "
+                    "WHERE scan_timestamp = :ts "
+                    "ORDER BY CASE tier WHEN 'TAKE' THEN 0 WHEN 'tier1' THEN 1 "
+                    "WHEN 'tier2' THEN 2 ELSE 3 END, ticker "
+                    "LIMIT 30"
+                ),
+                {"ts": latest},
+            )
+            .mappings()
+            .all()
+        )
         return latest, [dict(r) for r in rows]
 
 
 def pending_trades_recent(limit: int = 20) -> list[dict[str, Any]]:
     """Dashboard: recent pending_trades with formatted score."""
     with session_scope() as s:
-        rows = s.execute(
-            text(
-                "SELECT id, created_at, strategy, ticker, status, "
-                "printf('%.3f', model_score) AS score, decided_at "
-                "FROM pending_trades ORDER BY id DESC LIMIT :n"
-            ),
-            {"n": limit},
-        ).mappings().all()
+        rows = (
+            s.execute(
+                text(
+                    "SELECT id, created_at, strategy, ticker, status, "
+                    "printf('%.3f', model_score) AS score, decided_at "
+                    "FROM pending_trades ORDER BY id DESC LIMIT :n"
+                ),
+                {"n": limit},
+            )
+            .mappings()
+            .all()
+        )
         return [dict(r) for r in rows]
 
 
@@ -1777,16 +1950,20 @@ def pending_trades_brief(limit: int = 30) -> list[dict]:
 def calendar_call_trades_stats() -> dict:
     """Aggregate stats for the dashboard calendar panel."""
     with session_scope() as s:
-        r = s.execute(
-            text(
-                "SELECT COUNT(*) AS n, "
-                "printf('%.2f', AVG(net_debit)) AS avg_debit, "
-                "SUM(CASE WHEN near_exit IS NOT NULL THEN 1 ELSE 0 END) AS closed, "
-                "printf('%.2f', AVG(CASE WHEN near_exit IS NOT NULL "
-                "THEN (far_exit - far_entry) - (near_exit - near_entry) END)) AS avg_pnl "
-                "FROM calendar_call_trades"
+        r = (
+            s.execute(
+                text(
+                    "SELECT COUNT(*) AS n, "
+                    "printf('%.2f', AVG(net_debit)) AS avg_debit, "
+                    "SUM(CASE WHEN near_exit IS NOT NULL THEN 1 ELSE 0 END) AS closed, "
+                    "printf('%.2f', AVG(CASE WHEN near_exit IS NOT NULL "
+                    "THEN (far_exit - far_entry) - (near_exit - near_entry) END)) AS avg_pnl "
+                    "FROM calendar_call_trades"
+                )
             )
-        ).mappings().one()
+            .mappings()
+            .one()
+        )
         return dict(r)
 
 
@@ -1829,16 +2006,22 @@ def calendar_call_trades_backfill_stats() -> dict:
     """Counts used by the Streamlit queue tab."""
     with session_scope() as s:
         total = s.execute(select(func.count()).select_from(CalendarCallTrade)).scalar() or 0
-        with_exit = s.execute(
-            select(func.count()).select_from(CalendarCallTrade).where(
-                CalendarCallTrade.exit_value.is_not(None)
-            )
-        ).scalar() or 0
-        no_exit = s.execute(
-            select(func.count()).select_from(CalendarCallTrade).where(
-                CalendarCallTrade.exit_value.is_(None)
-            )
-        ).scalar() or 0
+        with_exit = (
+            s.execute(
+                select(func.count())
+                .select_from(CalendarCallTrade)
+                .where(CalendarCallTrade.exit_value.is_not(None))
+            ).scalar()
+            or 0
+        )
+        no_exit = (
+            s.execute(
+                select(func.count())
+                .select_from(CalendarCallTrade)
+                .where(CalendarCallTrade.exit_value.is_(None))
+            ).scalar()
+            or 0
+        )
         date_range = s.execute(
             select(
                 func.min(CalendarCallTrade.scan_date),
@@ -1858,18 +2041,24 @@ def snapshots_status_counts() -> dict:
     """total / labeled / unavailable / pending snapshot counts."""
     with session_scope() as s:
         total = s.execute(select(func.count()).select_from(Snapshot)).scalar() or 0
-        labeled = s.execute(
-            text(
-                "SELECT COUNT(*) FROM snapshots "
-                "WHERE outcome_fetched_at IS NOT NULL AND outcome_fetched_at != 'unavailable'"
-            )
-        ).scalar() or 0
-        unavail = s.execute(
-            text("SELECT COUNT(*) FROM snapshots WHERE outcome_fetched_at = 'unavailable'")
-        ).scalar() or 0
-        pending = s.execute(
-            text("SELECT COUNT(*) FROM snapshots WHERE outcome_fetched_at IS NULL")
-        ).scalar() or 0
+        labeled = (
+            s.execute(
+                text(
+                    "SELECT COUNT(*) FROM snapshots "
+                    "WHERE outcome_fetched_at IS NOT NULL AND outcome_fetched_at != 'unavailable'"
+                )
+            ).scalar()
+            or 0
+        )
+        unavail = (
+            s.execute(
+                text("SELECT COUNT(*) FROM snapshots WHERE outcome_fetched_at = 'unavailable'")
+            ).scalar()
+            or 0
+        )
+        pending = (
+            s.execute(text("SELECT COUNT(*) FROM snapshots WHERE outcome_fetched_at IS NULL")).scalar() or 0
+        )
         return {
             "total": int(total),
             "labeled": int(labeled),
@@ -1961,10 +2150,7 @@ def snapshots_reset_outcomes(ids: list[int]) -> int:
 def snapshots_reset_outcomes_view(view: str, *, ticker_filter: str = "") -> int:
     """Reset all snapshots matching a queue view back to pending."""
     where = _QUEUE_FILTERS.get(view, "1=1")
-    sql = (
-        "UPDATE snapshots SET outcome_fetched_at = NULL, outcome_attempt_count = 0 "
-        f"WHERE {where}"
-    )
+    sql = f"UPDATE snapshots SET outcome_fetched_at = NULL, outcome_attempt_count = 0 WHERE {where}"
     params: dict = {}
     if ticker_filter:
         sql += " AND ticker LIKE :ticker"
@@ -1977,9 +2163,10 @@ def snapshots_reset_outcomes_view(view: str, *, ticker_filter: str = "") -> int:
 def ff_backfill_progress() -> dict:
     """FF backfill stats for the live dashboard panel."""
     with session_scope() as s:
-        total_pairs = s.execute(
-            text(
-                """
+        total_pairs = (
+            s.execute(
+                text(
+                    """
                 SELECT COUNT(*) FROM (
                     SELECT ticker, scan_date
                     FROM snapshots
@@ -1994,19 +2181,25 @@ def ff_backfill_progress() -> dict:
                     GROUP BY ticker, scan_date
                 )
                 """
-            )
-        ).scalar() or 0
-        row = s.execute(
-            text(
-                """
+                )
+            ).scalar()
+            or 0
+        )
+        row = (
+            s.execute(
+                text(
+                    """
                 SELECT COUNT(*) AS done,
                        SUM(CASE WHEN skip_reason IS NULL THEN 1 ELSE 0 END) AS ok,
                        SUM(CASE WHEN skip_reason IS NOT NULL THEN 1 ELSE 0 END) AS skipped,
                        MAX(created_at) AS last_at
                 FROM ff_snapshots WHERE selector_version = 2
                 """
+                )
             )
-        ).mappings().one()
+            .mappings()
+            .one()
+        )
         out = {
             "total_pairs": int(total_pairs),
             "done": int(row["done"] or 0),
@@ -2015,17 +2208,21 @@ def ff_backfill_progress() -> dict:
             "last_at": row["last_at"],
         }
         if out["done"] >= out["total_pairs"] and out["total_pairs"]:
-            pr = s.execute(
-                text(
-                    """
+            pr = (
+                s.execute(
+                    text(
+                        """
                     SELECT COUNT(*) AS n,
                            AVG(premium_ratio) AS avg_pr,
                            SUM(CASE WHEN premium_ratio >= 1.2 THEN 1 ELSE 0 END) AS rich
                     FROM ff_snapshots
                     WHERE selector_version = 2 AND premium_ratio IS NOT NULL
                     """
+                    )
                 )
-            ).mappings().one()
+                .mappings()
+                .one()
+            )
             out["premium_n"] = int(pr["n"] or 0)
             out["avg_pr"] = pr["avg_pr"]
             out["rich"] = int(pr["rich"] or 0)
@@ -2037,46 +2234,110 @@ def ff_backfill_progress() -> dict:
 # ---------------------------------------------------------------------------
 
 _USABLE_OUTCOME_SQL = (
-    "actual_move_pct IS NOT NULL AND outcome_fetched_at IS NOT NULL "
-    "AND outcome_fetched_at != 'unavailable'"
+    "actual_move_pct IS NOT NULL AND outcome_fetched_at IS NOT NULL AND outcome_fetched_at != 'unavailable'"
 )
 
 _IV_FEATURE_FIELDS = [
-    "atm_iv_near", "atm_call_iv", "atm_put_iv",
-    "rv30", "hist_vol_3m", "iv30_rv30",
-    "term_slope", "term_structure_valid",
-    "expected_move_pct", "expected_move_dollars",
-    "straddle_price", "atm_call_delta", "atm_put_delta",
-    "sigma_baseline_1y", "sigma_short_leg", "sigma_short_leg_fair",
+    "atm_iv_near",
+    "atm_call_iv",
+    "atm_put_iv",
+    "rv30",
+    "hist_vol_3m",
+    "iv30_rv30",
+    "term_slope",
+    "term_structure_valid",
+    "expected_move_pct",
+    "expected_move_dollars",
+    "straddle_price",
+    "atm_call_delta",
+    "atm_put_delta",
+    "sigma_baseline_1y",
+    "sigma_short_leg",
+    "sigma_short_leg_fair",
     "actual_to_fair_ratio",
 ]
 
 _SNAPSHOT_COALESCE_FIELDS = [
-    "price", "avg_volume_30d", "rv30", "hist_vol_3m", "has_options",
-    "nearest_expiry", "days_to_expiry",
-    "atm_call_iv", "atm_put_iv", "atm_iv_near", "atm_call_delta", "atm_put_delta",
-    "straddle_price", "expected_move_dollars", "expected_move_pct",
-    "iv30_rv30", "term_slope", "term_structure_valid",
-    "sigma_baseline_1y", "sigma_short_leg", "sigma_short_leg_fair",
+    "price",
+    "avg_volume_30d",
+    "rv30",
+    "hist_vol_3m",
+    "has_options",
+    "nearest_expiry",
+    "days_to_expiry",
+    "atm_call_iv",
+    "atm_put_iv",
+    "atm_iv_near",
+    "atm_call_delta",
+    "atm_put_delta",
+    "straddle_price",
+    "expected_move_dollars",
+    "expected_move_pct",
+    "iv30_rv30",
+    "term_slope",
+    "term_structure_valid",
+    "sigma_baseline_1y",
+    "sigma_short_leg",
+    "sigma_short_leg_fair",
     "actual_to_fair_ratio",
 ]
 
 _FF_SNAPSHOT_COLS = [
-    "ticker", "scan_date", "earnings_date", "spot",
-    "t1_expiry", "t1_dte", "t1_strike", "t1_contract", "t1_close", "t1_iv",
-    "t2_expiry", "t2_dte", "t2_strike", "t2_contract", "t2_close", "t2_iv",
-    "sigma_fwd", "tau_days", "implied_event_move_pct",
-    "hist_median_move_pct", "hist_rms_move_pct", "n_hist_events",
-    "premium_ratio", "skip_reason", "selector_version",
+    "ticker",
+    "scan_date",
+    "earnings_date",
+    "spot",
+    "t1_expiry",
+    "t1_dte",
+    "t1_strike",
+    "t1_contract",
+    "t1_close",
+    "t1_iv",
+    "t2_expiry",
+    "t2_dte",
+    "t2_strike",
+    "t2_contract",
+    "t2_close",
+    "t2_iv",
+    "sigma_fwd",
+    "tau_days",
+    "implied_event_move_pct",
+    "hist_median_move_pct",
+    "hist_rms_move_pct",
+    "n_hist_events",
+    "premium_ratio",
+    "skip_reason",
+    "selector_version",
 ]
 
 _FF_UNIVERSE_SNAPSHOT_COLS = [
-    "ticker", "scan_date", "has_earnings_in_window", "earnings_date", "spot",
-    "t1_expiry", "t1_dte", "t1_strike", "t1_contract", "t1_close", "t1_iv",
-    "t2_expiry", "t2_dte", "t2_strike", "t2_contract", "t2_close", "t2_iv",
-    "forward_factor", "sigma_fwd", "tau_days", "implied_event_move_pct",
-    "hist_median_move_pct", "hist_rms_move_pct", "n_hist_events",
-    "premium_ratio", "skip_reason", "selector_version",
+    "ticker",
+    "scan_date",
+    "has_earnings_in_window",
+    "earnings_date",
+    "spot",
+    "t1_expiry",
+    "t1_dte",
+    "t1_strike",
+    "t1_contract",
+    "t1_close",
+    "t1_iv",
+    "t2_expiry",
+    "t2_dte",
+    "t2_strike",
+    "t2_contract",
+    "t2_close",
+    "t2_iv",
+    "forward_factor",
+    "sigma_fwd",
+    "tau_days",
+    "implied_event_move_pct",
+    "hist_median_move_pct",
+    "hist_rms_move_pct",
+    "n_hist_events",
+    "premium_ratio",
+    "skip_reason",
+    "selector_version",
 ]
 
 _SNAPSHOT_MODEL_COLS = {c.key for c in class_mapper(Snapshot).columns}
@@ -2138,7 +2399,7 @@ def snapshots_mark_iv_skip(
 def snapshots_rv_pending_pairs() -> list[dict]:
     """Distinct (ticker, scan_date) pairs needing rv30 backfill."""
     return _fetchall(
-                "SELECT ticker, scan_date, MIN(id) AS sample_id "
+        "SELECT ticker, scan_date, MIN(id) AS sample_id "
         "FROM snapshots "
         "WHERE scan_date >= '2026-05-01' AND has_options = 1 AND rv30 IS NULL "
         "GROUP BY ticker, scan_date "
@@ -2187,7 +2448,7 @@ def snapshots_count_null_rv30() -> int:
 def snapshots_missing_atm_iv() -> list[dict]:
     """Snapshots with options but no atm_iv_near."""
     return _fetchall(
-                "SELECT id, ticker, earnings_date, price FROM snapshots "
+        "SELECT id, ticker, earnings_date, price FROM snapshots "
         "WHERE has_options = 1 AND atm_iv_near IS NULL "
         "ORDER BY ticker, earnings_date",
         {},
@@ -2250,7 +2511,7 @@ def snapshots_iv_gap_rows(
 def ff_snapshots_pending_pairs(selector_version: int = 2) -> list[dict]:
     """(ticker, scan_date) pairs still needing an ff_snapshots row."""
     pairs = _fetchall(
-                "SELECT ticker, scan_date, earnings_date, price, "
+        "SELECT ticker, scan_date, earnings_date, price, "
         "AVG(ABS(actual_move_pct)) AS _x "
         "FROM snapshots "
         "WHERE has_options=1 AND price>=3 AND actual_move_pct IS NOT NULL "
@@ -2267,7 +2528,7 @@ def ff_snapshots_pending_pairs(selector_version: int = 2) -> list[dict]:
     done = {
         (r["ticker"], r["scan_date"])
         for r in _fetchall(
-                        "SELECT ticker, scan_date FROM ff_snapshots "
+            "SELECT ticker, scan_date FROM ff_snapshots "
             "WHERE (hist_rms_move_pct IS NOT NULL OR skip_reason IS NOT NULL) "
             "AND selector_version = :v",
             {"v": selector_version},
@@ -2279,7 +2540,7 @@ def ff_snapshots_pending_pairs(selector_version: int = 2) -> list[dict]:
 def snapshots_hist_move_abs(ticker: str, exclude_scan: str) -> list[float]:
     """|actual_move_pct| for a ticker excluding one scan_date."""
     rows = _fetchall(
-                "SELECT ABS(actual_move_pct) AS mag FROM snapshots "
+        "SELECT ABS(actual_move_pct) AS mag FROM snapshots "
         "WHERE ticker = :ticker AND actual_move_pct IS NOT NULL "
         "AND outcome_fetched_at IS NOT NULL AND outcome_fetched_at != 'unavailable' "
         "AND scan_date != :exclude_scan",
@@ -2293,12 +2554,10 @@ def ff_snapshots_upsert_many(rows: list[dict]) -> None:
     if not rows:
         return
     placeholders = ", ".join(f":{c}" for c in _FF_SNAPSHOT_COLS)
-    sql = (
-        f"INSERT OR REPLACE INTO ff_snapshots ({', '.join(_FF_SNAPSHOT_COLS)}) "
-        f"VALUES ({placeholders})"
-    )
+    sql = f"INSERT OR REPLACE INTO ff_snapshots ({', '.join(_FF_SNAPSHOT_COLS)}) VALUES ({placeholders})"
     payload = [{c: r.get(c) for c in _FF_SNAPSHOT_COLS} for r in rows]
     _execute(sql, payload, many=True)
+
 
 def ff_universe_snapshots_upsert_many(rows: list[dict]) -> None:
     """INSERT OR REPLACE a batch of ff_universe_snapshots rows in one transaction."""
@@ -2354,9 +2613,7 @@ def snapshots_iv_presence_counts() -> dict:
                 or 0
             ),
             "total_may": int(
-                s.execute(
-                    text("SELECT COUNT(*) FROM snapshots WHERE scan_date >= '2026-05-01'")
-                ).scalar()
+                s.execute(text("SELECT COUNT(*) FROM snapshots WHERE scan_date >= '2026-05-01'")).scalar()
                 or 0
             ),
             "need_backfill": int(
@@ -2375,14 +2632,18 @@ def snapshots_iv_presence_counts() -> dict:
 def snapshots_dedup() -> tuple[int, int]:
     """Delete duplicate snapshots, keeping the lowest id. Returns (deleted, remaining_groups)."""
     with session_scope() as s:
-        groups = s.execute(
-            text(
-                "SELECT MIN(id) AS keep_id, ticker, earnings_date, scan_date, timing, data_source "
-                "FROM snapshots "
-                "GROUP BY ticker, earnings_date, scan_date, timing, data_source "
-                "HAVING COUNT(*) > 1"
+        groups = (
+            s.execute(
+                text(
+                    "SELECT MIN(id) AS keep_id, ticker, earnings_date, scan_date, timing, data_source "
+                    "FROM snapshots "
+                    "GROUP BY ticker, earnings_date, scan_date, timing, data_source "
+                    "HAVING COUNT(*) > 1"
+                )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
         deleted = 0
         for g in groups:
             result = s.execute(
@@ -2416,7 +2677,8 @@ def snapshots_dedup() -> tuple[int, int]:
 
 def snapshots_usable_outcome_count(ticker: str) -> int:
     """Usable realized-outcome count for one ticker (hist-gate numerator)."""
-    rows = _fetchall("SELECT COUNT(*) AS n FROM snapshots "
+    rows = _fetchall(
+        "SELECT COUNT(*) AS n FROM snapshots "
         "WHERE ticker = :ticker AND actual_move_pct IS NOT NULL "
         "AND outcome_fetched_at IS NOT NULL AND outcome_fetched_at != 'unavailable'",
         {"ticker": ticker},
@@ -2426,7 +2688,8 @@ def snapshots_usable_outcome_count(ticker: str) -> int:
 
 def snapshots_outcome_row(ticker: str, earnings_date: str) -> dict | None:
     """id / actual_move_pct / outcome_fetched_at for ticker+earnings_date."""
-    rows = _fetchall("SELECT id, actual_move_pct, outcome_fetched_at FROM snapshots "
+    rows = _fetchall(
+        "SELECT id, actual_move_pct, outcome_fetched_at FROM snapshots "
         "WHERE ticker = :ticker AND earnings_date = :earnings_date "
         "ORDER BY id LIMIT 1",
         {"ticker": ticker, "earnings_date": earnings_date},
@@ -2441,6 +2704,7 @@ def snapshots_apply_hist_backfill_batch(writes: list[dict]) -> None:
     """
     if not writes:
         return
+
     def _write_one(execute: Any, w: dict) -> None:
         outcome = w["outcome"]
         if w.get("existing_id"):
@@ -2498,7 +2762,8 @@ def snapshots_usable_counts_by_ticker(universe: list[str] | None = None) -> dict
         return {}
     params = {f"t{i}": t for i, t in enumerate(universe)}
     placeholders = ", ".join(f":t{i}" for i in range(len(universe)))
-    rows = _fetchall(f"SELECT ticker, COUNT(*) AS n FROM snapshots "
+    rows = _fetchall(
+        f"SELECT ticker, COUNT(*) AS n FROM snapshots "
         f"WHERE ticker IN ({placeholders}) AND {_USABLE_OUTCOME_SQL} "
         f"GROUP BY ticker",
         params,
@@ -2508,7 +2773,8 @@ def snapshots_usable_counts_by_ticker(universe: list[str] | None = None) -> dict
 
 def snapshots_hist_repair_stats() -> list[dict]:
     """Per-ticker usable-outcome count and has_options flag for repair ranking."""
-    return _fetchall("SELECT s.ticker AS ticker, "
+    return _fetchall(
+        "SELECT s.ticker AS ticker, "
         f"SUM(CASE WHEN {_USABLE_OUTCOME_SQL} THEN 1 ELSE 0 END) AS usable, "
         "MAX(s.has_options) AS liquid "
         "FROM snapshots s GROUP BY s.ticker",
@@ -2530,11 +2796,10 @@ def snapshots_hist_abs_moves(ticker: str) -> list[float]:
 def snapshots_as_of_df(cutoff: str) -> pd.DataFrame:
     """SELECT * FROM snapshots WHERE scan_date <= cutoff. Missing table -> empty."""
     try:
-        return _read_df(
-            "SELECT * FROM snapshots WHERE scan_date <= :cutoff", {"cutoff": cutoff}
-        )
+        return _read_df("SELECT * FROM snapshots WHERE scan_date <= :cutoff", {"cutoff": cutoff})
     except Exception:
         return pd.DataFrame()
+
 
 def ff_universe_snapshots_as_of_df(cutoff: str) -> pd.DataFrame:
     """SELECT * FROM ff_universe_snapshots WHERE scan_date <= cutoff. Missing table -> empty."""
@@ -2545,6 +2810,7 @@ def ff_universe_snapshots_as_of_df(cutoff: str) -> pd.DataFrame:
         )
     except Exception:
         return pd.DataFrame()
+
 
 def daily_signals_as_of_df(cutoff: str) -> pd.DataFrame:
     """SELECT * FROM daily_signals WHERE signal_date <= cutoff. Missing table -> empty."""
@@ -2571,16 +2837,11 @@ def ff_snapshots_as_of_df(cutoff: str) -> pd.DataFrame:
 def snapshots_tickers_as_of(as_of: str, limit: int) -> list[str]:
     """Tickers from the most recent snapshot scan_date <= as_of."""
     with session_scope() as s:
-        latest = s.execute(
-            select(func.max(Snapshot.scan_date)).where(Snapshot.scan_date <= as_of)
-        ).scalar()
+        latest = s.execute(select(func.max(Snapshot.scan_date)).where(Snapshot.scan_date <= as_of)).scalar()
         if not latest:
             return []
         rows = s.execute(
-            select(Snapshot.ticker)
-            .where(Snapshot.scan_date == latest)
-            .distinct()
-            .order_by(Snapshot.ticker)
+            select(Snapshot.ticker).where(Snapshot.scan_date == latest).distinct().order_by(Snapshot.ticker)
         ).all()
         return [r[0] for r in rows][:limit]
 
@@ -2602,14 +2863,12 @@ def options_chain_df_latest(ticker: str, as_of: str) -> pd.DataFrame:
     )
 
 
-def daily_signals_history(
-    ticker: str, column: str, as_of: str, limit: int = 260
-) -> list[float]:
+def daily_signals_history(ticker: str, column: str, as_of: str, limit: int = 260) -> list[float]:
     """Prior daily_signals values for ``column`` (allowlisted)."""
     if column not in _DAILY_SIGNAL_COLS:
         raise ValueError(f"unknown daily_signals column: {column}")
     rows = _fetchall(
-                f"SELECT {column} AS v FROM daily_signals "
+        f"SELECT {column} AS v FROM daily_signals "
         "WHERE ticker = :ticker AND signal_date < :as_of "
         f"AND {column} IS NOT NULL ORDER BY signal_date DESC LIMIT :limit",
         {"ticker": ticker, "as_of": as_of, "limit": limit},
@@ -2627,4 +2886,3 @@ def snapshots_latest_price(ticker: str) -> float | None:
             .limit(1)
         ).first()
         return float(row[0]) if row and row[0] is not None else None
-

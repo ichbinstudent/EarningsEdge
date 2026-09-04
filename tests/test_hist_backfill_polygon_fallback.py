@@ -33,14 +33,9 @@ def make_bars(ticker, ed, close_pre=100.0, close_post=105.0):
             close = close_post
         else:
             close = close_post * (1 + i * 0.01)
-        bars.append({
-            "t": ts,
-            "o": close * 0.98,
-            "h": close * 1.02,
-            "l": close * 0.97,
-            "c": close,
-            "v": 1000000
-        })
+        bars.append(
+            {"t": ts, "o": close * 0.98, "h": close * 1.02, "l": close * 0.97, "c": close, "v": 1000000}
+        )
     return bars
 
 
@@ -78,8 +73,12 @@ def test_lse_has_data_polygon_not_called():
 
     # Verify row was inserted
     with db_engine.session_scope() as s:
-        rows = [dict(r) for r in s.execute(
-            text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker}).mappings().all()]
+        rows = [
+            dict(r)
+            for r in s.execute(text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker})
+            .mappings()
+            .all()
+        ]
     assert len(rows) == 1
     assert rows[0]["actual_move_pct"] == 5.0  # actual_move_pct
     assert result == 1
@@ -123,8 +122,12 @@ def test_lse_returns_empty_polygon_used():
 
     # Verify row was inserted with Backfill timing
     with db_engine.session_scope() as s:
-        rows = [dict(r) for r in s.execute(
-            text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker}).mappings().all()]
+        rows = [
+            dict(r)
+            for r in s.execute(text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker})
+            .mappings()
+            .all()
+        ]
     assert len(rows) == 1
     assert rows[0]["timing"] == "Backfill"  # timing
     assert rows[0]["actual_move_pct"] == 5.0  # actual_move_pct
@@ -141,9 +144,13 @@ def test_both_sources_fail_returns_existing_count():
 
     # Pre-existing row
     with db_engine.session_scope() as s:
-        s.execute(text("INSERT INTO snapshots (ticker, earnings_date, scan_date, timing, actual_move_pct, outcome_fetched_at) "
-                       "VALUES (:t, :ed, :sc, 'Backfill', :m, :f)"),
-                  {"t": ticker, "ed": "2026-06-01", "sc": "2026-06-02", "m": 3.5, "f": "2026-06-02"})
+        s.execute(
+            text(
+                "INSERT INTO snapshots (ticker, earnings_date, scan_date, timing, actual_move_pct, outcome_fetched_at) "
+                "VALUES (:t, :ed, :sc, 'Backfill', :m, :f)"
+            ),
+            {"t": ticker, "ed": "2026-06-01", "sc": "2026-06-02", "m": 3.5, "f": "2026-06-02"},
+        )
 
     # Mock yfinance to return one earnings date
     mock_df = pd.DataFrame(index=pd.to_datetime([ed - timedelta(days=10)]))
@@ -168,8 +175,12 @@ def test_both_sources_fail_returns_existing_count():
 
     # No new rows should be inserted
     with db_engine.session_scope() as s:
-        rows = [dict(r) for r in s.execute(
-            text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker}).mappings().all()]
+        rows = [
+            dict(r)
+            for r in s.execute(text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker})
+            .mappings()
+            .all()
+        ]
     assert len(rows) == 1
 
 
@@ -183,24 +194,30 @@ def test_early_exit_when_min_events_satisfied():
 
     # Pre-existing row
     with db_engine.session_scope() as s:
-        s.execute(text("INSERT INTO snapshots (ticker, earnings_date, scan_date, timing, actual_move_pct, outcome_fetched_at) "
-                       "VALUES (:t, :ed, :sc, 'Backfill', :m, :f)"),
-                  {"t": ticker, "ed": "2026-03-01", "sc": "2026-03-02", "m": 2.5, "f": "2026-03-02"})
+        s.execute(
+            text(
+                "INSERT INTO snapshots (ticker, earnings_date, scan_date, timing, actual_move_pct, outcome_fetched_at) "
+                "VALUES (:t, :ed, :sc, 'Backfill', :m, :f)"
+            ),
+            {"t": ticker, "ed": "2026-03-01", "sc": "2026-03-02", "m": 2.5, "f": "2026-03-02"},
+        )
 
     # Mock yfinance to return 4 earnings dates
-    dates = [ed - timedelta(days=i*90) for i in range(1, 5)]
+    dates = [ed - timedelta(days=i * 90) for i in range(1, 5)]
     mock_df = pd.DataFrame(index=pd.to_datetime(dates))
     mock_ticker = MagicMock()
     mock_ticker.get_earnings_dates = MagicMock(return_value=mock_df)
 
     # Mock LSE to return bars
     mock_lse = MagicMock()
-    mock_lse.daily_bars = MagicMock(side_effect=[
-        make_bars(ticker, dates[0]),
-        make_bars(ticker, dates[1]),
-        make_bars(ticker, dates[2]),  # Should not be called
-        make_bars(ticker, dates[3]),  # Should not be called
-    ])
+    mock_lse.daily_bars = MagicMock(
+        side_effect=[
+            make_bars(ticker, dates[0]),
+            make_bars(ticker, dates[1]),
+            make_bars(ticker, dates[2]),  # Should not be called
+            make_bars(ticker, dates[3]),  # Should not be called
+        ]
+    )
 
     with patch("earnings_edge.fwd_factor_ladder._lse_bars_client", return_value=mock_lse):
         with patch("earnings_edge.fwd_factor_ladder._polygon_bars_client", return_value=None):
@@ -214,8 +231,12 @@ def test_early_exit_when_min_events_satisfied():
 
     # Should have 3 total rows (1 pre-existing + 2 new)
     with db_engine.session_scope() as s:
-        rows = [dict(r) for r in s.execute(
-            text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker}).mappings().all()]
+        rows = [
+            dict(r)
+            for r in s.execute(text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker})
+            .mappings()
+            .all()
+        ]
     assert len(rows) == 3
 
 
@@ -230,9 +251,13 @@ def test_existing_good_outcome_not_overwritten():
 
     # Pre-existing row with good outcome
     with db_engine.session_scope() as s:
-        s.execute(text("INSERT INTO snapshots (ticker, earnings_date, scan_date, timing, actual_move_pct, outcome_fetched_at, pre_earnings_close) "
-                       "VALUES (:t, :ed, :sc, 'Backfill', :m, :f, :p)"),
-                  {"t": ticker, "ed": earnings_date, "sc": "2026-06-15", "m": 4.5, "f": "2026-06-15", "p": 150.0})
+        s.execute(
+            text(
+                "INSERT INTO snapshots (ticker, earnings_date, scan_date, timing, actual_move_pct, outcome_fetched_at, pre_earnings_close) "
+                "VALUES (:t, :ed, :sc, 'Backfill', :m, :f, :p)"
+            ),
+            {"t": ticker, "ed": earnings_date, "sc": "2026-06-15", "m": 4.5, "f": "2026-06-15", "p": 150.0},
+        )
 
     # Mock yfinance to return same earnings date
     mock_df = pd.DataFrame(index=pd.to_datetime([ed - timedelta(days=10)]))
@@ -253,8 +278,12 @@ def test_existing_good_outcome_not_overwritten():
 
     # Row should not be modified
     with db_engine.session_scope() as s:
-        rows = [dict(r) for r in s.execute(
-            text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker}).mappings().all()]
+        rows = [
+            dict(r)
+            for r in s.execute(text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker})
+            .mappings()
+            .all()
+        ]
     assert len(rows) == 1
     assert rows[0]["actual_move_pct"] == 4.5  # actual_move_pct unchanged
     assert rows[0]["pre_earnings_close"] == 150.0  # pre_earnings_close unchanged
@@ -292,8 +321,12 @@ def test_lse_raises_exception_polygon_fallback():
 
     # Verify row was inserted
     with db_engine.session_scope() as s:
-        rows = [dict(r) for r in s.execute(
-            text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker}).mappings().all()]
+        rows = [
+            dict(r)
+            for r in s.execute(text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker})
+            .mappings()
+            .all()
+        ]
     assert len(rows) == 1
     assert rows[0]["actual_move_pct"] == 5.0  # actual_move_pct
     assert result == 1
@@ -309,9 +342,13 @@ def test_no_api_keys_returns_existing():
 
     # Pre-existing row
     with db_engine.session_scope() as s:
-        s.execute(text("INSERT INTO snapshots (ticker, earnings_date, scan_date, timing, actual_move_pct, outcome_fetched_at) "
-                       "VALUES (:t, :ed, :sc, 'Backfill', :m, :f)"),
-                  {"t": ticker, "ed": "2026-06-01", "sc": "2026-06-02", "m": 3.5, "f": "2026-06-02"})
+        s.execute(
+            text(
+                "INSERT INTO snapshots (ticker, earnings_date, scan_date, timing, actual_move_pct, outcome_fetched_at) "
+                "VALUES (:t, :ed, :sc, 'Backfill', :m, :f)"
+            ),
+            {"t": ticker, "ed": "2026-06-01", "sc": "2026-06-02", "m": 3.5, "f": "2026-06-02"},
+        )
 
     # Mock clients to return None (no API keys)
     with patch("earnings_edge.fwd_factor_ladder._lse_bars_client", return_value=None):
@@ -323,8 +360,12 @@ def test_no_api_keys_returns_existing():
 
     # No new rows should be inserted
     with db_engine.session_scope() as s:
-        rows = [dict(r) for r in s.execute(
-            text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker}).mappings().all()]
+        rows = [
+            dict(r)
+            for r in s.execute(text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker})
+            .mappings()
+            .all()
+        ]
     assert len(rows) == 1
 
 
@@ -339,10 +380,13 @@ def test_update_existing_row_with_null_outcome():
 
     # Pre-existing row with NULL outcome
     with db_engine.session_scope() as s:
-        s.execute(text(
-            "INSERT INTO snapshots (ticker, earnings_date, scan_date, timing, actual_move_pct, outcome_fetched_at) "
-            "VALUES (:t, :ed, :sc, 'Backfill', NULL, NULL)"),
-            {"t": ticker, "ed": earnings_date, "sc": "2026-06-15"})
+        s.execute(
+            text(
+                "INSERT INTO snapshots (ticker, earnings_date, scan_date, timing, actual_move_pct, outcome_fetched_at) "
+                "VALUES (:t, :ed, :sc, 'Backfill', NULL, NULL)"
+            ),
+            {"t": ticker, "ed": earnings_date, "sc": "2026-06-15"},
+        )
 
     # Mock yfinance to return same earnings date
     mock_df = pd.DataFrame(index=pd.to_datetime([ed - timedelta(days=10)]))
@@ -363,8 +407,12 @@ def test_update_existing_row_with_null_outcome():
 
     # Row should be updated
     with db_engine.session_scope() as s:
-        rows = [dict(r) for r in s.execute(
-            text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker}).mappings().all()]
+        rows = [
+            dict(r)
+            for r in s.execute(text("SELECT * FROM snapshots WHERE ticker=:t"), {"t": ticker})
+            .mappings()
+            .all()
+        ]
     assert len(rows) == 1
     assert rows[0]["actual_move_pct"] == 5.0  # actual_move_pct now set
     assert rows[0]["outcome_fetched_at"] is not None  # outcome_fetched_at now set

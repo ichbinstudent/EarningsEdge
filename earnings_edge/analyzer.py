@@ -5,6 +5,8 @@ Yang-Zhang realised-volatility estimator, and IV term-structure builder.
 
 import warnings
 from datetime import datetime, timedelta
+import datetime as _dtmod  # module for annotations (datetime.date)
+from datetime import date as _date_cls  # noqa: F401
 from typing import Callable
 
 import numpy as np
@@ -24,18 +26,18 @@ def _thin_expiries(dates: list[str], max_count: int | None) -> list[str]:
         return dates
     if max_count < 2:
         return dates[:1]
-    picks = sorted({
-        0,
-        len(dates) - 1,
-        *{
-            round(i * (len(dates) - 1) / (max_count - 1))
-            for i in range(1, max_count - 1)
-        },
-    })
+    picks = sorted(
+        {
+            0,
+            len(dates) - 1,
+            *{round(i * (len(dates) - 1) / (max_count - 1)) for i in range(1, max_count - 1)},
+        }
+    )
     return [dates[i] for i in picks]
 
 
 # ── OptionsAnalyzer class ────────────────────────────────────────────
+
 
 class OptionsAnalyzer:
     """Stateless options analysis helper (volatility, term structure, recommendation)."""
@@ -79,8 +81,10 @@ class OptionsAnalyzer:
             log_oc = np.log(price_data["Open"] / price_data["Close"].shift(1))
 
             rs = log_ho * (log_ho - log_co) + log_lo * (log_lo - log_co)
-            close_vol = (log_oc ** 2).rolling(window).sum() / (window - 1.0)
-            open_vol = (np.log(price_data["Open"] / price_data["Close"].shift(1)) ** 2).rolling(window).sum() / (window - 1.0)
+            close_vol = (log_oc**2).rolling(window).sum() / (window - 1.0)
+            open_vol = (np.log(price_data["Open"] / price_data["Close"].shift(1)) ** 2).rolling(
+                window
+            ).sum() / (window - 1.0)
             window_rs = rs.rolling(window).sum() / (window - 1.0)
 
             k = 0.34 / (1.34 + (window + 1) / (window - 1))
@@ -134,7 +138,7 @@ class OptionsAnalyzer:
     def compute_recommendation(
         self,
         ticker: str,
-        earnings_date: datetime.date | None = None,
+        earnings_date: _dtmod.date | None = None,
         provider=None,
     ) -> AnalysisResult:
         """Full options analysis for a single ticker.
@@ -145,6 +149,7 @@ class OptionsAnalyzer:
         try:
             if provider is None:
                 from .market_data_provider import get_provider
+
                 provider = get_provider()
 
             ticker = ticker.strip().upper()
@@ -155,9 +160,7 @@ class OptionsAnalyzer:
             if not expiries:
                 return AnalysisResult.fail(ticker, f"No options for {ticker}.")
 
-            exp_dates = _thin_expiries(
-                self.filter_dates(expiries), provider.max_expiries_hint
-            )
+            exp_dates = _thin_expiries(self.filter_dates(expiries), provider.max_expiries_hint)
             options_chains = {d: provider.option_chain(ticker, d) for d in exp_dates}
 
             hist = provider.history(ticker, "1d")
@@ -243,8 +246,11 @@ class OptionsAnalyzer:
             if earnings_date:
                 if isinstance(earnings_date, str):
                     earnings_date = datetime.strptime(earnings_date, "%Y-%m-%d").date()
-                valid = [datetime.strptime(e, "%Y-%m-%d").date() for e in exp_dates
-                         if datetime.strptime(e, "%Y-%m-%d").date() >= earnings_date]
+                valid = [
+                    datetime.strptime(e, "%Y-%m-%d").date()
+                    for e in exp_dates
+                    if datetime.strptime(e, "%Y-%m-%d").date() >= earnings_date
+                ]
                 if valid:
                     short_leg_days = max(1, min((e - today).days for e in valid))
                 else:
@@ -263,7 +269,8 @@ class OptionsAnalyzer:
                 denom = T_short
                 if denom:
                     sigma_short_leg_fair = np.sqrt(
-                        (sigma_long_leg_ask ** 2 * T_long - sigma_baseline_mid ** 2 * (T_long - T_short)) / T_short
+                        (sigma_long_leg_ask**2 * T_long - sigma_baseline_mid**2 * (T_long - T_short))
+                        / T_short
                     )
                 idx_short = min(range(len(dtes)), key=lambda i: abs(dtes[i] - short_leg_days))
                 sigma_short_leg_bid = ivs_bid[idx_short]
@@ -274,8 +281,10 @@ class OptionsAnalyzer:
             expected_move_str = f"{(straddle / current_price * 100):.2f}%" if straddle else "N/A"
 
             recommendation = (
-                "BUY" if iv30 < hist_vol and avg_volume >= 1_500_000
-                else "SELL" if iv30 > hist_vol * 1.2
+                "BUY"
+                if iv30 < hist_vol and avg_volume >= 1_500_000
+                else "SELL"
+                if iv30 > hist_vol * 1.2
                 else "HOLD"
             )
 
@@ -290,7 +299,9 @@ class OptionsAnalyzer:
                 expected_move=expected_move_str,
                 avg_volume_pass=avg_volume >= 1_500_000,
                 sigma_baseline_1y=sigma_baseline_mid,
-                sigma_short_leg_fair=sigma_short_leg_fair if sigma_short_leg_fair is not None and not np.isnan(sigma_short_leg_fair) else None,
+                sigma_short_leg_fair=sigma_short_leg_fair
+                if sigma_short_leg_fair is not None and not np.isnan(sigma_short_leg_fair)
+                else None,
                 sigma_short_leg=sigma_short_leg_bid,
                 actual_to_fair_ratio=actual_to_fair_ratio,
                 atm_call_delta=atm_call_delta,

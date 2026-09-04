@@ -1,4 +1,5 @@
 """Tests for the human-in-the-loop trade approval flow."""
+
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
@@ -41,8 +42,10 @@ def _trade(ticker="AAPL", score=0.61, decision="TAKE", side="CALENDAR"):
         side=side,
         entry_price=1.85,
         features={
-            "near_strike": 190.0, "far_strike": 190.0,
-            "near_expiry": date(2026, 7, 31), "far_expiry": date(2026, 8, 28),
+            "near_strike": 190.0,
+            "far_strike": 190.0,
+            "near_expiry": date(2026, 7, 31),
+            "far_expiry": date(2026, 8, 28),
         },
         model_score=score,
         ml_decision=decision,
@@ -59,6 +62,7 @@ def store(tmp_path):
 def mock_bridge():
     client = MagicMock()
     client.position_symbols.return_value = set()
+
     # preflight_combo needs a live-looking Alpaca book per leg symbol.
     # Calendar legs arrive as (near sell, far buy): make the far leg pricier
     # so the net debit mid is positive (0.50) and the spread passes the gate.
@@ -68,6 +72,7 @@ def mock_bridge():
             mid = 5.04 if i == 0 else 5.54
             out[s] = {"latestQuote": {"bp": round(mid - 0.04, 2), "ap": round(mid + 0.04, 2)}}
         return out
+
     client.get_option_snapshots_bulk.side_effect = _bulk
     bridge = StrategyBridge(client=client, config=BridgeConfig(dry_run=False))
     return bridge
@@ -76,6 +81,7 @@ def mock_bridge():
 # ---------------------------------------------------------------------------
 # Serialization
 # ---------------------------------------------------------------------------
+
 
 def test_trade_json_roundtrip():
     t = _trade()
@@ -95,6 +101,7 @@ def test_trade_json_roundtrip():
 # ---------------------------------------------------------------------------
 # Store lifecycle
 # ---------------------------------------------------------------------------
+
 
 def test_store_add_get_mark(store):
     pid = store.add(_trade(), "card")
@@ -133,6 +140,7 @@ def test_store_list_pending(store):
 # build_proposals
 # ---------------------------------------------------------------------------
 
+
 def _fake_strategy(trades):
     strat = MagicMock()
     strat.run.return_value = StrategyResult(name="calendar_call_ml", trades=trades)
@@ -150,9 +158,12 @@ def test_build_proposals_filters_and_ranks(store, mock_bridge):
         _trade("HIGH", score=0.9),
         _trade("SKIPROW", score=0.99, decision="SKIP"),
     ]
-    rows = build_proposals(store, strategies=["calendar_call_ml"],
-                           bridge=mock_bridge,
-                           trade_source=_source({"calendar_call_ml": trades}))
+    rows = build_proposals(
+        store,
+        strategies=["calendar_call_ml"],
+        bridge=mock_bridge,
+        trade_source=_source({"calendar_call_ml": trades}),
+    )
     tickers = [r["ticker"] for r in rows]
     assert "SKIPROW" not in tickers, "SKIP trades must never be proposed"
     assert tickers == ["HIGH", "LOW"], "proposals ranked by model score"
@@ -162,9 +173,13 @@ def test_build_proposals_filters_and_ranks(store, mock_bridge):
 
 def test_build_proposals_respects_max(store, mock_bridge):
     trades = [_trade(f"T{i}", score=0.5 + i * 0.01) for i in range(10)]
-    rows = build_proposals(store, strategies=["calendar_call_ml"],
-                           max_proposals=3, bridge=mock_bridge,
-                           trade_source=_source({"calendar_call_ml": trades}))
+    rows = build_proposals(
+        store,
+        strategies=["calendar_call_ml"],
+        max_proposals=3,
+        bridge=mock_bridge,
+        trade_source=_source({"calendar_call_ml": trades}),
+    )
     assert len(rows) == 3
 
 
@@ -172,9 +187,12 @@ def test_build_proposals_skips_when_position_exists(store):
     client = MagicMock()
     client.position_symbols.return_value = {"AAPL260731C00190000"}  # near leg
     bridge = StrategyBridge(client=client, config=BridgeConfig(dry_run=False))
-    rows = build_proposals(store, strategies=["calendar_call_ml"],
-                           bridge=bridge,
-                           trade_source=_source({"calendar_call_ml": [_trade()]}))
+    rows = build_proposals(
+        store,
+        strategies=["calendar_call_ml"],
+        bridge=bridge,
+        trade_source=_source({"calendar_call_ml": [_trade()]}),
+    )
     assert rows == []
 
 
@@ -182,14 +200,17 @@ def test_build_proposals_funnel_counters(store, mock_bridge):
     from earnings_edge import trade_approval
 
     trades = [_trade("A", score=0.5), _trade("B", score=0.6, decision="SKIP")]
-    rows = build_proposals(store, strategies=["calendar_call_ml"],
-                           bridge=mock_bridge,
-                           trade_source=_source({"calendar_call_ml": trades}))
+    rows = build_proposals(
+        store,
+        strategies=["calendar_call_ml"],
+        bridge=mock_bridge,
+        trade_source=_source({"calendar_call_ml": trades}),
+    )
     assert len(rows) == 1
     f = trade_approval.LAST_FUNNEL
     stage = f["strategies"]["calendar_call_ml"]
-    assert stage["decision_pass"] == 2       # both trades returned by source
-    assert stage["legs_ok"] == 1             # SKIP filtered before legs
+    assert stage["decision_pass"] == 2  # both trades returned by source
+    assert stage["legs_ok"] == 1  # SKIP filtered before legs
     assert stage["dte_ok"] == 1
     assert stage["position_ok"] == 1
     assert stage["proposals_created"] == 1
@@ -198,26 +219,26 @@ def test_build_proposals_funnel_counters(store, mock_bridge):
     store._ensure_engine()
     with db_engine.session_scope() as s:
         row = s.execute(
-            text(
-                "SELECT strategies, counts, proposals_total FROM proposal_funnel "
-                "ORDER BY id DESC LIMIT 1"
-            )
+            text("SELECT strategies, counts, proposals_total FROM proposal_funnel ORDER BY id DESC LIMIT 1")
         ).one()
     import json as _json
+
     assert _json.loads(row[1])["calendar_call_ml"]["proposals_created"] == 1
     assert row[2] == 1
 
 
 def test_build_proposals_skips_unmapped_strategies(store, mock_bridge):
     # earnings_quality has no live mapping — must be skipped without error
-    rows = build_proposals(store, strategies=["earnings_quality"],
-                           bridge=mock_bridge, trade_source=_source({}))
+    rows = build_proposals(
+        store, strategies=["earnings_quality"], bridge=mock_bridge, trade_source=_source({})
+    )
     assert rows == []
 
 
 # ---------------------------------------------------------------------------
 # execute_proposal guards
 # ---------------------------------------------------------------------------
+
 
 def test_execute_not_found(store):
     assert execute_proposal(store, 999)["ok"] is False
@@ -250,7 +271,10 @@ def test_execute_success_marks_executed(store):
     client.position_symbols.return_value = set()
     client.get_option_snapshot.return_value = {}
     client.submit_multi_leg_order.return_value = {
-        "id": "ord-1", "status": "filled", "filled_qty": 1, "filled_avg_price": 1.85,
+        "id": "ord-1",
+        "status": "filled",
+        "filled_qty": 1,
+        "filled_avg_price": 1.85,
         "legs": [],
     }
     bridge = StrategyBridge(client=client, config=BridgeConfig(dry_run=False))
@@ -288,6 +312,7 @@ def test_reject_proposal(store):
 # run_auto_trade TAKE filter (bug: SKIP rows were being submitted)
 # ---------------------------------------------------------------------------
 
+
 def test_run_auto_trade_skips_non_take_trades():
     from earnings_edge.alpaca_bridge import run_auto_trade
 
@@ -300,10 +325,12 @@ def test_run_auto_trade_skips_non_take_trades():
     client.position_symbols.return_value = set()
     client.buying_power.return_value = 50000.0
 
-    with patch("earnings_edge.alpaca_bridge.create_client", return_value=client), \
-         patch("earnings_edge.alpaca_bridge._resolve_strategy", return_value=strat), \
-         patch("earnings_edge.alpaca_bridge.DataBundle") as mock_bundle, \
-         patch.object(StrategyBridge, "execute_trade", return_value=None) as mock_exec:
+    with (
+        patch("earnings_edge.alpaca_bridge.create_client", return_value=client),
+        patch("earnings_edge.alpaca_bridge._resolve_strategy", return_value=strat),
+        patch("earnings_edge.alpaca_bridge.DataBundle") as mock_bundle,
+        patch.object(StrategyBridge, "execute_trade", return_value=None) as mock_exec,
+    ):
         mock_bundle.from_db.return_value = MagicMock()
         run_auto_trade(strategies=["calendar_call_ml"])
 
@@ -314,6 +341,7 @@ def test_run_auto_trade_skips_non_take_trades():
 # ---------------------------------------------------------------------------
 # Market-closed guard (production path — no injected bridge)
 # ---------------------------------------------------------------------------
+
 
 def test_execute_refuses_when_market_closed(store):
     pid = store.add(_trade(), "card")
@@ -342,16 +370,29 @@ def test_execute_refuses_when_clock_check_fails(store):
 # FF ladder proposals — same store, same confirm path as every strategy
 # ---------------------------------------------------------------------------
 
+
 def _ff_candidate(ticker="AAPL"):
     from earnings_edge.fwd_factor_ladder import CalendarCandidate
+
     return CalendarCandidate(
-        ticker=ticker, earnings_date=date.today().isoformat(),
-        spot=190.0, strike=190.0,
-        near_symbol=f"{ticker}260731C00190000", far_symbol=f"{ticker}260828C00190000",
-        near_expiry="2026-07-31", far_expiry="2026-08-28",
-        near_bid=5.0, near_ask=5.2, far_bid=7.0, far_ask=7.2,
-        sigma_fwd=0.45, hist_rms_move=0.05, tau_days=28,
-        d_start=1.90, d_cap=2.00, mid_debit=1.85,
+        ticker=ticker,
+        earnings_date=date.today().isoformat(),
+        spot=190.0,
+        strike=190.0,
+        near_symbol=f"{ticker}260731C00190000",
+        far_symbol=f"{ticker}260828C00190000",
+        near_expiry="2026-07-31",
+        far_expiry="2026-08-28",
+        near_bid=5.0,
+        near_ask=5.2,
+        far_bid=7.0,
+        far_ask=7.2,
+        sigma_fwd=0.45,
+        hist_rms_move=0.05,
+        tau_days=28,
+        d_start=1.90,
+        d_cap=2.00,
+        mid_debit=1.85,
     )
 
 
@@ -390,6 +431,7 @@ def test_build_ff_proposals_dedupes(store):
 def _during_ff_window(created_at: str) -> datetime:
     """14:00 ET on the proposal's created date — inside 14:00–15:45, same day."""
     import pytz
+
     eastern = pytz.timezone("US/Eastern")
     created = datetime.fromisoformat(created_at)
     if created.tzinfo is None:
@@ -402,7 +444,10 @@ def test_execute_ff_arms_via_runner(store):
     rows = build_ff_proposals(store, [_ff_candidate()])
     runner = _FakeRunner()
     result = execute_proposal(
-        store, rows[0]["id"], ff_runner=runner, decided_by=5,
+        store,
+        rows[0]["id"],
+        ff_runner=runner,
+        decided_by=5,
         now=_during_ff_window(rows[0]["created_at"]),
     )
     assert result["ok"] is True
@@ -411,6 +456,7 @@ def test_execute_ff_arms_via_runner(store):
     row = store.get(rows[0]["id"])
     assert row["status"] == "executed"
     import json as _json
+
     assert _json.loads(row["order_json"])["ladder_id"] == 11
 
 
@@ -419,7 +465,9 @@ def test_execute_ff_refusal_marks_error(store):
     runner = _FakeRunner(lid=None)
     runner.events = ["⛔ FF arm refused: AAPL — kill switch is halted"]
     result = execute_proposal(
-        store, rows[0]["id"], ff_runner=runner,
+        store,
+        rows[0]["id"],
+        ff_runner=runner,
         now=_during_ff_window(rows[0]["created_at"]),
     )
     assert result["ok"] is False

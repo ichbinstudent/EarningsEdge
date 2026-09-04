@@ -6,6 +6,7 @@ snapshot with populated ATM data. These are backtest-calibration
 tools — they evaluate whether snapshot features (IV/RV, term slope,
 ATM IV level) have predictive power for common option structures.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,8 +18,8 @@ from scipy.stats import norm
 # Black-Scholes core (identical math to analyzer.py)
 # ---------------------------------------------------------------------------
 
-def bs_price(S: float, K: float, T: float, r: float, sigma: float,
-             opt_type: str = "call") -> float:
+
+def bs_price(S: float, K: float, T: float, r: float, sigma: float, opt_type: str = "call") -> float:
     if T <= 0 or sigma <= 0 or S <= 0 or K <= 0:
         return max(0.0, (S - K) if opt_type == "call" else (K - S))
     d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
@@ -28,8 +29,7 @@ def bs_price(S: float, K: float, T: float, r: float, sigma: float,
     return K * np.exp(-r * T) * norm.cdf(-d2) - S * norm.cdf(-d1)
 
 
-def bs_delta(S: float, K: float, T: float, r: float, sigma: float,
-             opt_type: str = "call") -> float:
+def bs_delta(S: float, K: float, T: float, r: float, sigma: float, opt_type: str = "call") -> float:
     if T <= 0 or sigma <= 0 or S <= 0 or K <= 0:
         return np.nan
     d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
@@ -44,6 +44,7 @@ def _nearest_strike(price: float, width: int = 5) -> float:
 # Iron Condor
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class IronCondor:
     """Sell OTM call + put, buy further-out wings.
@@ -51,6 +52,7 @@ class IronCondor:
     PnL when stock stays between short strikes = premium received minus
     wing costs (max credit). PnL when stock exceeds long strikes = max loss.
     """
+
     short_call: float
     long_call: float
     short_put: float
@@ -59,8 +61,9 @@ class IronCondor:
     max_loss: float
 
     @classmethod
-    def construct(cls, S: float, wing_width: int = 5, r: float = 0.045,
-                  T: float = None, sigma: float = 0.5) -> IronCondor:
+    def construct(
+        cls, S: float, wing_width: int = 5, r: float = 0.045, T: float = None, sigma: float = 0.5
+    ) -> IronCondor:
         atm = _nearest_strike(S)
         sc = atm + wing_width
         lc = atm + 2 * wing_width
@@ -82,11 +85,13 @@ class IronCondor:
 
     def payoff(self, underlying_at_expiry: float) -> float:
         # Call-side: loss when underlying > short_call
-        call_loss = max(0.0, underlying_at_expiry - self.short_call) \
-                    - max(0.0, underlying_at_expiry - self.long_call)
+        call_loss = max(0.0, underlying_at_expiry - self.short_call) - max(
+            0.0, underlying_at_expiry - self.long_call
+        )
         # Put-side: loss when underlying < short_put
-        put_loss = max(0.0, self.short_put - underlying_at_expiry) \
-                   - max(0.0, self.long_put - underlying_at_expiry)
+        put_loss = max(0.0, self.short_put - underlying_at_expiry) - max(
+            0.0, self.long_put - underlying_at_expiry
+        )
         return self.credit - call_loss - put_loss
 
 
@@ -94,19 +99,22 @@ class IronCondor:
 # Butterfly
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class Butterfly:
     """Long butterfly: buy lower, sell 2x ATM call, buy upper.
 
     Max profit when stock = ATM at expiry; max loss = net premium paid.
     """
+
     lower: float
     upper: float
     net_premium: float
 
     @classmethod
-    def construct(cls, S: float, width: int = 5, r: float = 0.045,
-                  T: float = None, sigma: float = 0.5) -> Butterfly:
+    def construct(
+        cls, S: float, width: int = 5, r: float = 0.045, T: float = None, sigma: float = 0.5
+    ) -> Butterfly:
         atm = _nearest_strike(S)
         lo = atm - width
         hi = atm + width
@@ -133,6 +141,7 @@ class Butterfly:
 # Risk Reversal
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class RiskReversal:
     """Buy OTM call, sell OTM put (or vice versa) — zero net premium, pure directional.
@@ -143,13 +152,15 @@ class RiskReversal:
 
     PnL at expiry = call payoff - put payoff - net_premium_paid.
     """
+
     call_strike: float
     put_strike: float
     net_premium: float
 
     @classmethod
-    def construct(cls, S: float, width: int = 5, r: float = 0.045,
-                  T: float = None, sigma: float = 0.5) -> RiskReversal:
+    def construct(
+        cls, S: float, width: int = 5, r: float = 0.045, T: float = None, sigma: float = 0.5
+    ) -> RiskReversal:
         atm = _nearest_strike(S)
         kc = atm + width
         kp = atm - width

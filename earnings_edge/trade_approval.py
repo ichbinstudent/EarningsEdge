@@ -15,6 +15,7 @@ effective mode is ``auto`` (TOML + operator override) AND the bot's
 ``partition_by_mode`` path runs it — live mode forces approval unless
 ``ALPACA_LIVE_ALLOW_AUTO=1``.
 """
+
 from __future__ import annotations
 
 import json
@@ -55,7 +56,7 @@ DEFAULT_STRATEGIES = [
     "vol_risk_premium",
     FF_LADDER,
     "forward_factor_arb",
-    "earnings_quality"
+    "earnings_quality",
 ]
 # Per-strategy decisions that may become a proposal card. calendar_call_ml
 # is model TAKE only.
@@ -101,6 +102,7 @@ CREATE TABLE IF NOT EXISTS proposal_funnel (
 # ---------------------------------------------------------------------------
 # Trade (de)serialization
 # ---------------------------------------------------------------------------
+
 
 def _json_default(o: Any) -> Any:
     if isinstance(o, (date, datetime)):
@@ -160,6 +162,7 @@ def trade_from_json(s: str) -> Trade:
 # ---------------------------------------------------------------------------
 # Store
 # ---------------------------------------------------------------------------
+
 
 class PendingTradeStore:
     """SQLite-backed pending-proposal store (lives in earnings_ml.db, WAL)."""
@@ -223,12 +226,13 @@ class PendingTradeStore:
 # Proposal building (local filtering only — see alpaca_bridge cost discipline)
 # ---------------------------------------------------------------------------
 
+
 def _render_card(trade: Trade, legs: list[dict], proposal_id: str = "?") -> str:
-    subtitle = (f"{cards.bold(trade.ticker)} {cards.esc(trade.side)} "
-                f"(earnings {trade.earnings_date.isoformat()})")
+    subtitle = (
+        f"{cards.bold(trade.ticker)} {cards.esc(trade.side)} (earnings {trade.earnings_date.isoformat()})"
+    )
     body = [
-        f"  {cards.esc(leg['side'].upper())} {cards.esc(leg.get('ratio_qty', 1))} "
-        f"{cards.code(leg['symbol'])}"
+        f"  {cards.esc(leg['side'].upper())} {cards.esc(leg.get('ratio_qty', 1))} {cards.code(leg['symbol'])}"
         for leg in legs
     ]
     meta = []
@@ -268,15 +272,17 @@ def _render_card(trade: Trade, legs: list[dict], proposal_id: str = "?") -> str:
                 # exc-policy: narrowed to datetime.fromisoformat errors
                 exp = trade.earnings_date
 
-            designer_legs.append(Leg(
-                action=action,
-                kind=l.get("option_type", "call"),
-                strike=float(l.get("strike", 0.0)),
-                expiry=exp,
-                quantity=ratio,
-                price=price,
-                iv=0.30
-            ))
+            designer_legs.append(
+                Leg(
+                    action=action,
+                    kind=l.get("option_type", "call"),
+                    strike=float(l.get("strike", 0.0)),
+                    expiry=exp,
+                    quantity=ratio,
+                    price=price,
+                    iv=0.30,
+                )
+            )
 
         S = float((trade.features or {}).get("price") or designer_legs[0].strike)
         if S == 0.0:
@@ -291,13 +297,11 @@ def _render_card(trade: Trade, legs: list[dict], proposal_id: str = "?") -> str:
         meta.append(f"Max Profit: {profit_str} | Max Loss: {loss_str}")
 
     except Exception as e:
-
         # exc-policy: keep broad, ensure visibility
 
+        record_event("silent_failure", f"trade_approval: {e}")
 
-        record_event('silent_failure', f'trade_approval: {e}')
-
-        logger.error('trade_approval broad exception', exc_info=True)
+        logger.error("trade_approval broad exception", exc_info=True)
         logger.warning("designer analyze failed in proposal build: %s", e)
 
     if meta:
@@ -315,30 +319,34 @@ def _render_card(trade: Trade, legs: list[dict], proposal_id: str = "?") -> str:
         body.append(f"<code>{cmd_str}</code>")
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
-        record_event('silent_failure', f'trade_approval: {exc}')
-        logger.error('trade_approval broad exception', exc_info=True)
+        record_event("silent_failure", f"trade_approval: {exc}")
+        logger.error("trade_approval broad exception", exc_info=True)
         pass
 
     footer = cards.esc(f"Expires in {PROPOSAL_TTL_HOURS:.0f}h — confirm to execute.")
-    return cards.card_frame(cards.ENTRY_EMOJI, f"Trade Proposal #{proposal_id} — {trade.strategy}",
-                            subtitle, body, footer)
+    return cards.card_frame(
+        cards.ENTRY_EMOJI, f"Trade Proposal #{proposal_id} — {trade.strategy}", subtitle, body, footer
+    )
 
 
 def _killswitch_note(db_path=None) -> str:
     """Card prefix when the kill switch is halted (proposals still build)."""
     try:
         from framework.risk.killswitch import KillSwitch
+
         if db_path is not None:
             from earnings_edge.db.engine import configure
+
             configure(db_path)
         ks = KillSwitch()
         if ks.is_halted():
             return cards.bold(
-                f"🛑 KILL SWITCH HALTED ({ks.status().get('reason')}) — execution will be vetoed")
+                f"🛑 KILL SWITCH HALTED ({ks.status().get('reason')}) — execution will be vetoed"
+            )
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
-        record_event('silent_failure', f'trade_approval: {exc}')
-        logger.error('trade_approval broad exception', exc_info=True)
+        record_event("silent_failure", f"trade_approval: {exc}")
+        logger.error("trade_approval broad exception", exc_info=True)
         pass
     return ""
 
@@ -352,6 +360,7 @@ def _default_trade_source(db_path):
 # ---------------------------------------------------------------------------
 # FF ladder candidates as proposals (same store, same confirm path)
 # ---------------------------------------------------------------------------
+
 
 def ff_candidate_to_trade(cand) -> Trade:
     """Wrap an FF ladder candidate as a Trade so it persists in the
@@ -398,14 +407,14 @@ def _render_ff_card(cand, proposal_id: str = "?") -> str:
         body.append(f"<code>{cmd_str}</code>")
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
-        record_event('silent_failure', f'trade_approval: {exc}')
-        logger.error('trade_approval broad exception', exc_info=True)
+        record_event("silent_failure", f"trade_approval: {exc}")
+        logger.error("trade_approval broad exception", exc_info=True)
         pass
 
-    footer = ("Confirm = arm limit ladder 14:00→15:45 ET, tick up every 15 min.\n"
-              "Expires 15:45 ET today.")
-    return cards.card_frame(cards.FF_EMOJI, f"Trade Proposal #{proposal_id} — {FF_LADDER}",
-                            subtitle, body, footer)
+    footer = "Confirm = arm limit ladder 14:00→15:45 ET, tick up every 15 min.\nExpires 15:45 ET today."
+    return cards.card_frame(
+        cards.FF_EMOJI, f"Trade Proposal #{proposal_id} — {FF_LADDER}", subtitle, body, footer
+    )
 
 
 def build_ff_proposals(
@@ -449,8 +458,8 @@ def _persist_funnel(store: PendingTradeStore, strategies: list[str], counts: dic
         )
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
-        record_event('silent_failure', f'trade_approval: {exc}')
-        logger.error('trade_approval broad exception', exc_info=True)
+        record_event("silent_failure", f"trade_approval: {exc}")
+        logger.error("trade_approval broad exception", exc_info=True)
         logger.warning("funnel persist failed (non-fatal): %s", exc)
 
 
@@ -490,16 +499,16 @@ def build_proposals(
         from earnings_edge.db.engine import configure
         from framework.core.control import filter_enabled
         from framework.core.registry import get_registry
+
         registry = get_registry()
         if store._db_path:
             configure(store._db_path)
-        names = filter_enabled(strategies or DEFAULT_STRATEGIES,
-                               registry.is_enabled)
+        names = filter_enabled(strategies or DEFAULT_STRATEGIES, registry.is_enabled)
         halted_note = _killswitch_note(store._db_path)
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
-        record_event('silent_failure', f'trade_approval: {exc}')
-        logger.error('trade_approval broad exception', exc_info=True)
+        record_event("silent_failure", f"trade_approval: {exc}")
+        logger.error("trade_approval broad exception", exc_info=True)
         logger.warning("registry unavailable (%s) — all strategies enabled", exc)
         names = strategies or DEFAULT_STRATEGIES
         halted_note = ""
@@ -536,8 +545,8 @@ def build_proposals(
             trades = trade_source(name)
         except Exception as exc:
             # exc-policy: keep broad, ensure visibility
-            record_event('silent_failure', f'trade_approval: {exc}')
-            logger.error('trade_approval broad exception', exc_info=True)
+            record_event("silent_failure", f"trade_approval: {exc}")
+            logger.error("trade_approval broad exception", exc_info=True)
             logger.error("live signal mapping for %s failed: %s", name, exc)
             funnel[name] = {**stage, "error": str(exc)}
             continue
@@ -616,7 +625,9 @@ def build_proposals(
     _persist_funnel(store, list(funnel), funnel, len(proposals))
     logger.info(
         "proposals built: %d (candidates: %d) | funnel: %s",
-        len(proposals), len(candidates), json.dumps(funnel),
+        len(proposals),
+        len(candidates),
+        json.dumps(funnel),
     )
     return proposals
 
@@ -624,6 +635,7 @@ def build_proposals(
 # ---------------------------------------------------------------------------
 # Execution (only ever triggered by explicit confirmation)
 # ---------------------------------------------------------------------------
+
 
 def _market_closed() -> str | None:
     """None when the US market is open, else a human-readable refusal.
@@ -634,8 +646,8 @@ def _market_closed() -> str | None:
         clock = create_client().get_clock()
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
-        record_event('silent_failure', f'trade_approval: {exc}')
-        logger.error('trade_approval broad exception', exc_info=True)
+        record_event("silent_failure", f"trade_approval: {exc}")
+        logger.error("trade_approval broad exception", exc_info=True)
         return f"market clock check failed ({exc}) — refusing to submit blind"
     if not clock.get("is_open"):
         return "US market is closed — confirm during 09:30–16:00 ET"
@@ -668,16 +680,19 @@ def _execute_ff(
         created = created.replace(tzinfo=UTC)
     created_et = created.astimezone(eastern)
     if created_et.date() != now_et.date():
-        store.mark(proposal_id, "expired",
-                   note=f"stale FF candidate (built {created_et.date()} ET)",
-                   decided_by=decided_by)
-        return {"ok": False,
-                "error": f"proposal #{proposal_id} is stale (built {created_et.date()} ET) — wait for today's 13:45 ET batch"}
+        store.mark(
+            proposal_id,
+            "expired",
+            note=f"stale FF candidate (built {created_et.date()} ET)",
+            decided_by=decided_by,
+        )
+        return {
+            "ok": False,
+            "error": f"proposal #{proposal_id} is stale (built {created_et.date()} ET) — wait for today's 13:45 ET batch",
+        }
     if now_et.time() >= FF_WINDOW_END_ET:
-        store.mark(proposal_id, "expired", note="ladder window closed",
-                   decided_by=decided_by)
-        return {"ok": False,
-                "error": "ladder window (14:00–15:45 ET) has closed for today"}
+        store.mark(proposal_id, "expired", note="ladder window closed", decided_by=decided_by)
+        return {"ok": False, "error": "ladder window (14:00–15:45 ET) has closed for today"}
 
     if ff_runner is None:
         from earnings_edge.fwd_factor_ladder import LadderRunner
@@ -689,12 +704,11 @@ def _execute_ff(
         reason = events[-1] if events else "arm refused"
         store.mark(proposal_id, "error", note=reason, decided_by=decided_by)
         return {"ok": False, "error": reason}
-    store.mark(proposal_id, "executed",
-               order_json={"ladder_id": lid, "status": "armed"},
-               decided_by=decided_by)
+    store.mark(
+        proposal_id, "executed", order_json={"ladder_id": lid, "status": "armed"}, decided_by=decided_by
+    )
     logger.info("proposal %d armed FF ladder %d (%s)", proposal_id, lid, trade.ticker)
-    return {"ok": True, "ladder_id": lid, "status": "armed",
-            "order_id": f"ff-ladder-{lid}"}
+    return {"ok": True, "ladder_id": lid, "status": "armed", "order_id": f"ff-ladder-{lid}"}
 
 
 def execute_proposal(
@@ -729,12 +743,16 @@ def execute_proposal(
         # FF cards carry their own freshness guards (same ET day + 14:00–15:45
         # arming window) inside _execute_ff; the generic session TTL does not
         # apply — a card built at the 13:45 batch is confirmed within minutes.
-        return _execute_ff(store, proposal_id, trade, row,
-                           decided_by=decided_by, ff_runner=ff_runner, now=now_utc)
+        return _execute_ff(
+            store, proposal_id, trade, row, decided_by=decided_by, ff_runner=ff_runner, now=now_utc
+        )
     age = now_utc - created
     if age > timedelta(hours=PROPOSAL_TTL_HOURS):
         store.mark(proposal_id, "expired", note=f"age {age}", decided_by=decided_by)
-        return {"ok": False, "error": f"proposal #{proposal_id} expired ({age.total_seconds() / 3600:.1f}h old)"}
+        return {
+            "ok": False,
+            "error": f"proposal #{proposal_id} expired ({age.total_seconds() / 3600:.1f}h old)",
+        }
 
     if bridge is None:
         # Production path (no injected bridge): never submit when the US
@@ -750,6 +768,7 @@ def execute_proposal(
         from framework.core.registry import get_registry
         from framework.execution.lifecycle import LifecycleManager
         from framework.risk.manager import RiskManager
+
         if store._db_path:
             configure(store._db_path)
         try:
@@ -758,16 +777,18 @@ def execute_proposal(
             sizer_resolver = registry.sizer_spec
         except Exception as exc:
             # exc-policy: keep broad, ensure visibility
-            record_event('silent_failure', f'trade_approval: {exc}')
-            logger.error('trade_approval broad exception', exc_info=True)
+            record_event("silent_failure", f"trade_approval: {exc}")
+            logger.error("trade_approval broad exception", exc_info=True)
             resolver = None
             sizer_resolver = None
         from earnings_edge.alpaca_bridge import (
             LIVE_FILL_POLL_ATTEMPTS,
             LIVE_FILL_POLL_SECS,
         )
+
         bridge = StrategyBridge(
-            client=create_client(), config=BridgeConfig(),
+            client=create_client(),
+            config=BridgeConfig(),
             risk_manager=RiskManager(),
             lifecycle_manager=LifecycleManager(),
             limits_resolver=resolver,
@@ -780,7 +801,9 @@ def execute_proposal(
     if result is None:
         reasons = dict(bridge.skip_reasons)
         detail = getattr(bridge, "last_skip_detail", "") or ""
-        store.mark(proposal_id, "error", note=f"bridge skip: {reasons} {detail}".strip(), decided_by=decided_by)
+        store.mark(
+            proposal_id, "error", note=f"bridge skip: {reasons} {detail}".strip(), decided_by=decided_by
+        )
         return {
             "ok": False,
             "error": f"skipped at execution: {reasons or 'bridge rejected'}",
@@ -803,10 +826,13 @@ def execute_proposal(
     # Track legs as managed positions (reconcile + guards read these).
     try:
         from framework.positions.exits import CREDIT_SIDES
+
         store._ensure_engine()
         managed_positions_open(
-            result.legs, trade.strategy,
-            group_id=result.order_id, order_id=result.order_id,
+            result.legs,
+            trade.strategy,
+            group_id=result.order_id,
+            order_id=result.order_id,
             entry_price=trade.entry_price or None,
             exit_by=result.exit_by,
             metadata={
@@ -817,8 +843,8 @@ def execute_proposal(
         )
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
-        record_event('silent_failure', f'trade_approval: {exc}')
-        logger.error('trade_approval broad exception', exc_info=True)
+        record_event("silent_failure", f"trade_approval: {exc}")
+        logger.error("trade_approval broad exception", exc_info=True)
         logger.warning("managed-position record failed (non-fatal): %s", exc)
     return {"ok": True, **order}
 

@@ -50,8 +50,11 @@ async def equity_snapshot_job(bot) -> dict | None:
         return None  # run_job already logged
     if stats.get("halted"):
         from framework.alerts import DEDUPER
-        DEDUPER.emit("daily_loss", "🛑 DAILY LOSS LIMIT BREACHED — kill switch tripped. "
-                     "No orders will submit until /resume.")
+
+        DEDUPER.emit(
+            "daily_loss",
+            "🛑 DAILY LOSS LIMIT BREACHED — kill switch tripped. No orders will submit until /resume.",
+        )
     await bot._flush_alerts()
     return stats
 
@@ -93,8 +96,10 @@ async def guard_eval_job(bot) -> None:
                 continue  # only short legs can be assigned
             try:
                 leg = LegView(
-                    symbol=pos["symbol"], side="sell",
-                    option_type=meta["option_type"], strike=float(meta["strike"]),
+                    symbol=pos["symbol"],
+                    side="sell",
+                    option_type=meta["option_type"],
+                    strike=float(meta["strike"]),
                     expiry=datetime.strptime(meta["expiry"], "%Y-%m-%d").date(),
                 )
             except (KeyError, ValueError):
@@ -111,9 +116,12 @@ async def guard_eval_job(bot) -> None:
             # near-expiry ITM check is the v1 guard.
             flags.extend(check_assignment_risk([leg], spots[und]))
         from earnings_edge.db import trade_events_insert
+
         for f in flags:
             trade_events_insert(
-                "guard_flag", symbol=f.symbol, qty=1,
+                "guard_flag",
+                symbol=f.symbol,
+                qty=1,
                 detail=f"{f.reason} dte={f.dte}",
             )
         return {"flags": len(flags), "symbols": [f.symbol for f in flags]}
@@ -125,8 +133,8 @@ async def guard_eval_job(bot) -> None:
     if stats and stats.get("flags"):
         syms = ", ".join(stats["symbols"][:5])
         await bot._push_risk_alert(
-            f"⚠️ Assignment risk on {stats['flags']} short leg(s): {syms}. "
-            f"Review exits before expiry.")
+            f"⚠️ Assignment risk on {stats['flags']} short leg(s): {syms}. Review exits before expiry."
+        )
 
 
 async def exit_eval_job(bot) -> None:
@@ -223,6 +231,7 @@ async def chain_cache_job(bot) -> None:
         if not clock.get("is_open"):
             return {"skipped": "market closed"}
         from earnings_edge.chain_cache import HOURLY_MAX_TICKERS, run_hourly
+
         return run_hourly(max_tickers=HOURLY_MAX_TICKERS)
 
     try:
@@ -239,29 +248,37 @@ async def picks_pipeline_job(bot) -> None:
 
     def work():
         import subprocess
+
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         py = sys.executable
         chain = subprocess.run(
             [py, "scripts/collect_options_snapshot.py", "--max-tickers", "250"],
-            cwd=root, capture_output=True, text=True, timeout=1800)
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=1800,
+        )
         sig = subprocess.run(
             [py, "scripts/collect_daily_signals.py", "--max-tickers", "60"],
-            cwd=root, capture_output=True, text=True, timeout=1800)
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=1800,
+        )
         if chain.returncode != 0:
             raise RuntimeError(f"chain collection failed: {chain.stderr[-300:]}")
         if sig.returncode != 0:
             raise RuntimeError(f"signals collection failed: {sig.stderr[-300:]}")
 
         from earnings_edge.picks import generate_picks
+
         latest = snapshots_max_scan_date()
         if not latest:
             return {"picks_written": 0, "counts": {}, "note": "no snapshots"}
         as_of = datetime.fromisoformat(str(latest)[:10]).date()
         picks = generate_picks(as_of)
         n = persist_picks(picks, as_of)
-        return {"picks_written": n,
-                "counts": {k: len(v) for k, v in picks.items()},
-                "as_of": str(as_of)}
+        return {"picks_written": n, "counts": {k: len(v) for k, v in picks.items()}, "as_of": str(as_of)}
 
     try:
         result = await asyncio.to_thread(lambda: run_job("daily_picks", work))
@@ -272,8 +289,10 @@ async def picks_pipeline_job(bot) -> None:
     counts = (result or {}).get("counts") or {}
     as_of = (result or {}).get("as_of", "?")
     breakdown = ", ".join(f"{k}: {v}" for k, v in counts.items()) or "none"
-    text = (f"🎯 Daily picks refreshed ({as_of}) — {sum(counts.values())} picks "
-            f"persisted ({breakdown}). Tap 🎯 Picks to browse.")
+    text = (
+        f"🎯 Daily picks refreshed ({as_of}) — {sum(counts.values())} picks "
+        f"persisted ({breakdown}). Tap 🎯 Picks to browse."
+    )
     for uid in bot._approval_chats():
         try:
             await bot.application.bot.send_message(chat_id=uid, text=text)

@@ -15,9 +15,10 @@ from dataclasses import dataclass
 class SizeContext:
     """Inputs a sizer may use. All dollar values are per-contract totals
     (i.e. premium x multiplier already applied)."""
+
     equity: float
     buying_power: float
-    price_per_unit: float            # debit paid (or credit received) per contract
+    price_per_unit: float  # debit paid (or credit received) per contract
     max_loss_per_unit: float | None = None  # defined-risk trades; None = price
 
 

@@ -58,8 +58,12 @@ logger = get_logger("collect_daily_signals")
 
 def _parse_args():
     p = argparse.ArgumentParser(description="Daily signals collector")
-    p.add_argument("--tickers", nargs="*", default=[],
-                   help="Universe; default = tickers from the latest snapshot scan_date.")
+    p.add_argument(
+        "--tickers",
+        nargs="*",
+        default=[],
+        help="Universe; default = tickers from the latest snapshot scan_date.",
+    )
     p.add_argument("--max-tickers", type=int, default=100)
     p.add_argument("--as-of", default=date.today().isoformat())
     p.add_argument("--benchmark", default="SPY")
@@ -86,6 +90,7 @@ def main() -> int:
     poly = None
     if os.environ.get("POLYGON_API_KEY"):
         from earnings_edge.collectors.polygon import PolygonClient
+
         poly = PolygonClient()
     else:
         logger.warning("POLYGON_API_KEY not set — momentum signals will be null")
@@ -115,23 +120,25 @@ def main() -> int:
             chain = enrich_chain_with_bs(chain, spot=spot, r=args.rate, as_of=args.as_of)
         sig = compute_chain_signals(chain, as_of=args.as_of)
 
-        iv_pctl = compute_iv_percentile(
-            daily_signals_history(ticker, "atm_iv", args.as_of), sig["atm_iv"])
+        iv_pctl = compute_iv_percentile(daily_signals_history(ticker, "atm_iv", args.as_of), sig["atm_iv"])
         skew_z, skew_mean = compute_zscore(
-            daily_signals_history(ticker, "skew_25d", args.as_of), sig["skew_25d"])
+            daily_signals_history(ticker, "skew_25d", args.as_of), sig["skew_25d"]
+        )
 
-        rows.append({
-            "ticker": ticker,
-            "signal_date": args.as_of,
-            "option_volume": sig["option_volume"],
-            "atm_iv": sig["atm_iv"],
-            "skew_25d": sig["skew_25d"],
-            "skew_zscore": skew_z,
-            "skew_mean": skew_mean,
-            "iv_pctl_1y": iv_pctl,
-            "ts_momentum": mom,
-            "relative_momentum": relative_momentum(mom, bench_mom),
-        })
+        rows.append(
+            {
+                "ticker": ticker,
+                "signal_date": args.as_of,
+                "option_volume": sig["option_volume"],
+                "atm_iv": sig["atm_iv"],
+                "skew_25d": sig["skew_25d"],
+                "skew_zscore": skew_z,
+                "skew_mean": skew_mean,
+                "iv_pctl_1y": iv_pctl,
+                "ts_momentum": mom,
+                "relative_momentum": relative_momentum(mom, bench_mom),
+            }
+        )
 
     if args.dry_run:
         for r in rows:

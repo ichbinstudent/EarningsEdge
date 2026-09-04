@@ -114,7 +114,8 @@ class LiveCalendarCandidateCollectionTests(unittest.TestCase):
     def test_insert_live_calendar_candidate_creates_table_and_persists_quote_score_and_features(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_engine.configure(Path(tmp) / "earnings_ml.db")
-            row_id = insert_live_calendar_candidate({
+            row_id = insert_live_calendar_candidate(
+                {
                     "scan_timestamp": "2026-05-26T15:00:00Z",
                     "ticker": "KSS",
                     "earnings_date": "2026-05-26",
@@ -139,10 +140,14 @@ class LiveCalendarCandidateCollectionTests(unittest.TestCase):
             )
 
             with db_engine.get_session() as s:
-                stored = s.execute(
-                    text("SELECT * FROM live_calendar_candidates WHERE id = :id"),
-                    {"id": row_id},
-                ).mappings().first()
+                stored = (
+                    s.execute(
+                        text("SELECT * FROM live_calendar_candidates WHERE id = :id"),
+                        {"id": row_id},
+                    )
+                    .mappings()
+                    .first()
+                )
             self.assertEqual(stored["ticker"], "KSS")
             self.assertEqual(stored["far_expiry"], "2026-06-26")
             self.assertEqual(stored["net_debit"], 0.80)
@@ -153,7 +158,9 @@ class LiveCalendarCandidateCollectionTests(unittest.TestCase):
     def test_bot_scan_persists_all_candidates_not_only_displayed_winners(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "earnings_ml.db"
-            scanner = EarningsCalendarScanner(model_path=Path("missing.joblib"), model_threshold=0.20, db_path=db_path)
+            scanner = EarningsCalendarScanner(
+                model_path=Path("missing.joblib"), model_threshold=0.20, db_path=db_path
+            )
             scanner._scanner = FakeScanner()
             scanner._calendar_model = {
                 "pipeline": FixedRegressionPipeline(),
@@ -177,7 +184,9 @@ class LiveCalendarCandidateCollectionTests(unittest.TestCase):
     def test_bot_scan_stores_all_scanner_output_rows_including_near_misses(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "earnings_ml.db"
-            scanner = EarningsCalendarScanner(model_path=Path("missing.joblib"), model_threshold=0.20, db_path=db_path)
+            scanner = EarningsCalendarScanner(
+                model_path=Path("missing.joblib"), model_threshold=0.20, db_path=db_path
+            )
             scanner._scanner = FakeScanner()
             scanner._calendar_model = {
                 "pipeline": FixedRegressionPipeline(),

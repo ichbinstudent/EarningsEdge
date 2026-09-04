@@ -18,42 +18,58 @@ def conn(tmp_path):
 
 # ── Data catalog -------------------------------------------------------------
 
+
 def test_catalog_pit_query_respects_decision_time(conn):
-    record("options_chain", "AAPL", "2026-07-20", source="alpaca",
-           available_at="2026-07-20T20:00:00+00:00")
-    record("options_chain", "AAPL", "2026-07-21", source="alpaca",
-           available_at="2026-07-21T20:00:00+00:00")
+    record("options_chain", "AAPL", "2026-07-20", source="alpaca", available_at="2026-07-20T20:00:00+00:00")
+    record("options_chain", "AAPL", "2026-07-21", source="alpaca", available_at="2026-07-21T20:00:00+00:00")
     # Decision made midday Jul 21: only the Jul-20 dataset was available yet
-    assert available_as_of("options_chain", "2026-07-21T13:00:00+00:00",
-                           symbol="AAPL") == ["2026-07-20"]
-    assert available_as_of("options_chain", "2026-07-22T13:00:00+00:00",
-                           symbol="AAPL") == ["2026-07-20", "2026-07-21"]
+    assert available_as_of("options_chain", "2026-07-21T13:00:00+00:00", symbol="AAPL") == ["2026-07-20"]
+    assert available_as_of("options_chain", "2026-07-22T13:00:00+00:00", symbol="AAPL") == [
+        "2026-07-20",
+        "2026-07-21",
+    ]
 
 
 def test_catalog_pit_only_excludes_unsafe_sources(conn):
-    record("chain_snapshot", "AAPL", "2026-07-20", source="lse",
-           available_at="2026-07-20T21:00:00+00:00", pit_safe=False)
-    record("chain_snapshot", "AAPL", "2026-07-20", source="polygon",
-           available_at="2026-07-20T21:00:00+00:00", pit_safe=True)
-    assert available_as_of("chain_snapshot", "2026-07-21T00:00:00+00:00",
-                           symbol="AAPL", pit_only=True) == ["2026-07-20"]
-    rows = available_as_of("chain_snapshot", "2026-07-21T00:00:00+00:00",
-                           symbol="AAPL", pit_only=False)
+    record(
+        "chain_snapshot",
+        "AAPL",
+        "2026-07-20",
+        source="lse",
+        available_at="2026-07-20T21:00:00+00:00",
+        pit_safe=False,
+    )
+    record(
+        "chain_snapshot",
+        "AAPL",
+        "2026-07-20",
+        source="polygon",
+        available_at="2026-07-20T21:00:00+00:00",
+        pit_safe=True,
+    )
+    assert available_as_of("chain_snapshot", "2026-07-21T00:00:00+00:00", symbol="AAPL", pit_only=True) == [
+        "2026-07-20"
+    ]
+    rows = available_as_of("chain_snapshot", "2026-07-21T00:00:00+00:00", symbol="AAPL", pit_only=False)
     assert rows == ["2026-07-20"]  # distinct as_of dates
 
 
 def test_catalog_range_and_freshness(conn):
     for d in ("2026-07-20", "2026-07-21", "2026-07-22"):
-        record("daily_bars", "MSFT", d, source="lse",
-               available_at=d + "T21:00:00+00:00")
-    assert available_as_of("daily_bars", "2026-07-23T00:00:00+00:00",
-                           symbol="MSFT", as_of_start="2026-07-21",
-                           as_of_end="2026-07-21") == ["2026-07-21"]
+        record("daily_bars", "MSFT", d, source="lse", available_at=d + "T21:00:00+00:00")
+    assert available_as_of(
+        "daily_bars",
+        "2026-07-23T00:00:00+00:00",
+        symbol="MSFT",
+        as_of_start="2026-07-21",
+        as_of_end="2026-07-21",
+    ) == ["2026-07-21"]
     latest = latest_availability("daily_bars", "MSFT")
     assert latest["as_of_date"] == "2026-07-22" and latest["source"] == "lse"
 
 
 # ── Model registry -----------------------------------------------------------
+
 
 def test_model_registry_register_promote_active(conn, tmp_path):
     m1 = tmp_path / "m1.joblib"
@@ -80,6 +96,7 @@ def test_model_registry_empty(conn):
 
 
 # ── Job runs -----------------------------------------------------------------
+
 
 def test_run_job_records_success(conn):
     result = run_job("test_job", lambda: 42, stats={"n": 1})

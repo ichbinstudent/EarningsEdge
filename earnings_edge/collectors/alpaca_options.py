@@ -8,6 +8,7 @@ Wraps the endpoints the user's paper account actually confirmed working:
 
 Both are free on the Developer/paper tier (no monthly subscription).
 """
+
 from __future__ import annotations
 
 import logging
@@ -34,9 +35,7 @@ class AlpacaOptionsClient:
         self.timeout = timeout
         self.max_retries = max_retries
         self.session = requests.Session()
-        self.session.headers.update(
-            {"APCA-API-KEY-ID": api_key, "APCA-API-SECRET-KEY": api_secret}
-        )
+        self.session.headers.update({"APCA-API-KEY-ID": api_key, "APCA-API-SECRET-KEY": api_secret})
 
     def bars(
         self,
@@ -114,7 +113,9 @@ class AlpacaOptionsClient:
                 r.raise_for_status()
                 return r.json()
             except Exception as exc:
-                logger.warning("Alpaca GET %s failed (attempt %d/%d): %s", path, attempt + 1, self.max_retries, exc)
+                logger.warning(
+                    "Alpaca GET %s failed (attempt %d/%d): %s", path, attempt + 1, self.max_retries, exc
+                )
                 if attempt + 1 < self.max_retries:
                     time.sleep(5 * (attempt + 1))
         return None

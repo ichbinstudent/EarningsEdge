@@ -51,14 +51,16 @@ def test_collector_merges_sources_and_persists(collector, monkeypatch, tmp_db_pa
     from earnings_edge.db import insert_snapshot
 
     monkeypatch.setattr(
-        collector, "_investing_fetch",
+        collector,
+        "_investing_fetch",
         lambda d: [
             _candidate("AAPL", timing="Post Market", source="investing"),
             _candidate("MSFT", timing="Unknown", source="investing"),
         ],
     )
     monkeypatch.setattr(
-        collector, "_finnhub_fetch",
+        collector,
+        "_finnhub_fetch",
         lambda d: [
             _candidate("MSFT", timing="Pre Market", source="finnhub"),
             _candidate("TSLA", timing="Post Market", source="finnhub"),
@@ -76,18 +78,18 @@ def test_collector_merges_sources_and_persists(collector, monkeypatch, tmp_db_pa
     for c in merged:
         insert_snapshot(_snapshot_row(c.ticker, c.timing))
     with db_engine.get_session() as s:
-        rows = s.execute(
-            text("SELECT ticker, timing, data_source FROM snapshots ORDER BY ticker")
-        ).mappings().all()
+        rows = (
+            s.execute(text("SELECT ticker, timing, data_source FROM snapshots ORDER BY ticker"))
+            .mappings()
+            .all()
+        )
 
     assert [r["ticker"] for r in rows] == ["AAPL", "MSFT", "TSLA"]
     assert all(r["data_source"] == "integration_fixture" for r in rows)
     assert dict((r["ticker"], r["timing"]) for r in rows)["MSFT"] == "Pre Market"
 
 
-def test_collector_fallback_and_duplicate_insert_ignored(
-    collector, monkeypatch, tmp_db_path
-):
+def test_collector_fallback_and_duplicate_insert_ignored(collector, monkeypatch, tmp_db_path):
     """investing.com failure falls back to finnhub; re-persisting the same
     scan is a silent no-op via the (ticker, earnings_date, scan_date, timing,
     data_source) unique index."""
@@ -101,7 +103,8 @@ def test_collector_fallback_and_duplicate_insert_ignored(
 
     monkeypatch.setattr(collector, "_investing_fetch", _boom)
     monkeypatch.setattr(
-        collector, "_finnhub_fetch",
+        collector,
+        "_finnhub_fetch",
         lambda d: [_candidate("NVDA", timing="Post Market", source="finnhub")],
     )
 

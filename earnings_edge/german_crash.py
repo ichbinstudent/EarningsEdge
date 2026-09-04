@@ -350,9 +350,18 @@ def quote_from_lseg(
     trade_ts = parse_trade_ts(raw.get("q._TRADE_DATE"), raw.get("q._TRDTIM_1"), captured_at)
     name = str(raw.get("q._DSPLY_NAME") or "").strip()
     return validate_quote(
-        ticker=ticker, venue=venue, last=last, bid=bid, ask=ask,
-        ts=captured_at, now=captured_at, cfg=cfg, ric=ric, name=name,
-        source="lseg", trade_ts=trade_ts,
+        ticker=ticker,
+        venue=venue,
+        last=last,
+        bid=bid,
+        ask=ask,
+        ts=captured_at,
+        now=captured_at,
+        cfg=cfg,
+        ric=ric,
+        name=name,
+        source="lseg",
+        trade_ts=trade_ts,
     )
 
 
@@ -373,8 +382,17 @@ def quote_from_tradegate(
         ts = datetime.fromtimestamp(unix_ts, tz=UTC)
     name = str(raw.get("name") or "").strip()
     return validate_quote(
-        ticker=isin, venue="Tradegate", last=last, bid=bid, ask=ask,
-        ts=ts, now=captured_at, cfg=cfg, ric=isin, name=name, source="tradegate",
+        ticker=isin,
+        venue="Tradegate",
+        last=last,
+        bid=bid,
+        ask=ask,
+        ts=ts,
+        now=captured_at,
+        cfg=cfg,
+        ric=isin,
+        name=name,
+        source="tradegate",
     )
 
 
@@ -398,10 +416,18 @@ class CrashDetector:
                 continue
             key = (q.ticker, q.venue)
             buf = self._windows[key]
-            buf.append(_Sample(
-                ts=q.ts, price=q.price, bid=q.bid, ask=q.ask, last=q.last,
-                name=q.name, ric=q.ric, source=q.source,
-            ))
+            buf.append(
+                _Sample(
+                    ts=q.ts,
+                    price=q.price,
+                    bid=q.bid,
+                    ask=q.ask,
+                    last=q.last,
+                    name=q.name,
+                    ric=q.ric,
+                    source=q.source,
+                )
+            )
             while buf and buf[0].ts < cutoff:
                 buf.popleft()
             if len(buf) < 2:
@@ -414,21 +440,23 @@ class CrashDetector:
                 continue
             drop = (high - last_px) / high
             if drop > self.cfg.threshold:
-                alerts.append(CrashAlert(
-                    ticker=q.ticker,
-                    venue=q.venue,
-                    drop_pct=drop,
-                    high=high,
-                    last=last_px,
-                    window_secs=self.cfg.window_secs,
-                    ts=now,
-                    bid=last_s.bid,
-                    ask=last_s.ask,
-                    name=last_s.name,
-                    ric=last_s.ric,
-                    high_ts=high_s.ts,
-                    source=last_s.source,
-                ))
+                alerts.append(
+                    CrashAlert(
+                        ticker=q.ticker,
+                        venue=q.venue,
+                        drop_pct=drop,
+                        high=high,
+                        last=last_px,
+                        window_secs=self.cfg.window_secs,
+                        ts=now,
+                        bid=last_s.bid,
+                        ask=last_s.ask,
+                        name=last_s.name,
+                        ric=last_s.ric,
+                        high_ts=high_s.ts,
+                        source=last_s.source,
+                    )
+                )
         return alerts
 
 
@@ -527,9 +555,7 @@ def format_alert(alert: CrashAlert) -> str:
 def in_open_snapshot_window(now: datetime) -> bool:
     """True during 07:30–08:00 Europe/Berlin (original Gettex capture slot)."""
     local = _aware(now).astimezone(BERLIN).time()
-    return (local.hour == 7 and local.minute >= 30) or (
-        local.hour == 8 and local.minute == 0
-    )
+    return (local.hour == 7 and local.minute >= 30) or (local.hour == 8 and local.minute == 0)
 
 
 def in_crash_poll_window(now: datetime) -> bool:
@@ -564,6 +590,7 @@ class CrashMonitor:
 
     def _full_refresh_due(self, full_every_secs: float = 900.0) -> bool:
         import time
+
         now = time.monotonic()
         if not self._watch_rics or (now - self._last_full_mono) >= full_every_secs:
             self._last_full_mono = now
@@ -595,9 +622,7 @@ class CrashMonitor:
                     if q:
                         valid.append(q)
                 fetched_rics = {
-                    str(row.get("q.RIC") or "").strip()
-                    for row in raw_lseg
-                    if isinstance(row, dict)
+                    str(row.get("q.RIC") or "").strip() for row in raw_lseg if isinstance(row, dict)
                 }
                 fetched_rics.discard("")
                 if fetched_rics:

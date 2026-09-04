@@ -1,4 +1,5 @@
 """Telegram Mini App: initData HMAC, operator gate, desk actions."""
+
 from __future__ import annotations
 
 import json
@@ -60,9 +61,7 @@ def test_quoted_token_and_chat_id_operator():
         },
         TOKEN,
     )
-    assert require_operator(
-        chat_raw, TOKEN, env={"TELEGRAM_APPROVAL_CHAT_ID": str(OP)}, now=NOW
-    ) == 1
+    assert require_operator(chat_raw, TOKEN, env={"TELEGRAM_APPROVAL_CHAT_ID": str(OP)}, now=NOW) == 1
 
 
 def test_require_operator_fail_closed(monkeypatch):
@@ -80,6 +79,7 @@ def test_load_desk_readonly_does_not_write(tmp_path, monkeypatch):
     path = tmp_path / "ro.db"
     configure(path)
     from earnings_edge.db import risk_state_get
+
     risk_state_get(ensure=True)
     monkeypatch.setenv("DASH_DB", str(path))
     snap = load_desk(get_positions=lambda: [])
@@ -90,10 +90,16 @@ def test_desk_snapshot_and_adopt(tmp_path, monkeypatch):
     path = tmp_path / "d.db"
     configure(path)
     monkeypatch.setenv("DASH_DB", str(path))
-    broker = [{
-        "symbol": "ATLO260918C00030000", "qty": "-1", "side": "short",
-        "avg_entry_price": "1", "current_price": "4", "unrealized_pl": "-300",
-    }]
+    broker = [
+        {
+            "symbol": "ATLO260918C00030000",
+            "qty": "-1",
+            "side": "short",
+            "avg_entry_price": "1",
+            "current_price": "4",
+            "unrealized_pl": "-300",
+        }
+    ]
     snap = load_desk(get_positions=lambda: broker)
     assert any(i["symbol"] == "ATLO260918C00030000" for i in snap["book"]["orphan"])
     assert snap["kill"]["halted"] is False
@@ -111,6 +117,7 @@ def test_run_desk_halt_and_unknown(tmp_path, monkeypatch):
     out = run_desk_action("halt", {}, by="webapp:1")
     assert out["ok"] and "Kill switch" in out["banner"]
     from framework.risk.killswitch import KillSwitch
+
     assert KillSwitch().is_halted()
     bad = run_desk_action("nope", {}, by="webapp:1")
     assert bad["ok"] is False
@@ -118,6 +125,7 @@ def test_run_desk_halt_and_unknown(tmp_path, monkeypatch):
 
 def test_action_endpoint_requires_init_data():
     from dashboard.server import app
+
     with TestClient(app) as client:
         r = client.post("/api/action", json={"op": "halt"})
         assert r.status_code == 403
@@ -127,6 +135,7 @@ def test_action_endpoint_requires_init_data():
 
 def test_action_halt_with_valid_init(tmp_path, monkeypatch):
     from dashboard import server as srv
+
     db = tmp_path / "act.db"
     configure(db)
     monkeypatch.setenv("DASH_DB", str(db))
@@ -155,6 +164,7 @@ def test_action_halt_with_valid_init(tmp_path, monkeypatch):
 
 def test_main_reply_kb_adds_webapp_row(monkeypatch):
     from bot import MAIN_KB, _main_reply_kb
+
     monkeypatch.delenv("TELEGRAM_WEBAPP_URL", raising=False)
     kb = _main_reply_kb()
     rows = [[b.text for b in row] for row in kb.keyboard]
@@ -167,5 +177,6 @@ def test_main_reply_kb_adds_webapp_row(monkeypatch):
     # launches without initData on several Telegram clients.
     assert getattr(kb2.keyboard[-1][0], "web_app", None) is None
     from bot import _desk_webapp_markup
+
     ikb = _desk_webapp_markup()
     assert ikb.inline_keyboard[0][0].web_app.url == "https://desk.example/"

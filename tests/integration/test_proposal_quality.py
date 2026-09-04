@@ -94,8 +94,7 @@ def _add_fill(db_path, group_id, near_symbol, far_symbol, entry_debit, qty=1.0):
     conn.close()
 
 
-def _add_outcome(db_path, ticker, earnings_date, expected=None, actual=None,
-                 direction=None):
+def _add_outcome(db_path, ticker, earnings_date, expected=None, actual=None, direction=None):
     import sqlite3
 
     conn = sqlite3.connect(str(db_path))
@@ -103,8 +102,7 @@ def _add_outcome(db_path, ticker, earnings_date, expected=None, actual=None,
         "INSERT INTO snapshots (ticker, earnings_date, scan_date, timing, "
         "expected_move_pct, actual_move_pct, actual_move_direction, data_source) "
         "VALUES (?,?,?,?,?,?,?, 'integration_fixture')",
-        (ticker, earnings_date, earnings_date, "Post Market",
-         expected, actual, direction),
+        (ticker, earnings_date, earnings_date, "Post Market", expected, actual, direction),
     )
     conn.commit()
     conn.close()
@@ -115,13 +113,11 @@ def test_join_produces_correct_aggregates(pq_db):
     entry debit are computed exactly."""
     _add_ladder(pq_db, "META", "2026-07-29", "filled", order_id="ord-meta")
     _add_fill(pq_db, "ord-meta", "META260828C00100000", "META260918C00100000", 10.20)
-    _add_outcome(pq_db, "META", "2026-07-29", expected=7.92, actual=-1.3144,
-                 direction="DOWN")
+    _add_outcome(pq_db, "META", "2026-07-29", expected=7.92, actual=-1.3144, direction="DOWN")
 
     # approved (armed) but never filled -> still approved, not executed
     _add_ladder(pq_db, "BA", "2026-07-28", "expired")
-    _add_outcome(pq_db, "BA", "2026-07-28", expected=5.36, actual=4.7565,
-                 direction="UP")
+    _add_outcome(pq_db, "BA", "2026-07-28", expected=5.36, actual=4.7565, direction="UP")
 
     report = pq.build_report(pq_db)
 
@@ -163,8 +159,7 @@ def test_timing_aware_event_move_pure_math():
 
     ed = date(2026, 7, 29)
     bars = []
-    for d, close in [(date(2026, 7, 28), 101.0), (ed, 102.0),
-                     (date(2026, 7, 30), 110.0)]:
+    for d, close in [(date(2026, 7, 28), 101.0), (ed, 102.0), (date(2026, 7, 30), 110.0)]:
         ts = int(datetime(d.year, d.month, d.day).timestamp() * 1000)
         bars.append({"t": ts, "c": close})
 
@@ -200,8 +195,7 @@ def test_empty_and_missing_outcomes_handled_gracefully(pq_db):
     # implied event move derived from candidate quotes
     _add_ladder(pq_db, "QQQ", "2026-07-29", "filled", order_id="ord-qqq")
     _add_fill(pq_db, "ord-qqq", "QQQ260828C00100000", "QQQ260918C00100000", 1.50)
-    _add_outcome(pq_db, "QQQ", "2026-07-29", expected=None, actual=0.5,
-                 direction="UP")
+    _add_outcome(pq_db, "QQQ", "2026-07-29", expected=None, actual=0.5, direction="UP")
 
     report = pq.build_report(pq_db)
     trades = {t["ticker"]: t for t in report["trades"]}

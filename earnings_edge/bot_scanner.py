@@ -135,6 +135,7 @@ def select_live_calendar_call_quote(
     try:
         if provider is None:
             from earnings_edge.market_data_provider import get_provider
+
             provider = get_provider()
         today = datetime.now().date()
         anchor = earnings_date or today
@@ -175,12 +176,22 @@ def select_live_calendar_call_quote(
         if net_debit <= 0:
             return None
         if not quote_is_sane(
-            near_bid, near_ask, far_bid, far_ask, net_debit, price,
+            near_bid,
+            near_ask,
+            far_bid,
+            far_ask,
+            net_debit,
+            price,
         ):
             logger.info(
-                "Rejecting insane calendar quote for %s: debit=%.2f spot=%.2f "
-                "near=%s/%s far=%s/%s",
-                ticker, net_debit, price, near_bid, near_ask, far_bid, far_ask,
+                "Rejecting insane calendar quote for %s: debit=%.2f spot=%.2f near=%s/%s far=%s/%s",
+                ticker,
+                net_debit,
+                price,
+                near_bid,
+                near_ask,
+                far_bid,
+                far_ask,
             )
             return None
         return LiveCalendarQuote(
@@ -245,7 +256,9 @@ def build_calendar_model_feature_row(
     if "net_debit" not in row or row["net_debit"] is None:
         far_entry = _safe_float(row.get("far_entry"))
         near_entry = _safe_float(row.get("near_entry"))
-        row["net_debit"] = far_entry - near_entry if far_entry is not None and near_entry is not None else None
+        row["net_debit"] = (
+            far_entry - near_entry if far_entry is not None and near_entry is not None else None
+        )
     return row
 
 
@@ -262,10 +275,7 @@ def format_model_prediction(score: CalendarModelScore, row: Mapping[str, Any]) -
         debit_text = f"debit ask ${debit_ask:.2f}, mid ${debit_mid:.2f}, bid ${debit_bid:.2f}"
     else:
         debit_text = f"debit ${debit:.2f}"
-    return (
-        f"• ML Exp Return: {score.probability:+.1%} → {decision} "
-        f"({debit_text}, strike ${strike:.2f})"
-    )
+    return f"• ML Exp Return: {score.probability:+.1%} → {decision} ({debit_text}, strike ${strike:.2f})"
 
 
 def load_calendar_model(path: Path) -> dict[str, Any] | None:
@@ -295,7 +305,9 @@ class EarningsCalendarScanner(BaseScanner):
         super().__init__("Earnings Calendar")
         self._scanner = EarningsScanner()
         self._db_path = db_path
-        configured_path = model_path or Path(os.environ.get("EARNINGS_CALENDAR_MODEL", DEFAULT_CALENDAR_MODEL))
+        configured_path = model_path or Path(
+            os.environ.get("EARNINGS_CALENDAR_MODEL", DEFAULT_CALENDAR_MODEL)
+        )
         self._model_path = configured_path
         self._model_threshold = (
             model_threshold
@@ -308,10 +320,10 @@ class EarningsCalendarScanner(BaseScanner):
             logger.exception("Failed to load calendar model")
             self._calendar_model = None
 
-
     def scan(self) -> dict[str, Any]:
         """Delegate to ScanService for clean separation of concerns."""
         from earnings_edge.services.scan_service import ScanService
+
         # forward the scanner's db_path — otherwise ScanService falls back to
         # the global default DB and test scans (injected tmp DB) still write
         # scan_runs/scanner_scan_outputs audit rows into production.
@@ -445,7 +457,11 @@ class EarningsCalendarScanner(BaseScanner):
             if self._db_path:
                 configure(self._db_path)
             row = self._build_enriched_row(
-                feature_row or {"ticker": report.ticker, "earnings_date": report.earnings_date.isoformat() if report.earnings_date else None},
+                feature_row
+                or {
+                    "ticker": report.ticker,
+                    "earnings_date": report.earnings_date.isoformat() if report.earnings_date else None,
+                },
                 scan_timestamp=scan_timestamp,
                 score=score,
                 rejection_reasons=rejection_reasons,
@@ -464,7 +480,7 @@ class EarningsCalendarScanner(BaseScanner):
         scan_timestamp: str,
         selected_by_bot: bool = True,
     ) -> tuple[str | None, float | None]:
-        selected_tickers = getattr(self, '_selected_tickers', set())
+        selected_tickers = getattr(self, "_selected_tickers", set())
         display_status = "displayed" if selected_by_bot else "not_displayed"
         if not report.metrics or report.metrics.price <= 0:
             # Still persist a scanner output row even when no price

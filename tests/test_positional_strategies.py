@@ -1,4 +1,5 @@
 """Tests for positional option strategies."""
+
 from __future__ import annotations
 
 from datetime import date
@@ -24,10 +25,18 @@ from earnings_edge.trading_types import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_snapshot(ticker: str, earnings_date: str, scan_date: str = "2025-01-01",
-                   price: float = 100.0, iv30_rv30: float = 1.3,
-                   expected_move_pct: float = 6.0, actual_move_pct: float = 4.0,
-                   direction: str = "UP", outcome_fetched: bool = True) -> dict:
+
+def _make_snapshot(
+    ticker: str,
+    earnings_date: str,
+    scan_date: str = "2025-01-01",
+    price: float = 100.0,
+    iv30_rv30: float = 1.3,
+    expected_move_pct: float = 6.0,
+    actual_move_pct: float = 4.0,
+    direction: str = "UP",
+    outcome_fetched: bool = True,
+) -> dict:
     return {
         "ticker": ticker,
         "earnings_date": earnings_date,
@@ -55,11 +64,15 @@ def _make_snapshot(ticker: str, earnings_date: str, scan_date: str = "2025-01-01
 # Test 1: registry has 5 positional strategies
 # ---------------------------------------------------------------------------
 
+
 def test_positional_registry():
     assert len(POSITIONAL_STRATEGIES) == 5
     expected = {
-        "short_straddle", "long_straddle",
-        "directional_call", "directional_put", "vol_risk_premium",
+        "short_straddle",
+        "long_straddle",
+        "directional_call",
+        "directional_put",
+        "vol_risk_premium",
     }
     assert set(POSITIONAL_STRATEGIES.keys()) == expected
 
@@ -68,17 +81,20 @@ def test_positional_registry():
 # Test 2: Short Straddle
 # ---------------------------------------------------------------------------
 
+
 def test_short_straddle_filter():
-    df = pd.DataFrame([
-        # IV/RV = 1.5 >= 1.2, expected_move = 8% >= 6% → PASS
-        _make_snapshot("A", "2025-01-10", iv30_rv30=1.5, expected_move_pct=8.0, actual_move_pct=4.0),
-        # IV/RV = 1.1 < 1.2 → FAIL
-        _make_snapshot("B", "2025-01-11", iv30_rv30=1.1, expected_move_pct=8.0, actual_move_pct=4.0),
-        # Expected move = 3% < 6% → FAIL
-        _make_snapshot("C", "2025-01-12", iv30_rv30=1.5, expected_move_pct=3.0, actual_move_pct=4.0),
-        # No outcome → FAIL
-        _make_snapshot("D", "2025-01-13", iv30_rv30=1.5, outcome_fetched=False),
-    ])
+    df = pd.DataFrame(
+        [
+            # IV/RV = 1.5 >= 1.2, expected_move = 8% >= 6% → PASS
+            _make_snapshot("A", "2025-01-10", iv30_rv30=1.5, expected_move_pct=8.0, actual_move_pct=4.0),
+            # IV/RV = 1.1 < 1.2 → FAIL
+            _make_snapshot("B", "2025-01-11", iv30_rv30=1.1, expected_move_pct=8.0, actual_move_pct=4.0),
+            # Expected move = 3% < 6% → FAIL
+            _make_snapshot("C", "2025-01-12", iv30_rv30=1.5, expected_move_pct=3.0, actual_move_pct=4.0),
+            # No outcome → FAIL
+            _make_snapshot("D", "2025-01-13", iv30_rv30=1.5, outcome_fetched=False),
+        ]
+    )
 
     data = DataBundle(
         snapshots=df,
@@ -117,15 +133,18 @@ def test_short_straddle_empty():
 # Test 3: Long Straddle
 # ---------------------------------------------------------------------------
 
+
 def test_long_straddle_filter():
-    df = pd.DataFrame([
-        # IV/RV = 0.9 <= 1.0, expected_move = 7% >= 4% → PASS (no model → still included)
-        _make_snapshot("A", "2025-01-10", iv30_rv30=0.9, expected_move_pct=7.0, actual_move_pct=10.0),
-        # IV/RV = 1.2 > 1.0 → FAIL
-        _make_snapshot("B", "2025-01-11", iv30_rv30=1.2, expected_move_pct=7.0, actual_move_pct=10.0),
-        # Expected move = 2% < 4% → FAIL
-        _make_snapshot("C", "2025-01-12", iv30_rv30=0.9, expected_move_pct=2.0, actual_move_pct=10.0),
-    ])
+    df = pd.DataFrame(
+        [
+            # IV/RV = 0.9 <= 1.0, expected_move = 7% >= 4% → PASS (no model → still included)
+            _make_snapshot("A", "2025-01-10", iv30_rv30=0.9, expected_move_pct=7.0, actual_move_pct=10.0),
+            # IV/RV = 1.2 > 1.0 → FAIL
+            _make_snapshot("B", "2025-01-11", iv30_rv30=1.2, expected_move_pct=7.0, actual_move_pct=10.0),
+            # Expected move = 2% < 4% → FAIL
+            _make_snapshot("C", "2025-01-12", iv30_rv30=0.9, expected_move_pct=2.0, actual_move_pct=10.0),
+        ]
+    )
 
     data = DataBundle(
         snapshots=df,
@@ -147,9 +166,11 @@ def test_long_straddle_filter():
 
 def test_long_straddle_pnl_sign():
     """Long straddle: PnL = |actual| - expected. Actual=10 > Expected=5 → positive PnL."""
-    df = pd.DataFrame([
-        _make_snapshot("A", "2025-01-10", iv30_rv30=0.9, expected_move_pct=5.0, actual_move_pct=10.0),
-    ])
+    df = pd.DataFrame(
+        [
+            _make_snapshot("A", "2025-01-10", iv30_rv30=0.9, expected_move_pct=5.0, actual_move_pct=10.0),
+        ]
+    )
 
     data = DataBundle(
         snapshots=df,
@@ -175,13 +196,16 @@ def test_long_straddle_pnl_sign():
 # Test 4: Directional Call
 # ---------------------------------------------------------------------------
 
+
 def test_directional_call():
     """DirectionalCall requires model direction=UP and magnitude >= threshold.
     Without models in test, nothing passes (model returns None → skip)."""
-    df = pd.DataFrame([
-        _make_snapshot("A", "2025-01-10", direction="UP", actual_move_pct=8.0, expected_move_pct=5.0),
-        _make_snapshot("B", "2025-01-11", direction="DOWN", actual_move_pct=-8.0, expected_move_pct=5.0),
-    ])
+    df = pd.DataFrame(
+        [
+            _make_snapshot("A", "2025-01-10", direction="UP", actual_move_pct=8.0, expected_move_pct=5.0),
+            _make_snapshot("B", "2025-01-11", direction="DOWN", actual_move_pct=-8.0, expected_move_pct=5.0),
+        ]
+    )
 
     data = DataBundle(
         snapshots=df,
@@ -197,9 +221,11 @@ def test_directional_call():
 
 
 def test_directional_put():
-    df = pd.DataFrame([
-        _make_snapshot("A", "2025-01-10", direction="DOWN", actual_move_pct=-8.0, expected_move_pct=5.0),
-    ])
+    df = pd.DataFrame(
+        [
+            _make_snapshot("A", "2025-01-10", direction="DOWN", actual_move_pct=-8.0, expected_move_pct=5.0),
+        ]
+    )
 
     data = DataBundle(
         snapshots=df,
@@ -217,15 +243,18 @@ def test_directional_put():
 # Test 5: Vol Risk Premium
 # ---------------------------------------------------------------------------
 
+
 def test_vol_risk_premium_filter():
-    df = pd.DataFrame([
-        # IV/RV = 1.5 >= 1.4, expected_move = 8% >= 6% → PASS
-        _make_snapshot("A", "2025-01-10", iv30_rv30=1.5, expected_move_pct=8.0, actual_move_pct=4.0),
-        # IV/RV = 1.2 < 1.4 → FAIL
-        _make_snapshot("B", "2025-01-11", iv30_rv30=1.2, expected_move_pct=8.0, actual_move_pct=4.0),
-        # Expected move = 4% < 6% → FAIL
-        _make_snapshot("C", "2025-01-12", iv30_rv30=1.5, expected_move_pct=4.0, actual_move_pct=4.0),
-    ])
+    df = pd.DataFrame(
+        [
+            # IV/RV = 1.5 >= 1.4, expected_move = 8% >= 6% → PASS
+            _make_snapshot("A", "2025-01-10", iv30_rv30=1.5, expected_move_pct=8.0, actual_move_pct=4.0),
+            # IV/RV = 1.2 < 1.4 → FAIL
+            _make_snapshot("B", "2025-01-11", iv30_rv30=1.2, expected_move_pct=8.0, actual_move_pct=4.0),
+            # Expected move = 4% < 6% → FAIL
+            _make_snapshot("C", "2025-01-12", iv30_rv30=1.5, expected_move_pct=4.0, actual_move_pct=4.0),
+        ]
+    )
 
     data = DataBundle(
         snapshots=df,
@@ -248,11 +277,14 @@ def test_vol_risk_premium_filter():
 # Test 6: Summary stats present
 # ---------------------------------------------------------------------------
 
+
 def test_short_straddle_summary():
-    df = pd.DataFrame([
-        _make_snapshot("A", "2025-01-10", iv30_rv30=1.5, expected_move_pct=8.0, actual_move_pct=4.0),
-        _make_snapshot("B", "2025-01-11", iv30_rv30=1.6, expected_move_pct=10.0, actual_move_pct=6.0),
-    ])
+    df = pd.DataFrame(
+        [
+            _make_snapshot("A", "2025-01-10", iv30_rv30=1.5, expected_move_pct=8.0, actual_move_pct=4.0),
+            _make_snapshot("B", "2025-01-11", iv30_rv30=1.6, expected_move_pct=10.0, actual_move_pct=6.0),
+        ]
+    )
 
     data = DataBundle(
         snapshots=df,
@@ -271,10 +303,13 @@ def test_short_straddle_summary():
 # Test 7: run_positional entry point
 # ---------------------------------------------------------------------------
 
+
 def test_run_positional():
-    df = pd.DataFrame([
-        _make_snapshot("A", "2025-01-10", iv30_rv30=1.5, expected_move_pct=8.0, actual_move_pct=4.0),
-    ])
+    df = pd.DataFrame(
+        [
+            _make_snapshot("A", "2025-01-10", iv30_rv30=1.5, expected_move_pct=8.0, actual_move_pct=4.0),
+        ]
+    )
 
     data = DataBundle(
         snapshots=df,
@@ -292,6 +327,7 @@ def test_run_positional():
 # ---------------------------------------------------------------------------
 # Test 8: Trade dataclass
 # ---------------------------------------------------------------------------
+
 
 def test_trade_is_winner():
     trade = Trade("A", date(2025, 1, 1), date(2025, 1, 1), "s", "LONG", 100.0, pnl=5.0)

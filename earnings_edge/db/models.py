@@ -15,13 +15,13 @@ class Base(DeclarativeBase):
 
 
 class AdoptedPosition(Base):
-    __tablename__ = 'adopted_positions'
+    __tablename__ = "adopted_positions"
     symbol: Mapped[str | None] = mapped_column(Text, primary_key=True)
     adopted_at: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class AlpacaPosition(Base):
-    __tablename__ = 'alpaca_positions'
+    __tablename__ = "alpaca_positions"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     ts: Mapped[str] = mapped_column(Text, nullable=False)
     symbol: Mapped[str | None] = mapped_column(Text)
@@ -32,12 +32,12 @@ class AlpacaPosition(Base):
     market_value: Mapped[float | None] = mapped_column(REAL)
     unrealized_pl: Mapped[float | None] = mapped_column(REAL)
     strategy: Mapped[str | None] = mapped_column(Text)
-    managed: Mapped[int | None] = mapped_column(Integer, server_default=text('0'))
+    managed: Mapped[int | None] = mapped_column(Integer, server_default=text("0"))
     run_id: Mapped[int | None] = mapped_column(Integer)
 
 
 class CalendarCallTrade(Base):
-    __tablename__ = 'calendar_call_trades'
+    __tablename__ = "calendar_call_trades"
     snapshot_id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     ticker: Mapped[str] = mapped_column(Text, nullable=False)
     earnings_date: Mapped[str] = mapped_column(Text, nullable=False)
@@ -55,7 +55,7 @@ class CalendarCallTrade(Base):
     exit_value: Mapped[float] = mapped_column(REAL, nullable=False)
     pnl_dollars: Mapped[float] = mapped_column(REAL, nullable=False)
     return_on_debit: Mapped[float | None] = mapped_column(REAL)
-    created_at: Mapped[str] = mapped_column(Text, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
+    created_at: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
     model_score: Mapped[float | None] = mapped_column(REAL)
     model_recommendation: Mapped[int | None] = mapped_column(Integer)
     model_reason: Mapped[str | None] = mapped_column(Text)
@@ -64,7 +64,7 @@ class CalendarCallTrade(Base):
 
 
 class DailySignal(Base):
-    __tablename__ = 'daily_signals'
+    __tablename__ = "daily_signals"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     ticker: Mapped[str] = mapped_column(Text, nullable=False)
     signal_date: Mapped[str] = mapped_column(Text, nullable=False)
@@ -80,19 +80,19 @@ class DailySignal(Base):
 
 
 class DataCatalog(Base):
-    __tablename__ = 'data_catalog'
+    __tablename__ = "data_catalog"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     dataset: Mapped[str] = mapped_column(Text, nullable=False)
     symbol: Mapped[str | None] = mapped_column(Text)
     as_of_date: Mapped[str | None] = mapped_column(Text)
     available_at: Mapped[str] = mapped_column(Text, nullable=False)
     source: Mapped[str] = mapped_column(Text, nullable=False)
-    pit_safe: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text('1'))
+    pit_safe: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
     ingested_at: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class EquitySnapshot(Base):
-    __tablename__ = 'equity_snapshots'
+    __tablename__ = "equity_snapshots"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     ts: Mapped[str] = mapped_column(Text, nullable=False)
     equity: Mapped[float | None] = mapped_column(REAL)
@@ -102,7 +102,7 @@ class EquitySnapshot(Base):
 
 
 class ExitProposal(Base):
-    __tablename__ = 'exit_proposals'
+    __tablename__ = "exit_proposals"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
     group_id: Mapped[str] = mapped_column(Text, nullable=False)
@@ -118,20 +118,20 @@ class ExitProposal(Base):
 
 
 class FfLadder(Base):
-    __tablename__ = 'ff_ladders'
+    __tablename__ = "ff_ladders"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     ticker: Mapped[str] = mapped_column(Text, nullable=False)
     candidate_json: Mapped[str] = mapped_column(Text, nullable=False)
     order_id: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'armed'"))
-    rung: Mapped[int | None] = mapped_column(Integer, server_default=text('0'))
+    rung: Mapped[int | None] = mapped_column(Integer, server_default=text("0"))
     armed_by: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[str | None] = mapped_column(Text, server_default=text("datetime('now')"))
     updated_at: Mapped[str | None] = mapped_column(Text, server_default=text("datetime('now')"))
 
 
 class FfSnapshot(Base):
-    __tablename__ = 'ff_snapshots'
+    __tablename__ = "ff_snapshots"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     ticker: Mapped[str] = mapped_column(Text, nullable=False)
     scan_date: Mapped[str] = mapped_column(Text, nullable=False)
@@ -162,11 +162,11 @@ class FfSnapshot(Base):
 
 
 class FfUniverseSnapshot(Base):
-    __tablename__ = 'ff_universe_snapshots'
+    __tablename__ = "ff_universe_snapshots"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     ticker: Mapped[str] = mapped_column(Text, nullable=False)
     scan_date: Mapped[str] = mapped_column(Text, nullable=False)
-    has_earnings_in_window: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text('0'))
+    has_earnings_in_window: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     earnings_date: Mapped[str | None] = mapped_column(Text)
     spot: Mapped[float | None] = mapped_column(REAL)
     t1_expiry: Mapped[str | None] = mapped_column(Text)
@@ -195,7 +195,7 @@ class FfUniverseSnapshot(Base):
 
 
 class JobRun(Base):
-    __tablename__ = 'job_runs'
+    __tablename__ = "job_runs"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     job_name: Mapped[str] = mapped_column(Text, nullable=False)
     started_at: Mapped[str] = mapped_column(Text, nullable=False)
@@ -206,7 +206,7 @@ class JobRun(Base):
 
 
 class LiveCalendarCandidate(Base):
-    __tablename__ = 'live_calendar_candidates'
+    __tablename__ = "live_calendar_candidates"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     scan_timestamp: Mapped[str] = mapped_column(Text, nullable=False)
     ticker: Mapped[str] = mapped_column(Text, nullable=False)
@@ -228,7 +228,7 @@ class LiveCalendarCandidate(Base):
     model_expected_return: Mapped[float | None] = mapped_column(REAL)
     model_decision: Mapped[str | None] = mapped_column(Text)
     model_rejection_reasons: Mapped[str | None] = mapped_column(Text)
-    selected_by_bot: Mapped[int | None] = mapped_column(Integer, server_default=text('0'))
+    selected_by_bot: Mapped[int | None] = mapped_column(Integer, server_default=text("0"))
     features_json: Mapped[str | None] = mapped_column(Text)
     exit_value: Mapped[float | None] = mapped_column(REAL)
     pnl_dollars: Mapped[float | None] = mapped_column(REAL)
@@ -236,7 +236,7 @@ class LiveCalendarCandidate(Base):
     outcome_fetched_at: Mapped[str | None] = mapped_column(Text)
     tier: Mapped[int | None] = mapped_column(Integer)
     passed: Mapped[int | None] = mapped_column(Integer)
-    near_miss: Mapped[int | None] = mapped_column(Integer, server_default=text('0'))
+    near_miss: Mapped[int | None] = mapped_column(Integer, server_default=text("0"))
     scanner_reason: Mapped[str | None] = mapped_column(Text)
     display_status: Mapped[str | None] = mapped_column(Text)
     volume: Mapped[float | None] = mapped_column(REAL)
@@ -266,11 +266,11 @@ class LiveCalendarCandidate(Base):
     actual_move_pct: Mapped[float | None] = mapped_column(REAL)
     actual_move_direction: Mapped[str | None] = mapped_column(Text)
     max_intraday_range_pct: Mapped[float | None] = mapped_column(REAL)
-    outcome_attempt_count: Mapped[int | None] = mapped_column(Integer, server_default=text('0'))
+    outcome_attempt_count: Mapped[int | None] = mapped_column(Integer, server_default=text("0"))
 
 
 class ManagedPosition(Base):
-    __tablename__ = 'managed_positions'
+    __tablename__ = "managed_positions"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     symbol: Mapped[str] = mapped_column(Text, nullable=False)
     strategy: Mapped[str] = mapped_column(Text, nullable=False)
@@ -282,12 +282,12 @@ class ManagedPosition(Base):
     order_id: Mapped[str | None] = mapped_column(Text)
     opened_at: Mapped[str] = mapped_column(Text, nullable=False)
     closed_at: Mapped[str | None] = mapped_column(Text)
-    metadata_: Mapped[str | None] = mapped_column('metadata', Text)
+    metadata_: Mapped[str | None] = mapped_column("metadata", Text)
     exit_by: Mapped[str | None] = mapped_column(Text)
 
 
 class ModelRegistry(Base):
-    __tablename__ = 'model_registry'
+    __tablename__ = "model_registry"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     path: Mapped[str] = mapped_column(Text, nullable=False)
@@ -297,7 +297,7 @@ class ModelRegistry(Base):
 
 
 class OptionsChain(Base):
-    __tablename__ = 'options_chain'
+    __tablename__ = "options_chain"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     collector_run_id: Mapped[str | None] = mapped_column(Text)
     ticker: Mapped[str] = mapped_column(Text, nullable=False)
@@ -331,7 +331,7 @@ class OptionsChain(Base):
 
 
 class PendingTrade(Base):
-    __tablename__ = 'pending_trades'
+    __tablename__ = "pending_trades"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
     strategy: Mapped[str] = mapped_column(Text, nullable=False)
@@ -348,7 +348,7 @@ class PendingTrade(Base):
 
 
 class Pick(Base):
-    __tablename__ = 'picks'
+    __tablename__ = "picks"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     pick_date: Mapped[str] = mapped_column(Text, nullable=False)
     strategy: Mapped[str] = mapped_column(Text, nullable=False)
@@ -359,7 +359,7 @@ class Pick(Base):
 
 
 class ProposalFunnel(Base):
-    __tablename__ = 'proposal_funnel'
+    __tablename__ = "proposal_funnel"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
     strategies: Mapped[str] = mapped_column(Text, nullable=False)
@@ -368,7 +368,7 @@ class ProposalFunnel(Base):
 
 
 class RiskEvent(Base):
-    __tablename__ = 'risk_events'
+    __tablename__ = "risk_events"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     ts: Mapped[str] = mapped_column(Text, nullable=False)
     event_type: Mapped[str] = mapped_column(Text, nullable=False)
@@ -377,39 +377,39 @@ class RiskEvent(Base):
 
 
 class RiskState(Base):
-    __tablename__ = 'risk_state'
+    __tablename__ = "risk_state"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    halted: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text('0'))
+    halted: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     reason: Mapped[str | None] = mapped_column(Text)
     tripped_at: Mapped[str | None] = mapped_column(Text)
     tripped_by: Mapped[str | None] = mapped_column(Text)
 
 
 class ScanRun(Base):
-    __tablename__ = 'scan_runs'
+    __tablename__ = "scan_runs"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     scan_timestamp: Mapped[str] = mapped_column(Text, nullable=False)
     scanner_name: Mapped[str] = mapped_column(Text, nullable=False)
     trigger_type: Mapped[str] = mapped_column(Text, nullable=False)
-    candidate_count: Mapped[int | None] = mapped_column(Integer, server_default=text('0'))
-    tier1_count: Mapped[int | None] = mapped_column(Integer, server_default=text('0'))
-    tier2_count: Mapped[int | None] = mapped_column(Integer, server_default=text('0'))
-    take_count: Mapped[int | None] = mapped_column(Integer, server_default=text('0'))
+    candidate_count: Mapped[int | None] = mapped_column(Integer, server_default=text("0"))
+    tier1_count: Mapped[int | None] = mapped_column(Integer, server_default=text("0"))
+    tier2_count: Mapped[int | None] = mapped_column(Integer, server_default=text("0"))
+    take_count: Mapped[int | None] = mapped_column(Integer, server_default=text("0"))
     duration_secs: Mapped[float | None] = mapped_column(REAL)
-    success: Mapped[int | None] = mapped_column(Integer, server_default=text('0'))
+    success: Mapped[int | None] = mapped_column(Integer, server_default=text("0"))
     error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[str | None] = mapped_column(Text, server_default=text("datetime('now')"))
 
 
 class ScannerScanOutput(Base):
-    __tablename__ = 'scanner_scan_outputs'
+    __tablename__ = "scanner_scan_outputs"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     scan_timestamp: Mapped[str] = mapped_column(Text, nullable=False)
     ticker: Mapped[str] = mapped_column(Text, nullable=False)
     earnings_date: Mapped[str | None] = mapped_column(Text)
     tier: Mapped[int | None] = mapped_column(Integer)
     passed: Mapped[int | None] = mapped_column(Integer)
-    near_miss: Mapped[int | None] = mapped_column(Integer, server_default=text('0'))
+    near_miss: Mapped[int | None] = mapped_column(Integer, server_default=text("0"))
     scanner_reason: Mapped[str | None] = mapped_column(Text)
     display_status: Mapped[str | None] = mapped_column(Text)
     price: Mapped[float | None] = mapped_column(REAL)
@@ -439,7 +439,7 @@ class ScannerScanOutput(Base):
     model_expected_return: Mapped[float | None] = mapped_column(REAL)
     model_decision: Mapped[str | None] = mapped_column(Text)
     model_rejection_reasons: Mapped[str | None] = mapped_column(Text)
-    selected_by_bot: Mapped[int | None] = mapped_column(Integer, server_default=text('0'))
+    selected_by_bot: Mapped[int | None] = mapped_column(Integer, server_default=text("0"))
     features_json: Mapped[str | None] = mapped_column(Text)
     exit_value: Mapped[float | None] = mapped_column(REAL)
     pnl_dollars: Mapped[float | None] = mapped_column(REAL)
@@ -448,7 +448,7 @@ class ScannerScanOutput(Base):
 
 
 class Snapshot(Base):
-    __tablename__ = 'snapshots'
+    __tablename__ = "snapshots"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     ticker: Mapped[str] = mapped_column(Text, nullable=False)
     earnings_date: Mapped[str] = mapped_column(Text, nullable=False)
@@ -488,12 +488,12 @@ class Snapshot(Base):
     actual_move_direction: Mapped[str | None] = mapped_column(Text)
     max_intraday_range_pct: Mapped[float | None] = mapped_column(REAL)
     outcome_fetched_at: Mapped[str | None] = mapped_column(Text)
-    outcome_attempt_count: Mapped[int | None] = mapped_column(Integer, server_default=text('0'))
+    outcome_attempt_count: Mapped[int | None] = mapped_column(Integer, server_default=text("0"))
     data_source: Mapped[str | None] = mapped_column(Text, server_default=text('"unknown"'))
 
 
 class StrategyState(Base):
-    __tablename__ = 'strategy_state'
+    __tablename__ = "strategy_state"
     name: Mapped[str | None] = mapped_column(Text, primary_key=True)
     lifecycle: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'paper'"))
     updated_at: Mapped[str | None] = mapped_column(Text)
@@ -503,7 +503,7 @@ class StrategyState(Base):
 
 
 class TradeEvent(Base):
-    __tablename__ = 'trade_events'
+    __tablename__ = "trade_events"
     id: Mapped[int | None] = mapped_column(Integer, primary_key=True, autoincrement=True)
     ts: Mapped[str] = mapped_column(Text, nullable=False)
     event_type: Mapped[str] = mapped_column(Text, nullable=False)

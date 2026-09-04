@@ -7,9 +7,11 @@ from datetime import date
 
 # ── Earnings calendar ─────────────────────────────────────────────────
 
+
 @dataclass
 class EarningsCandidate:
     """A single ticker from the earnings calendar."""
+
     ticker: str
     timing: str  # "Pre Market", "Post Market", "During Market", "Unknown"
     earnings_date: date | None = None
@@ -18,9 +20,11 @@ class EarningsCandidate:
 
 # ── Options analysis ──────────────────────────────────────────────────
 
+
 @dataclass
 class AnalysisResult:
     """Output of ``OptionsAnalyzer.compute_recommendation()``."""
+
     ticker: str
     current_price: float
     recommendation: str  # "BUY", "SELL", "HOLD"
@@ -55,27 +59,37 @@ class AnalysisResult:
     def fail(cls, ticker: str, msg: str) -> AnalysisResult:
         """Convenience constructor for error results."""
         return cls(
-            ticker=ticker, current_price=0, recommendation="",
-            iv30_rv30=0, term_slope=0, term_structure_valid=False,
-            term_structure_tier2=False, expected_move="N/A",
-            avg_volume_pass=False, error=msg,
+            ticker=ticker,
+            current_price=0,
+            recommendation="",
+            iv30_rv30=0,
+            term_slope=0,
+            term_structure_valid=False,
+            term_structure_tier2=False,
+            expected_move="N/A",
+            avg_volume_pass=False,
+            error=msg,
         )
 
 
 # ── Market Chameleon ──────────────────────────────────────────────────
 
+
 @dataclass
 class WinRateData:
     """Historical win-rate scraped from Market Chameleon."""
+
     win_rate: float = 0.0
     quarters: int = 0
 
 
 # ── Stock validation ──────────────────────────────────────────────────
 
+
 @dataclass
 class ValidationMetrics:
     """Numeric metrics collected during stock validation."""
+
     price: float = 0.0
     volume: float = 0.0
     days_to_expiry: int = 0
@@ -98,6 +112,7 @@ class ValidationMetrics:
 @dataclass
 class ValidationResult:
     """Output of ``StockValidator.validate()``."""
+
     passed: bool
     tier: int
     near_miss: bool
@@ -107,9 +122,11 @@ class ValidationResult:
 
 # ── Iron fly ──────────────────────────────────────────────────────────
 
+
 @dataclass
 class IronFlyResult:
     """Iron fly strike calculation output."""
+
     short_call_strike: float = 0.0
     short_put_strike: float = 0.0
     long_call_strike: float = 0.0
@@ -139,9 +156,11 @@ class IronFlyResult:
 
 # ── Orchestrator outputs ──────────────────────────────────────────────
 
+
 @dataclass
 class NearMiss:
     """A ticker that nearly passed validation."""
+
     ticker: str
     reason: str
 
@@ -149,6 +168,7 @@ class NearMiss:
 @dataclass
 class TickerReport:
     """Full analysis for a single ticker — validation + SPY context."""
+
     ticker: str
     passed: bool
     tier: int
@@ -170,6 +190,7 @@ class TickerReport:
 @dataclass
 class ScanResult:
     """Full earnings scan output."""
+
     tier1: list[str] = field(default_factory=list)
     tier2: list[str] = field(default_factory=list)
     near_misses: list[NearMiss] = field(default_factory=list)

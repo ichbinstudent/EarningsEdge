@@ -21,6 +21,7 @@ def test_db(tmp_path):
     configure(p)
     return p
 
+
 def test_metrics_endpoint(test_db):
     # Seed data
     now = datetime.now(UTC).isoformat()

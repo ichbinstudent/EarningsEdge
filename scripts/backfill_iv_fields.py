@@ -11,12 +11,22 @@ from earnings_edge.analyzer import OptionsAnalyzer
 from earnings_edge.db import snapshots_missing_atm_iv, snapshots_update_fields
 
 FIELDS_TO_UPDATE = [
-    "atm_iv_near", "atm_call_iv", "atm_put_iv",
-    "rv30", "hist_vol_3m", "iv30_rv30",
-    "term_slope", "term_structure_valid",
-    "expected_move_pct", "expected_move_dollars",
-    "sigma_baseline_1y", "sigma_short_leg", "sigma_short_leg_fair",
-    "actual_to_fair_ratio", "atm_call_delta", "atm_put_delta",
+    "atm_iv_near",
+    "atm_call_iv",
+    "atm_put_iv",
+    "rv30",
+    "hist_vol_3m",
+    "iv30_rv30",
+    "term_slope",
+    "term_structure_valid",
+    "expected_move_pct",
+    "expected_move_dollars",
+    "sigma_baseline_1y",
+    "sigma_short_leg",
+    "sigma_short_leg_fair",
+    "actual_to_fair_ratio",
+    "atm_call_delta",
+    "atm_put_delta",
 ]
 
 
@@ -26,6 +36,7 @@ def main():
 
     # Group by ticker to minimize yfinance calls
     from collections import defaultdict
+
     by_ticker = defaultdict(list)
     for row in rows:
         by_ticker[row["ticker"]].append(row)
@@ -45,7 +56,7 @@ def main():
         try:
             result = analyzer.compute_recommendation(ticker, latest_date)
             if not result.ok:
-                print(f"  [{i+1}/{len(by_ticker)}] {ticker}: {result.error}")
+                print(f"  [{i + 1}/{len(by_ticker)}] {ticker}: {result.error}")
                 failed += len(ticker_rows)
                 continue
 
@@ -56,16 +67,18 @@ def main():
                     fields[field] = val
 
             if not fields:
-                print(f"  [{i+1}/{len(by_ticker)}] {ticker}: no fields to update")
+                print(f"  [{i + 1}/{len(by_ticker)}] {ticker}: no fields to update")
                 failed += len(ticker_rows)
                 continue
 
             snapshots_update_fields([row["id"] for row in ticker_rows], fields)
             updated += len(ticker_rows)
-            print(f"  [{i+1}/{len(by_ticker)}] {ticker}: updated {len(ticker_rows)} rows (atm_iv={result.atm_iv_near:.3f})")
+            print(
+                f"  [{i + 1}/{len(by_ticker)}] {ticker}: updated {len(ticker_rows)} rows (atm_iv={result.atm_iv_near:.3f})"
+            )
 
         except Exception as e:
-            print(f"  [{i+1}/{len(by_ticker)}] {ticker}: EXCEPTION {e}")
+            print(f"  [{i + 1}/{len(by_ticker)}] {ticker}: EXCEPTION {e}")
             failed += len(ticker_rows)
 
         # Rate limit

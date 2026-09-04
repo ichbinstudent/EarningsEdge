@@ -26,7 +26,7 @@ CREDIT_SIDES = {"SHORT_STRADDLE", "SHORT_STRANGLE", "IRON_CONDOR"}
 @dataclass
 class LegPos:
     symbol: str
-    side: str            # "buy" (long) | "sell" (short)
+    side: str  # "buy" (long) | "sell" (short)
     qty: float = 1.0
     option_type: str = ""
     strike: float = 0.0
@@ -38,43 +38,46 @@ class PositionGroup:
     group_id: str
     strategy: str
     legs: list[LegPos]
-    entry_price: float          # net per-share premium at entry (positive)
-    opened_at: str              # ISO ts
-    credit: bool = False        # True = premium received at entry
-    event_date: date | None = None   # e.g. earnings date
+    entry_price: float  # net per-share premium at entry (positive)
+    opened_at: str  # ISO ts
+    credit: bool = False  # True = premium received at entry
+    event_date: date | None = None  # e.g. earnings date
     qty: int = 1
-    exit_by: date | None = None   # structural deadline computed at entry
-                                      # (e.g. a calendar's near-leg expiry) —
-                                      # None when the structure has no
-                                      # differential-expiry deadline
+    exit_by: date | None = None  # structural deadline computed at entry
+    # (e.g. a calendar's near-leg expiry) —
+    # None when the structure has no
+    # differential-expiry deadline
 
     @property
     def ticker(self) -> str:
         if not self.legs:
             return ""
         from .guards import occ_underlying
+
         return occ_underlying(self.legs[0].symbol) or ""
 
 
 @dataclass
 class MarketView:
     """What rules see: structure value per share, date/time context."""
-    value_now: float | None   # net mid: +mid long legs, −mid short legs
+
+    value_now: float | None  # net mid: +mid long legs, −mid short legs
     today: date
     sessions_since_open: int
     sessions_until_event: int | None = None
-    minutes_to_close: int | None = None   # None when unknown (clock fetch failed)
+    minutes_to_close: int | None = None  # None when unknown (clock fetch failed)
 
 
 @dataclass
 class ExitSignal:
     rule: str
     reason: str
-    auto: bool                   # True → close immediately; False → approval card
+    auto: bool  # True → close immediately; False → approval card
     pnl_pct: float | None = None
 
 
 # ── P&L ---------------------------------------------------------------------
+
 
 def pnl_pct(group: PositionGroup, value_now: float) -> float | None:
     if group.entry_price <= 0:
@@ -115,10 +118,7 @@ def leg_mid(leg: LegPos, snaps: dict[str, dict]) -> float | None:
 def unit_structure_value(legs: list[LegPos], snaps: dict[str, dict]) -> float | None:
     """Net mid per 1x ratio — ignore stored contract qty so a 9-lot calendar
     is priced at the combo mid, not mid×9 (which would never fill)."""
-    unit = [
-        LegPos(leg.symbol, leg.side, 1.0, leg.option_type, leg.strike, leg.expiry)
-        for leg in legs
-    ]
+    unit = [LegPos(leg.symbol, leg.side, 1.0, leg.option_type, leg.strike, leg.expiry) for leg in legs]
     return structure_value(unit, snaps)
 
 
@@ -158,13 +158,13 @@ def remaining_close_plan(
 
 # ── Rules ---------------------------------------------------------------------
 
+
 class ExitRule(ABC):
     name: str = "base"
     auto: bool = False
 
     @abstractmethod
-    def evaluate(self, group: PositionGroup, market: MarketView) -> ExitSignal | None:
-        ...
+    def evaluate(self, group: PositionGroup, market: MarketView) -> ExitSignal | None: ...
 
 
 class ProfitTargetExit(ExitRule):
@@ -180,7 +180,9 @@ class ProfitTargetExit(ExitRule):
         pnl = pnl_pct(group, market.value_now)
         if pnl is not None and pnl >= self.pct:
             return ExitSignal(
-                rule=self.name, auto=True, pnl_pct=pnl,
+                rule=self.name,
+                auto=True,
+                pnl_pct=pnl,
                 reason=f"pnl {pnl:+.0%} ≥ target {self.pct:+.0%}",
             )
         return None
@@ -199,7 +201,9 @@ class StopLossExit(ExitRule):
         pnl = pnl_pct(group, market.value_now)
         if pnl is not None and pnl <= -self.pct:
             return ExitSignal(
-                rule=self.name, auto=True, pnl_pct=pnl,
+                rule=self.name,
+                auto=True,
+                pnl_pct=pnl,
                 reason=f"pnl {pnl:+.0%} ≤ stop {-self.pct:+.0%}",
             )
         return None
@@ -209,9 +213,12 @@ class TimeExit(ExitRule):
     name = "time"
     auto = False  # day-count-from-entry / T-N are approval cards
 
-    def __init__(self, days_after_entry: int | None = None,
-                 days_before_event: int | None = None,
-                 days_after_event: int | None = None):
+    def __init__(
+        self,
+        days_after_entry: int | None = None,
+        days_before_event: int | None = None,
+        days_after_event: int | None = None,
+    ):
         self.days_after_entry = days_after_entry
         self.days_before_event = days_before_event
         self.days_after_event = days_after_event
@@ -220,26 +227,34 @@ class TimeExit(ExitRule):
         # Post-event deadline: event has arrived (sessions_until_event == 0
         # on event day and every session after). Auto — the vol-crush window
         # is the point of the trade; waiting for a card abandoned fills.
-        if self.days_after_event is not None and market.sessions_until_event is not None \
-                and market.sessions_until_event <= 0:
+        if (
+            self.days_after_event is not None
+            and market.sessions_until_event is not None
+            and market.sessions_until_event <= 0
+        ):
             return ExitSignal(
-                rule=self.name, auto=True,
+                rule=self.name,
+                auto=True,
                 reason=f"event day/past (sessions_until_event="
-                       f"{market.sessions_until_event}, days_after_event="
-                       f"{self.days_after_event})",
+                f"{market.sessions_until_event}, days_after_event="
+                f"{self.days_after_event})",
             )
-        if self.days_after_entry is not None \
-                and market.sessions_since_open >= self.days_after_entry:
+        if self.days_after_entry is not None and market.sessions_since_open >= self.days_after_entry:
             return ExitSignal(
-                rule=self.name, auto=False,
+                rule=self.name,
+                auto=False,
                 reason=f"{market.sessions_since_open} sessions ≥ {self.days_after_entry} after entry",
             )
-        if self.days_before_event is not None and market.sessions_until_event is not None \
-                and market.sessions_until_event <= self.days_before_event:
+        if (
+            self.days_before_event is not None
+            and market.sessions_until_event is not None
+            and market.sessions_until_event <= self.days_before_event
+        ):
             return ExitSignal(
-                rule=self.name, auto=False,
+                rule=self.name,
+                auto=False,
                 reason=f"{market.sessions_until_event} sessions to event "
-                       f"(exit at T-{self.days_before_event})",
+                f"(exit at T-{self.days_before_event})",
             )
         return None
 
@@ -257,6 +272,7 @@ class ScheduledExit(ExitRule):
     the same class of urgency as profit-target/stop-loss, not a discretionary
     "maybe take profit here" judgment call that should wait for a human.
     """
+
     name = "scheduled"
     auto = True
 
@@ -268,9 +284,9 @@ class ScheduledExit(ExitRule):
             return None
         if market.today >= group.exit_by and market.minutes_to_close <= self.minutes_before_close:
             return ExitSignal(
-                rule=self.name, auto=True,
-                reason=f"exit_by {group.exit_by.isoformat()} reached, "
-                       f"{market.minutes_to_close}min to close",
+                rule=self.name,
+                auto=True,
+                reason=f"exit_by {group.exit_by.isoformat()} reached, {market.minutes_to_close}min to close",
             )
         return None
 
@@ -281,11 +297,13 @@ def build_exit_rules(exits_cfg: list[dict]) -> list[ExitRule]:
     for e in exits_cfg:
         kind = e.get("rule")
         if kind == "time":
-            rules.append(TimeExit(
-                days_after_entry=e.get("days_after_entry"),
-                days_before_event=e.get("days_before_event"),
-                days_after_event=e.get("days_after_event"),
-            ))
+            rules.append(
+                TimeExit(
+                    days_after_entry=e.get("days_after_entry"),
+                    days_before_event=e.get("days_before_event"),
+                    days_after_event=e.get("days_after_event"),
+                )
+            )
         elif kind == "profit_target":
             rules.append(ProfitTargetExit(float(e["pct"])))
         elif kind == "stop_loss":

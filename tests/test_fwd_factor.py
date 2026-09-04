@@ -20,6 +20,7 @@ from earnings_edge.fwd_factor import (
 
 # ── OCC helpers ------------------------------------------------------------
 
+
 def test_occ_roundtrip():
     sym = occ_symbol("AAPL", date(2026, 8, 21), 330.0)
     assert sym == "AAPL260821C00330000"
@@ -39,10 +40,10 @@ def test_occ_put_and_fractional_strike():
 
 # ── required_near_iv / target_debit -----------------------------------------
 
+
 def test_required_near_iv_above_fwd():
     # 6% RMS move, 20% premium, T1=45d, tau=2d, fwd 30%
-    iv = required_near_iv(sigma_fwd=0.30, T1=45 / 365, tau=2 / 365,
-                          hist_rms_move=0.06, premium=0.20)
+    iv = required_near_iv(sigma_fwd=0.30, T1=45 / 365, tau=2 / 365, hist_rms_move=0.06, premium=0.20)
     assert iv is not None
     # event window adds variance → near IV must exceed the forward vol
     assert iv > 0.30
@@ -57,8 +58,9 @@ def test_required_near_iv_scales_with_premium():
 
 def test_target_debit_cheaper_for_higher_premium():
     # realistic: far 80d @ ~35% IV ≈ $6.54, required near (20%) ≈ $5.34 → D*20 ≈ +1.20
-    base = dict(far_price=6.54, spot=100.0, strike=100.0, T1=45 / 365,
-                sigma_fwd=0.35, tau=2 / 365, hist_rms_move=0.05)
+    base = dict(
+        far_price=6.54, spot=100.0, strike=100.0, T1=45 / 365, sigma_fwd=0.35, tau=2 / 365, hist_rms_move=0.05
+    )
     d20 = target_debit(**base, premium=0.20)
     d25 = target_debit(**base, premium=0.25)
     assert d20 is not None and d25 is not None
@@ -70,8 +72,16 @@ def test_target_debit_negative_when_threshold_demands_credit():
     # 6% RMS move, fwd only 30%, far leg cheap: the 20% threshold requires the
     # near leg to cost MORE than the far leg → D* < 0. Means: even a free
     # calendar meets the bar — extreme backwardation territory, skip in practice.
-    d20 = target_debit(far_price=3.00, spot=100.0, strike=100.0, T1=45 / 365,
-                       sigma_fwd=0.30, tau=2 / 365, hist_rms_move=0.06, premium=0.20)
+    d20 = target_debit(
+        far_price=3.00,
+        spot=100.0,
+        strike=100.0,
+        T1=45 / 365,
+        sigma_fwd=0.30,
+        tau=2 / 365,
+        hist_rms_move=0.06,
+        premium=0.20,
+    )
     assert d20 is not None and d20 < 0
 
 
@@ -96,6 +106,7 @@ def test_forward_iv_basic():
 
 # ── combo_debit / within_fill_range ------------------------------------------
 
+
 def test_combo_debit_mid_vs_executable():
     mid = combo_debit(near_bid=1.00, near_ask=1.10, far_bid=2.00, far_ask=2.20)
     assert mid == pytest.approx(2.10 - 1.05)
@@ -105,13 +116,14 @@ def test_combo_debit_mid_vs_executable():
 
 
 def test_within_fill_range():
-    assert within_fill_range(mid_debit=1.00, cap_debit=1.10)       # already cheaper than cap
+    assert within_fill_range(mid_debit=1.00, cap_debit=1.10)  # already cheaper than cap
     assert within_fill_range(mid_debit=1.20, cap_debit=1.10, f=0.15)  # within 15%
     assert not within_fill_range(mid_debit=1.30, cap_debit=1.10, f=0.15)  # too far
-    assert not within_fill_range(mid_debit=1.00, cap_debit=0.0)     # degenerate cap
+    assert not within_fill_range(mid_debit=1.00, cap_debit=0.0)  # degenerate cap
 
 
 # ── LadderSpec ---------------------------------------------------------------
+
 
 def _et(hour: int, minute: int = 0) -> datetime:
     return datetime(2026, 7, 27, hour, minute, tzinfo=ET)  # a Monday
@@ -130,8 +142,8 @@ def test_ladder_rungs_and_cap():
     # price walk: +tick per rung, hard cap
     assert spec.limit_at(0, 1.00, 1.05) == 1.00
     assert spec.limit_at(3, 1.00, 1.05) == 1.03
-    assert spec.limit_at(7, 1.00, 1.05) == 1.05   # clamped at cap, never above
-    assert spec.limit_at(7, 1.00, 1.20) == 1.07   # tick walk if cap is far
+    assert spec.limit_at(7, 1.00, 1.05) == 1.05  # clamped at cap, never above
+    assert spec.limit_at(7, 1.00, 1.20) == 1.07  # tick walk if cap is far
 
 
 def test_ladder_current_limit():

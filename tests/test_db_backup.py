@@ -1,4 +1,5 @@
 """Hot-DB-safe backup: online backup API, never TRUNCATE the live WAL."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -18,6 +19,7 @@ def test_backup_invoke(tmp_path):
     db_engine.configure(src)
     with db_engine.session_scope() as s:
         from sqlalchemy import text as sa_text
+
         s.execute(sa_text("CREATE TABLE IF NOT EXISTS t (x int)"))
         s.execute(sa_text("INSERT INTO t VALUES (1)"))
     out = backup_db(src, dest, now=NOW)
@@ -32,6 +34,7 @@ def test_backup_does_not_truncate_live_wal(tmp_path):
     db_engine.configure(src)
     with db_engine.session_scope() as s:
         from sqlalchemy import text as sa_text
+
         s.execute(sa_text("CREATE TABLE IF NOT EXISTS t (x int)"))
         s.execute(sa_text("INSERT INTO t VALUES (1)"))
 
@@ -76,9 +79,11 @@ def test_backup_rejects_failed_integrity(tmp_path):
     db_engine.configure(src)
     with db_engine.session_scope() as s:
         from sqlalchemy import text as sa_text
+
         s.execute(sa_text("CREATE TABLE IF NOT EXISTS t (x int)"))
 
     import sqlite3
+
     real_connect = sqlite3.connect
     n = {"i": 0}
 

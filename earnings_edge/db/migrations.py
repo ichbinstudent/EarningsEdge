@@ -13,8 +13,9 @@ from sqlalchemy.engine import Connection
 
 def run_migrations(conn: Connection) -> None:
     """Apply all column/table migrations (idempotent)."""
-    tables = {r[0] for r in conn.execute(sqlalchemy.text(
-        "SELECT name FROM sqlite_master WHERE type='table'"))}
+    tables = {
+        r[0] for r in conn.execute(sqlalchemy.text("SELECT name FROM sqlite_master WHERE type='table'"))
+    }
     if "snapshots" in tables:
         _migrate_snapshots(conn)
     if "calendar_call_trades" in tables:
@@ -30,10 +31,10 @@ def run_migrations(conn: Connection) -> None:
 
 def _migrate_snapshots(conn: Connection) -> None:
     """Add missing columns to snapshots for existing databases."""
-    existing = {r[1] for r in conn.execute(sqlalchemy.text('pragma table_info(snapshots)'))}
+    existing = {r[1] for r in conn.execute(sqlalchemy.text("pragma table_info(snapshots)"))}
     migrations = {
-        'outcome_attempt_count': 'INTEGER DEFAULT 0',
-        'data_source': 'TEXT DEFAULT "unknown"',
+        "outcome_attempt_count": "INTEGER DEFAULT 0",
+        "data_source": 'TEXT DEFAULT "unknown"',
     }
     for col, col_type in migrations.items():
         if col not in existing:
@@ -42,7 +43,7 @@ def _migrate_snapshots(conn: Connection) -> None:
 
 def _migrate_calendar_call_trades(conn: Connection) -> None:
     """Add model-score columns to calendar_call_trades for existing databases."""
-    existing = {r[1] for r in conn.execute(sqlalchemy.text('pragma table_info(calendar_call_trades)'))}
+    existing = {r[1] for r in conn.execute(sqlalchemy.text("pragma table_info(calendar_call_trades)"))}
     migrations = {
         "model_score": "REAL",
         "model_recommendation": "INTEGER",
@@ -52,38 +53,36 @@ def _migrate_calendar_call_trades(conn: Connection) -> None:
     }
     for col, col_type in migrations.items():
         if col not in existing:
-            conn.execute(sqlalchemy.text(
-                f"ALTER TABLE calendar_call_trades ADD COLUMN {col} {col_type}"
-            ))
+            conn.execute(sqlalchemy.text(f"ALTER TABLE calendar_call_trades ADD COLUMN {col} {col_type}"))
 
 
 def _migrate_options_chain_hourly(conn: Connection) -> None:
     """Allow one snapshot per contract per hour (was one per day via close)."""
-    tables = {r[0] for r in conn.execute(sqlalchemy.text(
-        "SELECT name FROM sqlite_master WHERE type='table'"))}
+    tables = {
+        r[0] for r in conn.execute(sqlalchemy.text("SELECT name FROM sqlite_master WHERE type='table'"))
+    }
     if "options_chain" not in tables:
         return
     cols = {r[1] for r in conn.execute(sqlalchemy.text("pragma table_info(options_chain)"))}
-    ddl_row = conn.execute(sqlalchemy.text(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name='options_chain'"
-    )).fetchone()
+    ddl_row = conn.execute(
+        sqlalchemy.text("SELECT sql FROM sqlite_master WHERE type='table' AND name='options_chain'")
+    ).fetchone()
     ddl = (ddl_row[0] if ddl_row else "") or ""
     compact = ddl.replace(" ", "")
-    already_hourly = (
-        "captured_hour" in cols
-        and "UNIQUE(contract_ticker,captured_hour)" in compact
-    )
+    already_hourly = "captured_hour" in cols and "UNIQUE(contract_ticker,captured_hour)" in compact
     if already_hourly:
         return
     if "captured_at" not in cols:
         conn.execute(sqlalchemy.text("ALTER TABLE options_chain ADD COLUMN captured_at TEXT"))
     if "captured_hour" not in cols:
         conn.execute(sqlalchemy.text("ALTER TABLE options_chain ADD COLUMN captured_hour TEXT"))
-    conn.execute(sqlalchemy.text(
-        "UPDATE options_chain SET captured_hour = scan_date || 'T16', "
-        "captured_at = COALESCE(created_at, scan_date || 'T16:00:00') "
-        "WHERE captured_hour IS NULL OR captured_hour = ''"
-    ))
+    conn.execute(
+        sqlalchemy.text(
+            "UPDATE options_chain SET captured_hour = scan_date || 'T16', "
+            "captured_at = COALESCE(created_at, scan_date || 'T16:00:00') "
+            "WHERE captured_hour IS NULL OR captured_hour = ''"
+        )
+    )
     for statement in (
         """
         CREATE TABLE IF NOT EXISTS options_chain_v2 (
@@ -135,50 +134,52 @@ def _migrate_options_chain_hourly(conn: Connection) -> None:
 
 def _migrate_live_calendar_candidates(conn: Connection) -> None:
     """Add missing columns to live_calendar_candidates for existing databases."""
-    existing = {r[1] for r in conn.execute(sqlalchemy.text('pragma table_info(live_calendar_candidates)'))}
+    existing = {r[1] for r in conn.execute(sqlalchemy.text("pragma table_info(live_calendar_candidates)"))}
     needed = {
-        'tier': 'INTEGER',
-        'passed': 'INTEGER',
-        'near_miss': 'INTEGER DEFAULT 0',
-        'scanner_reason': 'TEXT',
-        'display_status': 'TEXT',
-        'volume': 'REAL',
-        'market_cap': 'REAL',
-        'days_to_expiry': 'INTEGER',
-        'total_open_interest': 'INTEGER',
-        'atm_iv_near': 'REAL',
-        'sigma_baseline_1y': 'REAL',
-        'sigma_short_leg': 'REAL',
-        'sigma_short_leg_fair': 'REAL',
-        'actual_to_fair_ratio': 'REAL',
-        'iv_rv_ratio': 'REAL',
-        'hist_vol_3m': 'REAL',
-        'term_slope': 'REAL',
-        'term_structure_valid': 'INTEGER',
-        'expected_move_pct': 'REAL',
-        'expected_move_dollars': 'REAL',
-        'straddle_price': 'REAL',
-        'atm_call_delta': 'REAL',
-        'atm_put_delta': 'REAL',
-        'atm_call_iv': 'REAL',
-        'atm_put_iv': 'REAL',
-        'win_rate': 'REAL',
-        'win_quarters': 'INTEGER',
+        "tier": "INTEGER",
+        "passed": "INTEGER",
+        "near_miss": "INTEGER DEFAULT 0",
+        "scanner_reason": "TEXT",
+        "display_status": "TEXT",
+        "volume": "REAL",
+        "market_cap": "REAL",
+        "days_to_expiry": "INTEGER",
+        "total_open_interest": "INTEGER",
+        "atm_iv_near": "REAL",
+        "sigma_baseline_1y": "REAL",
+        "sigma_short_leg": "REAL",
+        "sigma_short_leg_fair": "REAL",
+        "actual_to_fair_ratio": "REAL",
+        "iv_rv_ratio": "REAL",
+        "hist_vol_3m": "REAL",
+        "term_slope": "REAL",
+        "term_structure_valid": "INTEGER",
+        "expected_move_pct": "REAL",
+        "expected_move_dollars": "REAL",
+        "straddle_price": "REAL",
+        "atm_call_delta": "REAL",
+        "atm_put_delta": "REAL",
+        "atm_call_iv": "REAL",
+        "atm_put_iv": "REAL",
+        "win_rate": "REAL",
+        "win_quarters": "INTEGER",
         # Stock-move outcome columns (filled by outcomes.py alongside exit_value/pnl)
-        'pre_earnings_close': 'REAL',
-        'post_earnings_close': 'REAL',
-        'actual_move_pct': 'REAL',
-        'actual_move_direction': 'TEXT',
-        'max_intraday_range_pct': 'REAL',
-        'outcome_attempt_count': 'INTEGER DEFAULT 0',
+        "pre_earnings_close": "REAL",
+        "post_earnings_close": "REAL",
+        "actual_move_pct": "REAL",
+        "actual_move_direction": "TEXT",
+        "max_intraday_range_pct": "REAL",
+        "outcome_attempt_count": "INTEGER DEFAULT 0",
     }
     for col, col_type in needed.items():
         if col not in existing:
             conn.execute(sqlalchemy.text(f"ALTER TABLE live_calendar_candidates ADD COLUMN {col} {col_type}"))
 
+
 def _migrate_ff_universe_snapshots(conn: Connection, tables: set) -> None:
     if "ff_universe_snapshots" not in tables:
-        conn.execute(sqlalchemy.text('''
+        conn.execute(
+            sqlalchemy.text("""
             CREATE TABLE ff_universe_snapshots (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ticker TEXT NOT NULL,
@@ -211,8 +212,13 @@ def _migrate_ff_universe_snapshots(conn: Connection, tables: set) -> None:
                 selector_version INTEGER,
                 UNIQUE(ticker, scan_date)
             )
-        '''))
-        conn.execute(sqlalchemy.text('CREATE UNIQUE INDEX IF NOT EXISTS idx_uq_ff_universe_snapshots_ticker_date ON ff_universe_snapshots(ticker, scan_date)'))
+        """)
+        )
+        conn.execute(
+            sqlalchemy.text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_uq_ff_universe_snapshots_ticker_date ON ff_universe_snapshots(ticker, scan_date)"
+            )
+        )
 
 
 def _migrate_framework(conn: Connection, tables: set) -> None:
@@ -266,8 +272,7 @@ def _create_indexes(conn: Connection, tables: set) -> None:
         )
     if "model_registry" in tables:
         statements.append(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_uq_model_registry_name_sha "
-            "ON model_registry(name, sha256)"
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_uq_model_registry_name_sha ON model_registry(name, sha256)"
         )
     if "ff_snapshots" in tables:
         statements.append(

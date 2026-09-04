@@ -1,4 +1,5 @@
 """Tests for Alpaca trading client & strategy bridge."""
+
 from __future__ import annotations
 
 from datetime import date
@@ -27,6 +28,7 @@ from earnings_edge.trading_types import Trade
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def mock_client():
     """AlpacaTradingClient with mocked session and methods."""
@@ -41,6 +43,7 @@ def mock_client():
     client.get_option_snapshot = MagicMock(return_value={})
     return client
 
+
 @pytest.fixture
 def bridge(mock_client):
     config = BridgeConfig(dry_run=True)
@@ -51,16 +54,19 @@ def bridge(mock_client):
 # Client basics
 # ---------------------------------------------------------------------------
 
+
 def test_client_env_vars():
     with patch.dict("os.environ", {"APCA_API_KEY_ID": "env_key", "APCA_API_SECRET_KEY": "env_secret"}):
         c = AlpacaTradingClient()
         assert c.api_key == "env_key"
         assert c.api_secret == "env_secret"
 
+
 def test_client_explicit_args():
     c = AlpacaTradingClient(api_key="explicit", api_secret="args")
     assert c.api_key == "explicit"
     assert c.api_secret == "args"
+
 
 def test_client_headers_set():
     with patch.dict("os.environ", {"APCA_API_KEY_ID": "k", "APCA_API_SECRET_KEY": "s"}):
@@ -68,6 +74,7 @@ def test_client_headers_set():
     h = c.session.headers
     assert h["APCA-API-KEY-ID"] == "k"
     assert h["APCA-API-SECRET-KEY"] == "s"
+
 
 def test_account_parsing(mock_client):
     mock_client.session.request.return_value = MagicMock(
@@ -79,16 +86,19 @@ def test_account_parsing(mock_client):
     assert float(acct["buying_power"]) == 50000.0
     assert mock_client.buying_power() == 50000.0
 
+
 def test_auth_error_raises(mock_client):
     mock_client.session.request.return_value = MagicMock(
         status_code=401,
         json=lambda: {"message": "Unauthorized"},
     )
     from framework.alerts import DEDUPER
+
     DEDUPER.reset()
     with pytest.raises(AlpacaAuthError):
         mock_client.get_account()
     assert any("401" in m for m in DEDUPER.drain())
+
 
 def test_not_found_raises(mock_client):
     mock_client.session.request.return_value = MagicMock(
@@ -102,6 +112,7 @@ def test_not_found_raises(mock_client):
 # ---------------------------------------------------------------------------
 # OrderResult
 # ---------------------------------------------------------------------------
+
 
 def test_order_result_from_alpaca():
     raw = {
@@ -125,6 +136,7 @@ def test_order_result_from_alpaca():
 # Bridge: leg builders
 # ---------------------------------------------------------------------------
 
+
 def _make_trade(side="DIRECTIONAL_CALL", features=None):
     return Trade(
         ticker="AAPL",
@@ -140,6 +152,7 @@ def _make_trade(side="DIRECTIONAL_CALL", features=None):
         ml_decision="TAKE",
     )
 
+
 def test_bridge_single_call_leg(bridge):
     trade = _make_trade("DIRECTIONAL_CALL")
     legs = bridge._build_legs(trade)
@@ -149,6 +162,7 @@ def test_bridge_single_call_leg(bridge):
     assert legs[0]["strike"] == 150.0
     assert "AAPL250117C" in legs[0]["symbol"]
 
+
 def test_bridge_single_put_leg(bridge):
     trade = _make_trade("DIRECTIONAL_PUT")
     legs = bridge._build_legs(trade)
@@ -156,6 +170,7 @@ def test_bridge_single_put_leg(bridge):
     assert legs[0]["side"] == "buy"
     assert legs[0]["option_type"] == "put"
     assert "AAPL250117P" in legs[0]["symbol"]
+
 
 def test_bridge_short_straddle_legs(bridge):
     trade = _make_trade("SHORT_STRADDLE", {"atm_strike": 250.0, "expiry": date(2025, 1, 17)})
@@ -166,6 +181,7 @@ def test_bridge_short_straddle_legs(bridge):
     assert sides == {"sell"}
     assert types == {"call", "put"}
 
+
 def test_bridge_long_straddle_legs(bridge):
     trade = _make_trade("LONG_STRADDLE", {"atm_strike": 250.0, "expiry": date(2025, 1, 17)})
     legs = bridge._build_legs(trade)
@@ -173,12 +189,18 @@ def test_bridge_long_straddle_legs(bridge):
     sides = {leg["side"] for leg in legs}
     assert sides == {"buy"}
 
+
 def test_bridge_iron_condor_legs(bridge):
-    trade = _make_trade("IRON_CONDOR", {
-        "short_call": 160.0, "short_put": 140.0,
-        "long_call": 165.0, "long_put": 135.0,
-        "expiry": date(2025, 1, 17),
-    })
+    trade = _make_trade(
+        "IRON_CONDOR",
+        {
+            "short_call": 160.0,
+            "short_put": 140.0,
+            "long_call": 165.0,
+            "long_put": 135.0,
+            "expiry": date(2025, 1, 17),
+        },
+    )
     legs = bridge._build_legs(trade)
     assert len(legs) == 4
     assert legs[0]["side"] == "buy" and legs[0]["option_type"] == "put"
@@ -186,11 +208,18 @@ def test_bridge_iron_condor_legs(bridge):
     assert legs[2]["side"] == "sell" and legs[2]["option_type"] == "call"
     assert legs[3]["side"] == "buy" and legs[3]["option_type"] == "call"
 
+
 def test_bridge_butterfly_legs(bridge):
-    trade = _make_trade("BUTTERFLY", {
-        "atm": 150.0, "lo": 145.0, "hi": 155.0,
-        "option_type": "call", "expiry": date(2025, 1, 17),
-    })
+    trade = _make_trade(
+        "BUTTERFLY",
+        {
+            "atm": 150.0,
+            "lo": 145.0,
+            "hi": 155.0,
+            "option_type": "call",
+            "expiry": date(2025, 1, 17),
+        },
+    )
     legs = bridge._build_legs(trade)
     assert len(legs) == 3
     # 1 long lo, 2 short atm, 1 long hi
@@ -198,20 +227,32 @@ def test_bridge_butterfly_legs(bridge):
     assert legs[1]["side"] == "sell" and legs[1]["strike"] == 150.0 and legs[1]["ratio_qty"] == 2
     assert legs[2]["side"] == "buy" and legs[2]["strike"] == 155.0
 
+
 def test_bridge_risk_reversal_legs(bridge):
-    trade = _make_trade("RISK_REVERSAL", {
-        "call_strike": 420.0, "put_strike": 400.0, "expiry": date(2025, 1, 17),
-    })
+    trade = _make_trade(
+        "RISK_REVERSAL",
+        {
+            "call_strike": 420.0,
+            "put_strike": 400.0,
+            "expiry": date(2025, 1, 17),
+        },
+    )
     legs = bridge._build_legs(trade)
     assert len(legs) == 2
     sides = {leg["side"] for leg in legs}
     assert sides == {"buy", "sell"}
 
+
 def test_bridge_calendar_legs(bridge):
-    trade = _make_trade("CALENDAR", {
-        "near_strike": 150.0, "far_strike": 150.0,
-        "near_expiry": date(2025, 1, 17), "far_expiry": date(2025, 2, 21),
-    })
+    trade = _make_trade(
+        "CALENDAR",
+        {
+            "near_strike": 150.0,
+            "far_strike": 150.0,
+            "near_expiry": date(2025, 1, 17),
+            "far_expiry": date(2025, 2, 21),
+        },
+    )
     legs = bridge._build_legs(trade)
     assert len(legs) == 2
     sides = {leg["side"] for leg in legs}
@@ -222,10 +263,12 @@ def test_bridge_calendar_legs(bridge):
 # Bridge: OCC symbol construction
 # ---------------------------------------------------------------------------
 
+
 def test_occ_symbol_basic():
     b = StrategyBridge(client=MagicMock(), config=BridgeConfig(dry_run=True))
     assert b._occ_symbol("AAPL", date(2025, 1, 17), 150.0, "call") == "AAPL250117C00150000"
     assert b._occ_symbol("TSLA", date(2025, 6, 20), 250.0, "put") == "TSLA250620P00250000"
+
 
 def test_occ_symbol_fractional_strike():
     b = StrategyBridge(client=MagicMock(), config=BridgeConfig(dry_run=True))
@@ -236,6 +279,7 @@ def test_occ_symbol_fractional_strike():
 # Bridge: config & defaults
 # ---------------------------------------------------------------------------
 
+
 def test_bridge_config_defaults():
     config = BridgeConfig()
     assert config.dry_run is False
@@ -243,10 +287,12 @@ def test_bridge_config_defaults():
     assert config.max_pct_per_trade == MAX_PCT_PER_TRADE
     assert config.skip_if_position_exists is True
 
+
 def test_bridge_config_custom():
     config = BridgeConfig(dry_run=True, max_pct_per_trade=0.20)
     assert config.dry_run is True
     assert config.max_pct_per_trade == 0.20
+
 
 def test_best_strategies_list():
     assert len(BEST_STRATEGIES) >= 5
@@ -258,6 +304,7 @@ def test_best_strategies_list():
 # Bridge: execute trade (dry run)
 # ---------------------------------------------------------------------------
 
+
 def test_execute_trade_dry_run_single(bridge):
     trade = _make_trade("DIRECTIONAL_CALL")
     result = bridge.execute_trade(trade)
@@ -266,6 +313,7 @@ def test_execute_trade_dry_run_single(bridge):
     assert result.strategy == "test"
     assert len(result.legs) == 1
 
+
 def test_execute_trade_dry_run_straddle(bridge):
     trade = _make_trade("SHORT_STRADDLE")
     result = bridge.execute_trade(trade)
@@ -273,12 +321,18 @@ def test_execute_trade_dry_run_straddle(bridge):
     assert result.status == "dry_run"
     assert len(result.legs) == 2
 
+
 def test_execute_trade_dry_run_iron_condor(bridge):
-    trade = _make_trade("IRON_CONDOR", {
-        "short_call": 160.0, "short_put": 140.0,
-        "long_call": 165.0, "long_put": 135.0,
-        "expiry": date(2025, 1, 17),
-    })
+    trade = _make_trade(
+        "IRON_CONDOR",
+        {
+            "short_call": 160.0,
+            "short_put": 140.0,
+            "long_call": 165.0,
+            "long_put": 135.0,
+            "expiry": date(2025, 1, 17),
+        },
+    )
     result = bridge.execute_trade(trade)
     assert result is not None
     assert result.status == "dry_run"
@@ -289,14 +343,19 @@ def test_execute_trade_dry_run_iron_condor(bridge):
 # Bridge: DTE filtering
 # ---------------------------------------------------------------------------
 
+
 def test_skip_too_short_dte(bridge):
     """Trades with DTE < min should be skipped."""
-    trade = _make_trade("DIRECTIONAL_CALL", {
-        "atm_strike": 150.0,
-        "expiry": date(2025, 1, 10),  # DTE = 0
-    })
+    trade = _make_trade(
+        "DIRECTIONAL_CALL",
+        {
+            "atm_strike": 150.0,
+            "expiry": date(2025, 1, 10),  # DTE = 0
+        },
+    )
     result = bridge.execute_trade(trade)
     assert result is None  # skipped
+
 
 def test_skip_existing_position(mock_client):
     """Existing position should cause skip when skip_if_position_exists=True."""
@@ -312,15 +371,19 @@ def test_skip_existing_position(mock_client):
 # Mega-day regression: filtering must be LOCAL (zero API calls per skip)
 # ---------------------------------------------------------------------------
 
+
 def test_dte_skip_makes_zero_api_calls(mock_client):
     """A DTE=0 candidate (the mega-earnings-day case) must skip without ANY
     HTTP call — this was the 600s-timeout bug: 1,656 candidates each costing
     2-4 Alpaca calls before being filtered."""
     bridge = StrategyBridge(client=mock_client, config=BridgeConfig(dry_run=False))
-    trade = _make_trade("DIRECTIONAL_CALL", {
-        "atm_strike": 150.0,
-        "expiry": date(2025, 1, 10),  # DTE = 0
-    })
+    trade = _make_trade(
+        "DIRECTIONAL_CALL",
+        {
+            "atm_strike": 150.0,
+            "expiry": date(2025, 1, 10),  # DTE = 0
+        },
+    )
     result = bridge.execute_trade(trade)
     assert result is None
     assert bridge.skip_reasons["dte"] == 1
@@ -358,19 +421,30 @@ def test_position_symbols_batch(mock_client):
 
 def test_submit_retries_once_with_catalog_resolution(mock_client):
     """OCC submit rejected -> resolve via cached contract catalog -> retry once."""
-    mock_client.submit_multi_leg_order = MagicMock(side_effect=[
-        AlpacaError(400, "invalid symbol"),
-        {"id": "ord-1", "status": "accepted", "legs": []},
-    ])
-    mock_client.get_option_contracts = MagicMock(return_value={"option_contracts": [
-        {"symbol": "AA250117C00150000", "type": "call", "strike_price": "150.0"},
-    ]})
+    mock_client.submit_multi_leg_order = MagicMock(
+        side_effect=[
+            AlpacaError(400, "invalid symbol"),
+            {"id": "ord-1", "status": "accepted", "legs": []},
+        ]
+    )
+    mock_client.get_option_contracts = MagicMock(
+        return_value={
+            "option_contracts": [
+                {"symbol": "AA250117C00150000", "type": "call", "strike_price": "150.0"},
+            ]
+        }
+    )
     mock_client.position_symbols = MagicMock(return_value=set())
     bridge = StrategyBridge(client=mock_client, config=BridgeConfig(dry_run=False))
-    trade = _make_trade("CALENDAR", {
-        "near_strike": 150.0, "far_strike": 150.0,
-        "near_expiry": date(2025, 1, 17), "far_expiry": date(2025, 2, 21),
-    })
+    trade = _make_trade(
+        "CALENDAR",
+        {
+            "near_strike": 150.0,
+            "far_strike": 150.0,
+            "near_expiry": date(2025, 1, 17),
+            "far_expiry": date(2025, 2, 21),
+        },
+    )
     result = bridge.execute_trade(trade)
     assert result is not None
     assert result.order_id == "ord-1"
@@ -394,6 +468,7 @@ def test_submit_no_retry_on_non_symbol_error(mock_client):
 # ---------------------------------------------------------------------------
 # Client: URL paths + no-retry semantics
 # ---------------------------------------------------------------------------
+
 
 def test_get_and_cancel_order_url_paths(mock_client):
     """Order endpoints are /orders/{id} (the old /orders:{id} was a 404 bug)."""
@@ -424,6 +499,7 @@ def test_no_retry_on_401(mock_client):
 # PositionManager
 # ---------------------------------------------------------------------------
 
+
 def test_position_manager_filters_options(mock_client):
     mock_client.session.request.return_value = MagicMock(
         status_code=200,
@@ -437,13 +513,32 @@ def test_position_manager_filters_options(mock_client):
     assert len(opts) == 1
     assert opts[0]["symbol"] == "AAPL250117C00150000"
 
+
 def test_position_manager_exposure_by_underlying(mock_client):
     mock_client.session.request.return_value = MagicMock(
         status_code=200,
         json=lambda: [
-            {"symbol": "AAPL250117C00150000", "asset_class": "option", "qty": "1", "market_value": "450.0", "underlying_symbol": "AAPL"},
-            {"symbol": "AAPL250221C00160000", "asset_class": "option", "qty": "1", "market_value": "300.0", "underlying_symbol": "AAPL"},
-            {"symbol": "TSLA250117P00200000", "asset_class": "option", "qty": "1", "market_value": "200.0", "underlying_symbol": "TSLA"},
+            {
+                "symbol": "AAPL250117C00150000",
+                "asset_class": "option",
+                "qty": "1",
+                "market_value": "450.0",
+                "underlying_symbol": "AAPL",
+            },
+            {
+                "symbol": "AAPL250221C00160000",
+                "asset_class": "option",
+                "qty": "1",
+                "market_value": "300.0",
+                "underlying_symbol": "AAPL",
+            },
+            {
+                "symbol": "TSLA250117P00200000",
+                "asset_class": "option",
+                "qty": "1",
+                "market_value": "200.0",
+                "underlying_symbol": "TSLA",
+            },
         ],
     )
     pm = PositionManager(mock_client)
@@ -454,6 +549,7 @@ def test_position_manager_exposure_by_underlying(mock_client):
 # ---------------------------------------------------------------------------
 # run_auto_trade (with mocked client)
 # ---------------------------------------------------------------------------
+
 
 def test_run_auto_trade_dry_run(mock_client):
     """Verify the pipeline runs end-to-end in dry-run mode with mocked client.
@@ -470,6 +566,7 @@ def test_run_auto_trade_dry_run(mock_client):
     # Should have processed some strategies
     assert len(summary["strategies"]) > 0
 
+
 def test_run_auto_trade_subset(mock_client):
     """Verify strategy subset selection works."""
     with patch("earnings_edge.alpaca_bridge.create_client", return_value=mock_client):
@@ -482,14 +579,15 @@ def test_run_auto_trade_subset(mock_client):
 # Symbol resolution (live — Alpaca paper API)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.live
 def test_live_account():
     """Live test: test account status (requires APCA_API_KEY_ID env var)."""
     import os
+
     if not os.environ.get("APCA_API_KEY_ID"):
         pytest.skip("APCA_API_KEY_ID not set")
     client = AlpacaTradingClient()
     acct = client.get_account()
     assert acct["status"] == "ACTIVE"
     assert float(acct["buying_power"]) > 0
-

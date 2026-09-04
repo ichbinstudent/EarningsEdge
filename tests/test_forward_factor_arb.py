@@ -19,6 +19,7 @@ class FakeAlpaca:
 TODAY = date(2026, 7, 25)
 SPOT = 150.0
 
+
 def make_fake_chain():
     al = FakeAlpaca(spot=SPOT)
     # T1 = 45 DTE
@@ -31,6 +32,7 @@ def make_fake_chain():
     sym2 = occ_symbol("TEST", d2, SPOT)
     al.chain[sym2] = {"bid": 6.0, "ask": 6.2}  # ~ 0.25 IV
     return al
+
 
 def test_arb_build_candidate_no_event_raw_iv(tmp_db_path):
     al = make_fake_chain()
@@ -53,14 +55,18 @@ def test_arb_build_candidate_no_event_raw_iv(tmp_db_path):
 
 def test_arb_build_candidate_event_no_hist_rms(tmp_db_path):
     from earnings_edge.db.repositories import insert_snapshot
+
     # Insert next earnings inside T1 (T1 is 45 DTE, let's put earnings at 20 DTE)
     ed = TODAY + timedelta(days=20)
-    insert_snapshot({"ticker": "TEST", "has_options": 1, "earnings_date": ed.isoformat(), "scan_date": TODAY.isoformat()})
+    insert_snapshot(
+        {"ticker": "TEST", "has_options": 1, "earnings_date": ed.isoformat(), "scan_date": TODAY.isoformat()}
+    )
 
     al = make_fake_chain()
     cand = build_candidate(al, "TEST", today=TODAY)
 
     assert cand.skip_reason == "event inside T1, no hist rms"
+
 
 def test_arb_build_candidate_event_with_hist_rms(tmp_db_path):
 
@@ -68,7 +74,9 @@ def test_arb_build_candidate_event_with_hist_rms(tmp_db_path):
     from earnings_edge.db.repositories import insert_snapshot
 
     ed = TODAY + timedelta(days=20)
-    insert_snapshot({"ticker": "TEST", "has_options": 1, "earnings_date": ed.isoformat(), "scan_date": TODAY.isoformat()})
+    insert_snapshot(
+        {"ticker": "TEST", "has_options": 1, "earnings_date": ed.isoformat(), "scan_date": TODAY.isoformat()}
+    )
 
     # Inject hist rms
     # hist_rms_move needs 3+ outcomes
@@ -77,20 +85,19 @@ def test_arb_build_candidate_event_with_hist_rms(tmp_db_path):
         for i, mv in enumerate((5.0, 5.0, 5.0)):
             c.execute(
                 "INSERT INTO snapshots (ticker, earnings_date, scan_date, actual_move_pct, outcome_fetched_at) "
-                f"VALUES ('TEST', '2025-0{i+1}-01', '2025-01-01', {mv}, '2025-01-01')"
+                f"VALUES ('TEST', '2025-0{i + 1}-01', '2025-01-01', {mv}, '2025-01-01')"
             )
         c.commit()
 
     al = make_fake_chain()
     # Boost near premium so factor is high enough after removing earnings var
     sym1 = occ_symbol("TEST", TODAY + timedelta(days=45), SPOT)
-    al.chain[sym1] = {"bid": 7.0, "ask": 7.2} # Highly inflated near leg
+    al.chain[sym1] = {"bid": 7.0, "ask": 7.2}  # Highly inflated near leg
 
     sym2 = occ_symbol("TEST", TODAY + timedelta(days=75), SPOT)
     al.chain[sym2] = {"bid": 6.8, "ask": 7.0}
 
     cand = build_candidate(al, "TEST", today=TODAY)
-
 
     assert cand.skip_reason is None
     assert cand.earnings_date == ed.isoformat()

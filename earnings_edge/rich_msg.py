@@ -6,15 +6,11 @@ import httpx
 
 logger = logging.getLogger("rich_msg")
 
+
 async def send_rich_html(bot: Any, chat_id: int, html_str: str, reply_markup: Any = None) -> bool:
     """Send a rich HTML message via the raw /sendRichMessage endpoint."""
     url = f"{bot.base_url}/sendRichMessage"
-    payload = {
-        "chat_id": chat_id,
-        "rich_message": {
-            "html": html_str
-        }
-    }
+    payload = {"chat_id": chat_id, "rich_message": {"html": html_str}}
     if reply_markup is not None:
         payload["reply_markup"] = reply_markup.to_dict() if hasattr(reply_markup, "to_dict") else reply_markup
 
@@ -29,16 +25,13 @@ async def send_rich_html(bot: Any, chat_id: int, html_str: str, reply_markup: An
         logger.error(f"sendRichMessage exception: {e}")
         return False
 
-async def edit_rich_html(bot: Any, chat_id: int, message_id: int, html_str: str, reply_markup: Any = None) -> bool:
+
+async def edit_rich_html(
+    bot: Any, chat_id: int, message_id: int, html_str: str, reply_markup: Any = None
+) -> bool:
     """Edit a message with rich HTML via the raw /editMessageText endpoint."""
     url = f"{bot.base_url}/editMessageText"
-    payload = {
-        "chat_id": chat_id,
-        "message_id": message_id,
-        "rich_message": {
-            "html": html_str
-        }
-    }
+    payload = {"chat_id": chat_id, "message_id": message_id, "rich_message": {"html": html_str}}
     if reply_markup is not None:
         payload["reply_markup"] = reply_markup.to_dict() if hasattr(reply_markup, "to_dict") else reply_markup
 
@@ -53,8 +46,10 @@ async def edit_rich_html(bot: Any, chat_id: int, message_id: int, html_str: str,
         logger.error(f"editMessageText (rich) exception: {e}")
         return False
 
+
 def orders_rich_view(limit: int = 12) -> str:
     from earnings_edge.db import trade_events_list
+
     events = trade_events_list(limit=limit)
     out = ["<h3>ORDERS</h3>"]
     if not events:
@@ -95,8 +90,10 @@ def orders_rich_view(limit: int = 12) -> str:
     out.extend(details)
     return "\n".join(out)
 
+
 def jobs_rich_view(limit: int = 12) -> str:
     from earnings_edge.db import job_runs_list
+
     runs = job_runs_list(limit=limit)
     out = ["<h3>JOB RUNS</h3>"]
     if not runs:
@@ -118,6 +115,7 @@ def jobs_rich_view(limit: int = 12) -> str:
             stats = r["stats_json"]
             if stats:
                 import json
+
                 try:
                     s_dict = json.loads(stats)
                     items = [f"{k}={v}" for k, v in list(s_dict.items())[:4]]
@@ -140,6 +138,7 @@ def jobs_rich_view(limit: int = 12) -> str:
     out.append("</table>")
     return "\n".join(out)
 
+
 def equity_rich_view(days: int = 7) -> str:
     from earnings_edge.db import equity_snapshots_daily_avg
     from framework.risk.equity import daily_pnl, day_start_equity, latest_equity
@@ -156,7 +155,9 @@ def equity_rich_view(days: int = 7) -> str:
 
     out = ["<h3>EQUITY</h3>"]
     if start_val is not None:
-        out.append(f"<p>Latest: ${val:,.2f} | BP: ${bp:,.2f} | Day-start: ${start_val:,.2f} | Day-PnL: ${pnl:,.2f}</p>")
+        out.append(
+            f"<p>Latest: ${val:,.2f} | BP: ${bp:,.2f} | Day-start: ${start_val:,.2f} | Day-PnL: ${pnl:,.2f}</p>"
+        )
     else:
         out.append(f"<p>Latest: ${val:,.2f} | BP: ${bp:,.2f} | Day-PnL: ${pnl:,.2f}</p>")
 

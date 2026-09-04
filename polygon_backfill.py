@@ -258,7 +258,9 @@ def fetch_events_finnhub(start: date, end: date, tickers: set[str] | None = None
     return deduped
 
 
-def fetch_events_polygon_benzinga(pg: PolygonClient, start: date, end: date, tickers: set[str] | None = None) -> list[EarningsEvent]:
+def fetch_events_polygon_benzinga(
+    pg: PolygonClient, start: date, end: date, tickers: set[str] | None = None
+) -> list[EarningsEvent]:
     params: dict[str, Any] = {"date.gte": start.isoformat(), "date.lte": end.isoformat(), "limit": 1000}
     data = pg.get("/benzinga/v1/earnings", params)
     if not data:
@@ -271,11 +273,15 @@ def fetch_events_polygon_benzinga(pg: PolygonClient, start: date, end: date, tic
             continue
         if tickers and sym not in tickers:
             continue
-        out.append(EarningsEvent(sym, datetime.strptime(d[:10], "%Y-%m-%d").date(), e.get("time") or "historical"))
+        out.append(
+            EarningsEvent(sym, datetime.strptime(d[:10], "%Y-%m-%d").date(), e.get("time") or "historical")
+        )
     return out
 
 
-def collect_polygon_features(pg: PolygonClient, event: EarningsEvent, scan_offset_days: int = 1) -> dict[str, Any]:
+def collect_polygon_features(
+    pg: PolygonClient, event: EarningsEvent, scan_offset_days: int = 1
+) -> dict[str, Any]:
     """Collect pre-earnings features from Polygon as of the prior trading day/window."""
     ticker = event.ticker
     ed = event.earnings_date
@@ -318,7 +324,13 @@ def collect_polygon_features(pg: PolygonClient, event: EarningsEvent, scan_offse
         row["collection_error"] = "no historical option contracts"
         return row
 
-    expiries = sorted({datetime.strptime(c["expiration_date"], "%Y-%m-%d").date() for c in contracts if c.get("expiration_date")})
+    expiries = sorted(
+        {
+            datetime.strptime(c["expiration_date"], "%Y-%m-%d").date()
+            for c in contracts
+            if c.get("expiration_date")
+        }
+    )
     if not expiries:
         row["collection_error"] = "contracts missing expiries"
         return row
@@ -395,7 +407,7 @@ def collect_polygon_features(pg: PolygonClient, event: EarningsEvent, scan_offse
         T_short_days = max((near_exp - as_of).days, 1)
         T_long_days = max((far_exp - as_of).days, T_short_days + 1)
         baseline_iv = min(near_iv, far_iv)
-        radicand = (far_iv ** 2 * T_long_days - baseline_iv ** 2 * (T_long_days - T_short_days)) / T_short_days
+        radicand = (far_iv**2 * T_long_days - baseline_iv**2 * (T_long_days - T_short_days)) / T_short_days
         if radicand > 0:
             sigma_short_leg_fair = float(np.sqrt(radicand))
             if sigma_short_leg_fair > 0:
@@ -409,7 +421,9 @@ def collect_polygon_features(pg: PolygonClient, event: EarningsEvent, scan_offse
     return row
 
 
-def fetch_events_investing(start: date, end: date, tickers: set[str] | None = None, limit: int | None = None) -> list[EarningsEvent]:
+def fetch_events_investing(
+    start: date, end: date, tickers: set[str] | None = None, limit: int | None = None
+) -> list[EarningsEvent]:
     """Fetch historical earnings events from the Investing.com calendar parser only."""
     out: list[EarningsEvent] = []
     cur = start
@@ -453,7 +467,13 @@ def parse_manual_events(values: list[str] | None) -> list[EarningsEvent]:
         parts = value.split(":", 2)
         if len(parts) < 2:
             raise ValueError(f"Bad --event {value!r}; expected TICKER:YYYY-MM-DD[:TIMING]")
-        events.append(EarningsEvent(parts[0].upper(), datetime.strptime(parts[1], "%Y-%m-%d").date(), parts[2] if len(parts) == 3 else "manual"))
+        events.append(
+            EarningsEvent(
+                parts[0].upper(),
+                datetime.strptime(parts[1], "%Y-%m-%d").date(),
+                parts[2] if len(parts) == 3 else "manual",
+            )
+        )
     return events
 
 
@@ -478,7 +498,11 @@ def run_backfill(
     pg = PolygonClient(key, sleep=rate_sleep)
 
     if manual_events:
-        events = [e for e in manual_events if start <= e.earnings_date <= end and (not tickers or e.ticker in tickers)]
+        events = [
+            e
+            for e in manual_events
+            if start <= e.earnings_date <= end and (not tickers or e.ticker in tickers)
+        ]
     elif events_source == "investing":
         events = fetch_events_investing(start, end, tickers, limit)
     elif events_source == "finnhub":
@@ -503,12 +527,22 @@ def run_backfill(
             row = collect_polygon_features(pg, event)
             outcome = OutcomeService().compute_outcome(event.ticker, event.earnings_date.isoformat())
             if dry_run:
-                logger.info("  DRY row: price=%s iv=%s em=%s err=%s outcome=%s",
-                            row.get("price"), row.get("atm_iv_near"), row.get("expected_move_pct"),
-                            row.get("collection_error"), outcome)
+                logger.info(
+                    "  DRY row: price=%s iv=%s em=%s err=%s outcome=%s",
+                    row.get("price"),
+                    row.get("atm_iv_near"),
+                    row.get("expected_move_pct"),
+                    row.get("collection_error"),
+                    outcome,
+                )
                 continue
             if row.get("collection_error") and not insert_errors:
-                logger.info("  Skipping failed snapshot for %s %s: %s", event.ticker, event.earnings_date, row.get("collection_error"))
+                logger.info(
+                    "  Skipping failed snapshot for %s %s: %s",
+                    event.ticker,
+                    event.earnings_date,
+                    row.get("collection_error"),
+                )
                 continue
             sid = insert_snapshot(row)
             if outcome:
@@ -532,16 +566,28 @@ def main() -> None:
     p = argparse.ArgumentParser(description="Historical Polygon options/stock backfill for ML training")
     p.add_argument("--start", required=True, help="Start date YYYY-MM-DD")
     p.add_argument("--end", required=True, help="End date YYYY-MM-DD")
-    p.add_argument("--events-source", choices=["investing", "finnhub", "polygon-benzinga"], default="investing")
+    p.add_argument(
+        "--events-source", choices=["investing", "finnhub", "polygon-benzinga"], default="investing"
+    )
     p.add_argument("--tickers", help="Comma-separated ticker filter, e.g. AAPL,MSFT,NVDA")
     p.add_argument("--limit", type=int, help="Max events to process")
-    p.add_argument("--event", action="append",
-                   help="Exact event to process as TICKER:YYYY-MM-DD[:TIMING]. Can be repeated; avoids calendar scraping.")
+    p.add_argument(
+        "--event",
+        action="append",
+        help="Exact event to process as TICKER:YYYY-MM-DD[:TIMING]. Can be repeated; avoids calendar scraping.",
+    )
     p.add_argument("--dry-run", action="store_true")
-    p.add_argument("--insert-errors", action="store_true",
-                   help="Insert rows with collection_error. Default skips failed feature rows to keep training data clean.")
-    p.add_argument("--rate-sleep", type=float, default=12.5,
-                   help="Seconds to sleep after each Polygon request (free tier often needs ~12.5s)")
+    p.add_argument(
+        "--insert-errors",
+        action="store_true",
+        help="Insert rows with collection_error. Default skips failed feature rows to keep training data clean.",
+    )
+    p.add_argument(
+        "--rate-sleep",
+        type=float,
+        default=12.5,
+        help="Seconds to sleep after each Polygon request (free tier often needs ~12.5s)",
+    )
     args = p.parse_args()
 
     run_backfill(

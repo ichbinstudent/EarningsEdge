@@ -25,6 +25,7 @@ class _FakeBot:
     _picks_sync = MagicMock()
     _chain_cache_sync = MagicMock()
 
+
 def test_scheduler_hardening_properties():
     bot = _FakeBot()
     bot._setup_scheduler()
@@ -40,6 +41,7 @@ def test_scheduler_hardening_properties():
         else:
             assert job.misfire_grace_time == 120
 
+
 def test_scheduler_hardening_dst_safety():
     bot = _FakeBot()
     bot._setup_scheduler()
@@ -47,9 +49,9 @@ def test_scheduler_hardening_dst_safety():
     ny_tz = pytz.timezone("America/New_York")
 
     # Check winter week (Standard Time)
-    winter_base = datetime(2026, 1, 12, tzinfo=pytz.UTC) # A Monday
+    winter_base = datetime(2026, 1, 12, tzinfo=pytz.UTC)  # A Monday
     # Check summer week (Daylight Saving Time)
-    summer_base = datetime(2026, 7, 13, tzinfo=pytz.UTC) # A Monday
+    summer_base = datetime(2026, 7, 13, tzinfo=pytz.UTC)  # A Monday
 
     # Expected hours in ET (wall-clock)
     expected_hours = {
@@ -72,5 +74,7 @@ def test_scheduler_hardening_dst_safety():
                 if next_time:
                     ny_time = next_time.astimezone(ny_tz)
                     if job.id in expected_hours:
-                        assert ny_time.hour in expected_hours[job.id], f"{job.id} fired at wrong hour {ny_time.hour} on {ny_time}"
+                        assert ny_time.hour in expected_hours[job.id], (
+                            f"{job.id} fired at wrong hour {ny_time.hour} on {ny_time}"
+                        )
                     current_time = next_time

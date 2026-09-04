@@ -39,26 +39,49 @@ DB_PATH = Path("data/earnings_ml.db")
 DEFAULT_OUTPUT = Path("data/models/calendar_call_filter.joblib")
 
 # Columns that must never be used as features (identifiers, targets, leakage).
-_LEAKY_COLUMNS = frozenset({
-    "id", "snapshot_id", "ticker", "earnings_date", "scan_date",
-    "near_expiry", "far_expiry", "near_call_ticker", "far_call_ticker",
-    "near_exit", "far_exit",
-    "pnl_dollars", "return_on_debit", "exit_value",
-    "model_score", "model_recommendation", "model_reason", "model_name",
-    "model_scored_at", "created_at",
-    "actual_move_pct", "actual_move_direction", "max_intraday_range_pct",
-    "pre_earnings_close", "post_earnings_close",
-    "collection_error", "mc_source", "event_source",
-    "outcome_attempt_count", "outcome_fetched_at", "recommendation", "timing",
-})
+_LEAKY_COLUMNS = frozenset(
+    {
+        "id",
+        "snapshot_id",
+        "ticker",
+        "earnings_date",
+        "scan_date",
+        "near_expiry",
+        "far_expiry",
+        "near_call_ticker",
+        "far_call_ticker",
+        "near_exit",
+        "far_exit",
+        "pnl_dollars",
+        "return_on_debit",
+        "exit_value",
+        "model_score",
+        "model_recommendation",
+        "model_reason",
+        "model_name",
+        "model_scored_at",
+        "created_at",
+        "actual_move_pct",
+        "actual_move_direction",
+        "max_intraday_range_pct",
+        "pre_earnings_close",
+        "post_earnings_close",
+        "collection_error",
+        "mc_source",
+        "event_source",
+        "outcome_attempt_count",
+        "outcome_fetched_at",
+        "recommendation",
+        "timing",
+    }
+)
 
 
 def discover_features(df: pd.DataFrame) -> list[str]:
     """Auto-discover numeric features from the dataframe, excluding leaky columns."""
     numeric_cols = df.select_dtypes(include=[np.number]).columns
     return sorted(
-        c for c in numeric_cols
-        if c not in _LEAKY_COLUMNS and c != "target" and df[c].notna().any()
+        c for c in numeric_cols if c not in _LEAKY_COLUMNS and c != "target" and df[c].notna().any()
     )
 
 
@@ -85,13 +108,13 @@ def load_calendar_trades(db_path: Path) -> pd.DataFrame:
     df["abs_moneyness_error"] = (df["moneyness"] - 1.0).abs()
     df["debit_pct_price"] = df["net_debit"] / df["price"]
     df["near_far_entry_ratio"] = df["near_entry"] / df["far_entry"].replace(0, np.nan)
-    df["entry_width_days"] = (
-        pd.to_datetime(df["far_expiry"]) - pd.to_datetime(df["near_expiry"])
-    ).dt.days
+    df["entry_width_days"] = (pd.to_datetime(df["far_expiry"]) - pd.to_datetime(df["near_expiry"])).dt.days
     return df.sort_values("earnings_date").reset_index(drop=True)
 
 
-def apply_data_quality_gates(df: pd.DataFrame, max_moneyness_error: float) -> tuple[pd.DataFrame, dict[str, Any]]:
+def apply_data_quality_gates(
+    df: pd.DataFrame, max_moneyness_error: float
+) -> tuple[pd.DataFrame, dict[str, Any]]:
     raw = {
         "raw_rows": len(df),
         "raw_pnl": float(df["pnl_dollars"].sum()) if not df.empty else 0.0,
@@ -143,9 +166,7 @@ def build_model_pipeline(
     model_name: str,
     random_state: int,
 ) -> Pipeline:
-    numeric_pipeline = Pipeline(
-        [("imputer", SimpleImputer(strategy="median")), ("scaler", StandardScaler())]
-    )
+    numeric_pipeline = Pipeline([("imputer", SimpleImputer(strategy="median")), ("scaler", StandardScaler())])
     pre = ColumnTransformer([("num", numeric_pipeline, features)])
     if is_regression_target(target):
         if model_name == "ridge":
@@ -321,8 +342,7 @@ def train(args: argparse.Namespace) -> dict[str, Any]:
     test_df = clean.iloc[train_end_idx:]
     if len(train_df) < 30 or len(test_df) < 20:
         raise RuntimeError(
-            f"Holdout split too small: train={len(train_df)}, test={len(test_df)}. "
-            "Adjust --train-fraction."
+            f"Holdout split too small: train={len(train_df)}, test={len(test_df)}. Adjust --train-fraction."
         )
 
     pipe.fit(train_df[features].apply(pd.to_numeric, errors="coerce"), train_df["target"])
@@ -334,7 +354,9 @@ def train(args: argparse.Namespace) -> dict[str, Any]:
     else:
         test_score = pipe.predict_proba(test_df[features].apply(pd.to_numeric, errors="coerce"))[:, 1]
         holdout_metric_name = "auc"
-        holdout_metric = roc_auc_score(test_df["target"], test_score) if test_df["target"].nunique() == 2 else None
+        holdout_metric = (
+            roc_auc_score(test_df["target"], test_score) if test_df["target"].nunique() == 2 else None
+        )
         holdout_mae = None
 
     selection_masks: list[tuple[str, np.ndarray]] = [
@@ -444,9 +466,15 @@ def main() -> None:
     parser.add_argument("--min-pnl", type=float, default=10.0)
     parser.add_argument("--min-return", type=float, default=0.10)
     parser.add_argument("--max-moneyness-error", type=float, default=0.20)
-    parser.add_argument("--min-iv-rv", type=float, default=None, help="Minimum IV/RV ratio to include in training data")
-    parser.add_argument("--train-fraction", type=float, default=0.70,
-                        help="Fraction of earliest-era rows for training (rest is holdout)")
+    parser.add_argument(
+        "--min-iv-rv", type=float, default=None, help="Minimum IV/RV ratio to include in training data"
+    )
+    parser.add_argument(
+        "--train-fraction",
+        type=float,
+        default=0.70,
+        help="Fraction of earliest-era rows for training (rest is holdout)",
+    )
     parser.add_argument("--min-rows", type=int, default=100)
     parser.add_argument("--cv-splits", type=int, default=4)
     parser.add_argument(
@@ -488,9 +516,7 @@ def main() -> None:
     meta = train(args)
 
     if args.deploy:
-        bot_default = (
-            args.output.parent / "calendar_call_filter_ridge_allfeatures.joblib"
-        )
+        bot_default = args.output.parent / "calendar_call_filter_ridge_allfeatures.joblib"
         import shutil
 
         shutil.copy2(args.output, bot_default)

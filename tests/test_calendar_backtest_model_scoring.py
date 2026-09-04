@@ -37,28 +37,32 @@ class CalendarBacktestModelScoringTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             configure(Path(tmp) / "t.db")
             ensure_schema()
-            sid1 = insert_snapshot({
-                "ticker": "AAA",
-                "earnings_date": "2025-01-15",
-                "scan_date": "2025-01-14",
-                "price": 100,
-                "avg_volume_30d": 1000000,
-                "has_options": 1,
-                "days_to_expiry": 2,
-                "atm_iv_near": 0.8,
-                "data_source": "t1",
-            })
-            sid2 = insert_snapshot({
-                "ticker": "AAA",
-                "earnings_date": "2025-01-15",
-                "scan_date": "2025-01-14",
-                "price": 100,
-                "avg_volume_30d": 1000000,
-                "has_options": 1,
-                "days_to_expiry": 2,
-                "atm_iv_near": 0.8,
-                "data_source": "t2",
-            })
+            sid1 = insert_snapshot(
+                {
+                    "ticker": "AAA",
+                    "earnings_date": "2025-01-15",
+                    "scan_date": "2025-01-14",
+                    "price": 100,
+                    "avg_volume_30d": 1000000,
+                    "has_options": 1,
+                    "days_to_expiry": 2,
+                    "atm_iv_near": 0.8,
+                    "data_source": "t1",
+                }
+            )
+            sid2 = insert_snapshot(
+                {
+                    "ticker": "AAA",
+                    "earnings_date": "2025-01-15",
+                    "scan_date": "2025-01-14",
+                    "price": 100,
+                    "avg_volume_30d": 1000000,
+                    "has_options": 1,
+                    "days_to_expiry": 2,
+                    "atm_iv_near": 0.8,
+                    "data_source": "t2",
+                }
+            )
             self.assertTrue(sid1)
             self.assertTrue(sid2)
             self.assertNotEqual(sid1, sid2)

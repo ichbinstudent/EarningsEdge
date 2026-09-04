@@ -24,7 +24,8 @@ def _seed(ticker, ed, sd, labeled=True, has_options=1, **cols):
     from earnings_edge.db import engine as db_engine
 
     base = dict(
-        price=50.0, has_options=has_options,
+        price=50.0,
+        has_options=has_options,
         actual_move_pct=7.5 if labeled else None,
         outcome_fetched_at="2026-08-01T00:00:00" if labeled else None,
         data_source="integration_fixture",
@@ -48,25 +49,26 @@ def test_apply_features_fills_nulls_and_preserves_existing(tmp_db_path):
 
     from earnings_edge.db import engine as db_engine
 
-    sid = _seed("IVCO", "2026-07-30", "2026-07-29",
-                atm_iv_near=None, rv30=None, sigma_short_leg=0.31)
+    sid = _seed("IVCO", "2026-07-30", "2026-07-29", atm_iv_near=None, rv30=None, sigma_short_leg=0.31)
 
-    filled = ivbf.apply_features(sid, {
-        "atm_iv_near": 0.45, "rv30": 0.28, "sigma_short_leg": 0.99,
-        "atm_call_iv": None,  # absent values are skipped
-    })
+    filled = ivbf.apply_features(
+        sid,
+        {
+            "atm_iv_near": 0.45,
+            "rv30": 0.28,
+            "sigma_short_leg": 0.99,
+            "atm_call_iv": None,  # absent values are skipped
+        },
+    )
     with db_engine.get_session() as s:
         row = s.execute(
-            text(
-                "SELECT atm_iv_near, rv30, sigma_short_leg, atm_call_iv "
-                "FROM snapshots WHERE id = :id"
-            ),
+            text("SELECT atm_iv_near, rv30, sigma_short_leg, atm_call_iv FROM snapshots WHERE id = :id"),
             {"id": sid},
         ).first()
-    assert row[0] == 0.45      # NULL -> filled
-    assert row[1] == 0.28      # NULL -> filled
-    assert row[2] == 0.31      # existing value preserved (COALESCE)
-    assert row[3] is None      # None feature never written
+    assert row[0] == 0.45  # NULL -> filled
+    assert row[1] == 0.28  # NULL -> filled
+    assert row[2] == 0.31  # existing value preserved (COALESCE)
+    assert row[3] is None  # None feature never written
     assert "atm_iv_near" in filled and "atm_call_iv" not in filled
 
 

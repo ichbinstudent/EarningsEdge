@@ -94,7 +94,9 @@ class BotScannerModelTests(unittest.TestCase):
         line = format_model_prediction(score, row)
 
         self.assertEqual(artifact["pipeline"].seen_columns, ["price", "net_debit", "debit_pct_price"])
-        self.assertEqual(line, "• ML Exp Return: +42.0% → TAKE (debit ask $1.05, mid $0.80, bid $0.55, strike $100.00)")
+        self.assertEqual(
+            line, "• ML Exp Return: +42.0% → TAKE (debit ask $1.05, mid $0.80, bid $0.55, strike $100.00)"
+        )
 
     def test_live_calendar_quote_uses_executable_ask_debit_for_model_features(self):
         quote = LiveCalendarQuote(

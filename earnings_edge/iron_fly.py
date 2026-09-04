@@ -1,6 +1,5 @@
 """Iron fly strategy strike calculation."""
 
-
 import yfinance as yf
 
 from .config import get_logger, session
@@ -65,13 +64,21 @@ def calculate_iron_fly(ticker: str) -> IronFlyResult:
         rr = round(max_risk / max_profit, 1) if max_profit > 0 else float("inf")
 
         return IronFlyResult(
-            short_call_strike=sc_strike, short_put_strike=sp_strike,
-            long_call_strike=lc_strike, long_put_strike=lp_strike,
-            short_call_premium=sc_prem, short_put_premium=sp_prem,
-            long_call_premium=lc_prem, long_put_premium=lp_prem,
-            total_credit=credit, total_debit=debit, net_credit=net,
-            put_wing_width=pw, call_wing_width=cw,
-            max_profit=max_profit, max_risk=max_risk,
+            short_call_strike=sc_strike,
+            short_put_strike=sp_strike,
+            long_call_strike=lc_strike,
+            long_put_strike=lp_strike,
+            short_call_premium=sc_prem,
+            short_put_premium=sp_prem,
+            long_call_premium=lc_prem,
+            long_put_premium=lp_prem,
+            total_credit=credit,
+            total_debit=debit,
+            net_credit=net,
+            put_wing_width=pw,
+            call_wing_width=cw,
+            max_profit=max_profit,
+            max_risk=max_risk,
             upper_breakeven=round(sc_strike + net, 2),
             lower_breakeven=round(sp_strike - net, 2),
             risk_reward_ratio=rr,

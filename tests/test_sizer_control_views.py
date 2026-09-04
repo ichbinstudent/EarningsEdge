@@ -26,13 +26,20 @@ from framework.risk.manager import RiskLimits, RiskManager
 
 def _calendar_trade(entry_price=1.85):
     return Trade(
-        ticker="AAPL", earnings_date=date(2026, 7, 29), scan_date=date(2026, 7, 28),
-        strategy="calendar_call_ml", side="CALENDAR", entry_price=entry_price,
+        ticker="AAPL",
+        earnings_date=date(2026, 7, 29),
+        scan_date=date(2026, 7, 28),
+        strategy="calendar_call_ml",
+        side="CALENDAR",
+        entry_price=entry_price,
         features={
-            "near_strike": 190.0, "far_strike": 190.0,
-            "near_expiry": date(2026, 7, 31), "far_expiry": date(2026, 8, 28),
+            "near_strike": 190.0,
+            "far_strike": 190.0,
+            "near_expiry": date(2026, 7, 31),
+            "far_expiry": date(2026, 8, 28),
         },
-        model_score=0.7, ml_decision="TAKE",
+        model_score=0.7,
+        ml_decision="TAKE",
     )
 
 
@@ -49,13 +56,15 @@ def _client(equity="100000", buying_power="50000"):
 def _bridge(tmp_path, client, sizer=None, limits=None):
     configure(tmp_path / "fw.db")
     return StrategyBridge(
-        client=client, config=BridgeConfig(),
+        client=client,
+        config=BridgeConfig(),
         risk_manager=RiskManager(limits=limits),
         sizer_resolver=(lambda name: sizer) if sizer else None,
     )
 
 
 # ── Sizer wiring -------------------------------------------------------------
+
 
 def test_sizer_pct_portfolio_scales_qty(tmp_path):
     # 5% of 100k equity = $5000 budget; unit cost $185 → 27, capped at 25.
@@ -105,9 +114,12 @@ def test_sizer_veto_when_budget_below_unit_cost(tmp_path):
 def test_sized_cost_flows_into_risk_gate(tmp_path):
     # 2% of 100k = $2000 → 10 contracts at $185 = $1850; tight per-trade cap
     # of 0.5% of 50k BP = $250 vetoes the SIZED cost ($185 would pass at qty 1).
-    bridge = _bridge(tmp_path, _client(),
-                     sizer={"name": "fixed_dollar", "budget": 2000.0},
-                     limits=RiskLimits(max_pct_per_trade=0.005))
+    bridge = _bridge(
+        tmp_path,
+        _client(),
+        sizer={"name": "fixed_dollar", "budget": 2000.0},
+        limits=RiskLimits(max_pct_per_trade=0.005),
+    )
     assert bridge.execute_trade(_calendar_trade()) is None
     assert bridge.skip_reasons["risk_veto"] == 1
 
@@ -123,10 +135,12 @@ def test_no_sizer_keeps_qty_one(tmp_path):
 def test_probation_multiplier_scales_sized_qty_down(tmp_path):
     configure(tmp_path / "fw.db")
     from framework.execution.lifecycle import LifecycleManager
+
     lm = LifecycleManager()
     lm.set_state("calendar_call_ml", "probation", by="test")
     bridge = StrategyBridge(
-        client=_client(), config=BridgeConfig(),
+        client=_client(),
+        config=BridgeConfig(),
         risk_manager=RiskManager(),
         lifecycle_manager=lm,
         sizer_resolver=lambda name: {"name": "fixed_dollar", "budget": 2000.0},
@@ -142,45 +156,45 @@ def test_probation_multiplier_scales_sized_qty_down(tmp_path):
 def test_record_entry_uses_scaled_cost(tmp_path):
     configure(tmp_path / "fw.db")
     bridge = StrategyBridge(
-        client=_client(), config=BridgeConfig(),
+        client=_client(),
+        config=BridgeConfig(),
         risk_manager=RiskManager(),
         sizer_resolver=lambda name: {"name": "fixed_dollar", "budget": 2000.0},
     )
     assert bridge.execute_trade(_calendar_trade()) is not None
     with db_engine.get_session() as s:
-        row = s.execute(
-            text("SELECT detail FROM risk_events WHERE event_type = 'entry'")
-        ).mappings().first()
+        row = s.execute(text("SELECT detail FROM risk_events WHERE event_type = 'entry'")).mappings().first()
     assert "cost=1850.00" in row["detail"]  # 10 × $185, not $185
 
 
 def test_account_fetched_once_for_sizing_and_risk(tmp_path):
     client = _client()
-    bridge = _bridge(tmp_path, client,
-                     sizer={"name": "fixed_dollar", "budget": 2000.0})
+    bridge = _bridge(tmp_path, client, sizer={"name": "fixed_dollar", "budget": 2000.0})
     bridge.execute_trade(_calendar_trade())
     assert client.get_account.call_count == 1
 
 
 # ── Runtime enable/disable overrides -----------------------------------------
 
+
 def test_control_set_and_effective(tmp_path):
     configure(tmp_path / "fw.db")
-    assert effective_enabled("s1", True) is True     # no row → TOML default
+    assert effective_enabled("s1", True) is True  # no row → TOML default
     set_enabled("s1", False, by="test")
-    assert effective_enabled("s1", True) is False    # override wins
+    assert effective_enabled("s1", True) is False  # override wins
     assert enabled_overrides() == {"s1": False}
     clear_override("s1", by="test")
-    assert effective_enabled("s1", True) is True     # back to TOML
+    assert effective_enabled("s1", True) is True  # back to TOML
     assert enabled_overrides() == {}
 
 
 def test_control_preserves_lifecycle_on_toggle(tmp_path):
     configure(tmp_path / "fw.db")
     from framework.execution.lifecycle import LifecycleManager
+
     LifecycleManager().set_state("s1", "live", by="test")
     set_enabled("s1", False, by="test")
-    assert LifecycleManager().state("s1") == "live"    # toggle doesn't demote
+    assert LifecycleManager().state("s1") == "live"  # toggle doesn't demote
     set_enabled("s1", True, by="test")
     assert LifecycleManager().state("s1") == "live"
 
@@ -195,12 +209,14 @@ def test_filter_enabled_layers_db_on_toml(tmp_path):
 def test_migration_adds_enabled_column_to_old_db(tmp_path):
     # Simulate a pre-migration DB: strategy_state without the enabled column.
     import sqlite3
+
     path = tmp_path / "fw.db"
     conn = sqlite3.connect(str(path))
     conn.execute(
         "CREATE TABLE IF NOT EXISTS strategy_state ("
         " name TEXT PRIMARY KEY, lifecycle TEXT NOT NULL DEFAULT 'paper',"
-        " updated_at TEXT, updated_by TEXT)")
+        " updated_at TEXT, updated_by TEXT)"
+    )
     conn.execute("INSERT INTO strategy_state (name, lifecycle) VALUES ('old', 'live')")
     conn.commit()
     conn.close()
@@ -212,6 +228,7 @@ def test_migration_adds_enabled_column_to_old_db(tmp_path):
     # existing row survives, lifecycle intact, override unset (→ TOML default)
     assert effective_enabled("old", True) is True
     from framework.execution.lifecycle import LifecycleManager
+
     assert LifecycleManager().state("old") == "live"
 
 
@@ -225,40 +242,57 @@ def test_build_proposals_respects_db_override(tmp_path):
     source = MagicMock(return_value=[_calendar_trade()])
     reg = StrategyRegistry(configs={})
     with patch("framework.core.registry.get_registry", lambda: reg):
-        rows = build_proposals(store, strategies=["calendar_call_ml"],
-                               trade_source=source)
+        rows = build_proposals(store, strategies=["calendar_call_ml"], trade_source=source)
     assert rows == []
     source.assert_not_called()  # filtered before the signal source is consulted
 
 
 # ── Bot views ------------------------------------------------------------------
 
+
 def _seed_fw(tmp_path):
     from datetime import datetime
+
     today = datetime.now(UTC).date().isoformat()
     configure(tmp_path / "fw.db")
     with db_engine.session_scope() as s:
-        s.execute(text(
-            "INSERT INTO equity_snapshots (ts, equity, buying_power, portfolio_value) "
-            f"VALUES ('{today}T14:00:00+00:00', 100000, 50000, 100000)"))
-        s.execute(text(
-            "INSERT INTO equity_snapshots (ts, equity, buying_power, portfolio_value) "
-            f"VALUES ('{today}T15:00:00+00:00', 99500, 50000, 99500)"))
-        s.execute(text(
-            "INSERT INTO job_runs (job_name, started_at, finished_at, success, stats_json) "
-            f"VALUES ('equity_snapshot', '{today}T15:00:00', '{today}T15:00:01', 1, '{{\"equity\": 99500}}')"))
-        s.execute(text(
-            "INSERT INTO job_runs (job_name, started_at, finished_at, success, error) "
-            f"VALUES ('reconcile', '{today}T15:30:00', '{today}T15:30:01', 0, 'boom')"))
-        s.execute(text(
-            "INSERT INTO trade_events (ts, event_type, symbol, strategy, qty, price, detail) "
-            f"VALUES ('{today}T15:00:00', 'exit_filled', 'AAPL', 'calendar_call_ml', 1, 2.1, 'PT hit')"))
+        s.execute(
+            text(
+                "INSERT INTO equity_snapshots (ts, equity, buying_power, portfolio_value) "
+                f"VALUES ('{today}T14:00:00+00:00', 100000, 50000, 100000)"
+            )
+        )
+        s.execute(
+            text(
+                "INSERT INTO equity_snapshots (ts, equity, buying_power, portfolio_value) "
+                f"VALUES ('{today}T15:00:00+00:00', 99500, 50000, 99500)"
+            )
+        )
+        s.execute(
+            text(
+                "INSERT INTO job_runs (job_name, started_at, finished_at, success, stats_json) "
+                f"VALUES ('equity_snapshot', '{today}T15:00:00', '{today}T15:00:01', 1, '{{\"equity\": 99500}}')"
+            )
+        )
+        s.execute(
+            text(
+                "INSERT INTO job_runs (job_name, started_at, finished_at, success, error) "
+                f"VALUES ('reconcile', '{today}T15:30:00', '{today}T15:30:01', 0, 'boom')"
+            )
+        )
+        s.execute(
+            text(
+                "INSERT INTO trade_events (ts, event_type, symbol, strategy, qty, price, detail) "
+                f"VALUES ('{today}T15:00:00', 'exit_filled', 'AAPL', 'calendar_call_ml', 1, 2.1, 'PT hit')"
+            )
+        )
 
 
 def test_status_view_renders(tmp_path):
     from earnings_edge.bot_views import status_view
+
     _seed_fw(tmp_path)
-    text = status_view( market_open=True, pending_proposals=2, pending_exits=1)
+    text = status_view(market_open=True, pending_proposals=2, pending_exits=1)
     assert "SYSTEM STATUS" in text
     assert "🟢 open" in text
     assert "🟢 armed" in text
@@ -270,14 +304,32 @@ def test_status_view_renders(tmp_path):
 def test_positions_view_empty_and_seeded(tmp_path):
     from earnings_edge.bot_views import positions_view
     from framework.execution.managed import record_open_positions
+
     _seed_fw(tmp_path)
     assert "No open managed positions" in positions_view()
-    record_open_positions([{"symbol": "AAPL260731C00190000", "side": "sell", "ratio_qty": 2,
-          "option_type": "call", "strike": 190.0, "expiry": date(2026, 7, 31)},
-         {"symbol": "AAPL260828C00190000", "side": "buy", "ratio_qty": 2,
-          "option_type": "call", "strike": 190.0, "expiry": date(2026, 8, 28)}],
-        "calendar_call_ml", group_id="ord-1",
-        entry_price=1.85, metadata={"side": "CALENDAR", "earnings_date": "2026-07-29"},
+    record_open_positions(
+        [
+            {
+                "symbol": "AAPL260731C00190000",
+                "side": "sell",
+                "ratio_qty": 2,
+                "option_type": "call",
+                "strike": 190.0,
+                "expiry": date(2026, 7, 31),
+            },
+            {
+                "symbol": "AAPL260828C00190000",
+                "side": "buy",
+                "ratio_qty": 2,
+                "option_type": "call",
+                "strike": 190.0,
+                "expiry": date(2026, 8, 28),
+            },
+        ],
+        "calendar_call_ml",
+        group_id="ord-1",
+        entry_price=1.85,
+        metadata={"side": "CALENDAR", "earnings_date": "2026-07-29"},
     )
     text = positions_view()
     assert "calendar_call_ml" in text and "AAPL" in text
@@ -287,6 +339,7 @@ def test_positions_view_empty_and_seeded(tmp_path):
 
 def test_orders_and_jobs_views(tmp_path):
     from earnings_edge.bot_views import jobs_view, orders_view
+
     _seed_fw(tmp_path)
     orders = orders_view()
     assert "exit_filled" in orders and "AAPL" in orders
@@ -297,6 +350,7 @@ def test_orders_and_jobs_views(tmp_path):
 
 def test_equity_view(tmp_path):
     from earnings_edge.bot_views import equity_view
+
     _seed_fw(tmp_path)
     text = equity_view()
     assert "$99,500" in text
@@ -305,13 +359,20 @@ def test_equity_view(tmp_path):
 
 def test_strategies_view_and_buttons(tmp_path):
     from earnings_edge.bot_views import strategies_view
+
     _seed_fw(tmp_path)
-    cfg = StrategyConfig(name="s1", enabled=True, execution_mode="approval",
-                         lifecycle="paper", sizer={"name": "fixed_dollar", "budget": 1000.0},
-                         limits={}, exits=[])
+    cfg = StrategyConfig(
+        name="s1",
+        enabled=True,
+        execution_mode="approval",
+        lifecycle="paper",
+        sizer={"name": "fixed_dollar", "budget": 1000.0},
+        limits={},
+        exits=[],
+    )
     reg = StrategyRegistry(configs={"s1": cfg})
     set_enabled("s1", False, by="test")
-    text, buttons = strategies_view( registry=reg)
+    text, buttons = strategies_view(registry=reg)
     assert "s1" in text and "⏸" in text
     assert "fixed_dollar" in text
     assert buttons == [{"name": "s1", "enabled": False}]

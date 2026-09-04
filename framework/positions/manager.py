@@ -111,8 +111,15 @@ class ExitManager:
             logger.warning("exit eval: could not parse clock (%s)", exc)
             return None
 
-    def _evaluate_group(self, group: PositionGroup, snaps: dict, cal,
-                        today: date, out: dict, minutes_to_close: int | None = None) -> None:
+    def _evaluate_group(
+        self,
+        group: PositionGroup,
+        snaps: dict,
+        cal,
+        today: date,
+        out: dict,
+        minutes_to_close: int | None = None,
+    ) -> None:
         cfg = self.registry.get(group.strategy)
         rules = build_exit_rules(cfg.exits) if cfg else []
         if not rules:
@@ -120,8 +127,9 @@ class ExitManager:
 
         opened_date = group.opened_at[:10]
         try:
-            sessions_since = max(len(cal.sessions_between(
-                datetime.strptime(opened_date, "%Y-%m-%d").date(), today)) - 1, 0)
+            sessions_since = max(
+                len(cal.sessions_between(datetime.strptime(opened_date, "%Y-%m-%d").date(), today)) - 1, 0
+            )
         except ValueError:
             sessions_since = 0
         sessions_until_event = None
@@ -129,18 +137,19 @@ class ExitManager:
             if group.event_date < today:
                 sessions_until_event = 0  # event day/past → time exits fire
             else:
-                sessions_until_event = max(
-                    len(cal.sessions_between(today, group.event_date)) - 1, 0)
+                sessions_until_event = max(len(cal.sessions_between(today, group.event_date)) - 1, 0)
 
         value = unit_structure_value(group.legs, snaps)
         market = MarketView(
-            value_now=value, today=today,
+            value_now=value,
+            today=today,
             sessions_since_open=sessions_since,
             sessions_until_event=sessions_until_event,
             minutes_to_close=minutes_to_close,
         )
 
         from ..core.control import effective_execution_mode
+
         toml_mode = cfg.execution_mode if cfg else "approval"
         is_auto = effective_execution_mode(group.strategy, toml_mode) == "auto"
 
@@ -155,10 +164,12 @@ class ExitManager:
                 out["auto_closed"].append(
                     f"🔒 {cards.bold('AUTO-EXIT')} {cards.esc(group.strategy)} "
                     f"{cards.bold(group.ticker)} ({cards.esc(signal.rule)}: "
-                    f"{cards.esc(signal.reason)}) @ {mo.filled_avg_price}")
+                    f"{cards.esc(signal.reason)}) @ {mo.filled_avg_price}"
+                )
             else:
                 out["errors"].append(
-                    f"{group.ticker}: exit order {mo.state} ({mo.detail}) — retrying next cycle")
+                    f"{group.ticker}: exit order {mo.state} ({mo.detail}) — retrying next cycle"
+                )
         else:
             row = self.propose_exit(group, signal)
             if row is not None:
@@ -172,8 +183,7 @@ class ExitManager:
         or when every remaining unquoted leg is past expiry."""
         today = self._today or datetime.now(UTC).date()
         try:
-            snaps = self.client.get_option_snapshots_bulk(
-                *[leg.symbol for leg in group.legs]) or {}
+            snaps = self.client.get_option_snapshots_bulk(*[leg.symbol for leg in group.legs]) or {}
         except Exception:
             snaps = {}
         plan = remaining_close_plan(group.legs, snaps, today)
@@ -182,19 +192,24 @@ class ExitManager:
             n = close_positions(group.group_id)
             mo = ManagedOrder(
                 client_order_id=f"exit_{group.group_id}_expired",
-                side="sell", qty=group.qty, policy="mark",
-                state="filled", detail="marked closed: expired unquoted legs",
+                side="sell",
+                qty=group.qty,
+                policy="mark",
+                state="filled",
+                detail="marked closed: expired unquoted legs",
             )
-            self._event("exit_filled", group,
-                        detail=f"{reason} | expired unquoted legs closed locally n={n}")
+            self._event("exit_filled", group, detail=f"{reason} | expired unquoted legs closed locally n={n}")
             logger.info("exit marked expired %s %s (%s)", group.strategy, group.ticker, reason)
             return mo
 
         if plan["mode"] == "no_quote":
             mo = ManagedOrder(
                 client_order_id=f"exit_{group.group_id}_noquote",
-                side="sell", qty=group.qty, policy="none",
-                state="error", detail="no quote",
+                side="sell",
+                qty=group.qty,
+                policy="none",
+                state="error",
+                detail="no quote",
             )
             self._event("exit_order", group, detail=f"{reason} | order error: no quote")
             logger.warning("exit order error for %s: no quote", group.group_id)
@@ -203,9 +218,11 @@ class ExitManager:
         close_legs = plan["close_legs"]
         if plan["mode"] == "combo":
             inverted = [
-                {"symbol": leg.symbol,
-                 "side": "sell" if leg.side == "buy" else "buy",
-                 "ratio_qty": round(float(leg.qty) / float(max(group.qty, 1.0)))}
+                {
+                    "symbol": leg.symbol,
+                    "side": "sell" if leg.side == "buy" else "buy",
+                    "ratio_qty": round(float(leg.qty) / float(max(group.qty, 1.0))),
+                }
                 for leg in close_legs
             ]
             side = "buy" if group.credit else "sell"
@@ -213,15 +230,19 @@ class ExitManager:
 
             def quote_fn() -> float | None:
                 try:
-                    now_snaps = self.client.get_option_snapshots_bulk(
-                        *[leg.symbol for leg in close_legs]) or {}
+                    now_snaps = (
+                        self.client.get_option_snapshots_bulk(*[leg.symbol for leg in close_legs]) or {}
+                    )
                 except Exception:
                     return None
                 value = unit_structure_value(close_legs, now_snaps)
                 return abs(value) if value else None
 
             mo = self.order_manager.execute(
-                inverted, qty, LimitWalkPolicy(steps=3), quote_fn,
+                inverted,
+                qty,
+                LimitWalkPolicy(steps=3),
+                quote_fn,
                 side=side,
                 client_order_id=f"exit_{group.group_id}_{int(datetime.now(UTC).timestamp())}",
             )
@@ -231,11 +252,13 @@ class ExitManager:
             filled_any = False
             last_px = None
             for leg in close_legs:
-                inverted = [{
-                    "symbol": leg.symbol,
-                    "side": "sell" if leg.side == "buy" else "buy",
-                    "ratio_qty": round(float(leg.qty) / float(max(group.qty, 1.0))),
-                }]
+                inverted = [
+                    {
+                        "symbol": leg.symbol,
+                        "side": "sell" if leg.side == "buy" else "buy",
+                        "ratio_qty": round(float(leg.qty) / float(max(group.qty, 1.0))),
+                    }
+                ]
                 side = inverted[0]["side"]
                 qty = max(int(leg.qty), 1)
 
@@ -248,11 +271,13 @@ class ExitManager:
                     return abs(mid) if mid else None
 
                 last = self.order_manager.execute(
-                    inverted, qty, LimitWalkPolicy(steps=3), quote_fn,
+                    inverted,
+                    qty,
+                    LimitWalkPolicy(steps=3),
+                    quote_fn,
                     side=side,
                     client_order_id=(
-                        f"exit_{group.group_id}_{leg.symbol}_"
-                        f"{int(datetime.now(UTC).timestamp())}"
+                        f"exit_{group.group_id}_{leg.symbol}_{int(datetime.now(UTC).timestamp())}"
                     ),
                 )
                 if last.state in ("filled", "partial"):
@@ -261,8 +286,11 @@ class ExitManager:
             if last is None:
                 last = ManagedOrder(
                     client_order_id=f"exit_{group.group_id}_empty",
-                    side="sell", qty=group.qty, policy="none",
-                    state="error", detail="no quote",
+                    side="sell",
+                    qty=group.qty,
+                    policy="none",
+                    state="error",
+                    detail="no quote",
                 )
             if filled_any:
                 last.state = "filled" if last.state != "partial" else last.state
@@ -272,6 +300,7 @@ class ExitManager:
             mo = last
             if mo.state == "exhausted":
                 from framework.alerts import DEDUPER
+
                 DEDUPER.emit(
                     "remaining_leg_exhaust",
                     f"⚠️ Remaining-leg close exhausted for {group.ticker} "
@@ -284,13 +313,17 @@ class ExitManager:
             if mo.filled_avg_price is not None and group.entry_price > 0:
                 sign = -1.0 if group.credit else 1.0
                 realized = sign * (mo.filled_avg_price - group.entry_price) * 100 * group.qty
-            self._event("exit_filled", group, price=mo.filled_avg_price,
-                        detail=f"{reason} | legs closed={n} mode={plan['mode']} realized_pnl={realized}")
-            logger.info("exit filled %s %s @ %s (%s)", group.strategy, group.ticker,
-                        mo.filled_avg_price, reason)
+            self._event(
+                "exit_filled",
+                group,
+                price=mo.filled_avg_price,
+                detail=f"{reason} | legs closed={n} mode={plan['mode']} realized_pnl={realized}",
+            )
+            logger.info(
+                "exit filled %s %s @ %s (%s)", group.strategy, group.ticker, mo.filled_avg_price, reason
+            )
         else:
-            self._event("exit_order", group,
-                        detail=f"{reason} | order {mo.state}: {mo.detail}")
+            self._event("exit_order", group, detail=f"{reason} | order {mo.state}: {mo.detail}")
             logger.warning("exit order %s for %s: %s", mo.state, group.group_id, mo.detail)
         return mo
 
@@ -299,16 +332,14 @@ class ExitManager:
     def propose_exit(self, group: PositionGroup, signal: ExitSignal) -> dict | None:
         """Insert a deduped approval card for a time-based exit."""
         legs_txt = " / ".join(
-            f"{'SELL' if leg.side == 'sell' else 'BUY'} {cards.code(leg.symbol)}"
-            for leg in group.legs
+            f"{'SELL' if leg.side == 'sell' else 'BUY'} {cards.code(leg.symbol)}" for leg in group.legs
         )
         subtitle = cards.esc(f"rule: {signal.rule} — {signal.reason}")
         body = [
             cards.esc(f"entry ${group.entry_price:.2f} | opened {group.opened_at[:10]}"),
             f"legs: {legs_txt}",
         ]
-        card = cards.card_frame(cards.EXIT_EMOJI, f"EXIT? [{group.strategy}] {group.ticker}",
-                                subtitle, body)
+        card = cards.card_frame(cards.EXIT_EMOJI, f"EXIT? [{group.strategy}] {group.ticker}", subtitle, body)
         pid = exit_proposals_insert(
             group_id=group.group_id,
             strategy=group.strategy,
@@ -332,7 +363,8 @@ class ExitManager:
         now = _utcnow()
         if not close:
             exit_proposals_mark(
-                proposal_id, "snoozed",
+                proposal_id,
+                "snoozed",
                 snoozed_until=date.today().isoformat(),
                 decided_by=decided_by,
                 decided_at=now,
@@ -348,19 +380,26 @@ class ExitManager:
         status = "closed" if mo.state in ("filled", "partial") else "pending"
         if status == "closed":
             exit_proposals_mark(
-                proposal_id, "closed",
-                decided_by=decided_by, decided_at=now,
+                proposal_id,
+                "closed",
+                decided_by=decided_by,
+                decided_at=now,
             )
-        return {"ok": status == "closed", "order_state": mo.state, "detail": mo.detail,
-                "filled_avg_price": mo.filled_avg_price}
+        return {
+            "ok": status == "closed",
+            "order_state": mo.state,
+            "detail": mo.detail,
+            "filled_avg_price": mo.filled_avg_price,
+        }
 
     def pending_exit_proposals(self) -> list[dict]:
         return exit_proposals_list_pending()
 
     # ── internals ----------------------------------------------------------------
 
-    def _event(self, event_type: str, group: PositionGroup,
-               price: float | None = None, detail: str = "") -> None:
+    def _event(
+        self, event_type: str, group: PositionGroup, price: float | None = None, detail: str = ""
+    ) -> None:
         trade_events_insert(
             event_type,
             symbol=group.ticker,
@@ -369,4 +408,3 @@ class ExitManager:
             price=price,
             detail=detail,
         )
-

@@ -26,11 +26,11 @@ def conn(tmp_path):
     db_engine.configure(tmp_path / "fw.db")
 
 
-CTX = SizeContext(equity=100_000, buying_power=80_000,
-                  price_per_unit=250.0, max_loss_per_unit=250.0)
+CTX = SizeContext(equity=100_000, buying_power=80_000, price_per_unit=250.0, max_loss_per_unit=250.0)
 
 
 # ── Sizers ---------------------------------------------------------------
+
 
 def test_fixed_dollar_sizer():
     assert FixedDollarSizer(1000).quantity(CTX) == 4
@@ -45,16 +45,14 @@ def test_pct_portfolio_sizer():
 
 def test_vol_target_sizer():
     assert VolTargetSizer(0.02).quantity(CTX) == 8  # 2k risk / 250
-    naked = SizeContext(equity=100_000, buying_power=80_000,
-                        price_per_unit=500.0, max_loss_per_unit=None)
+    naked = SizeContext(equity=100_000, buying_power=80_000, price_per_unit=500.0, max_loss_per_unit=None)
     assert VolTargetSizer(0.02).quantity(naked) == 4  # falls back to price
 
 
 def test_vol_target_qty_at_least_one_when_stress_fits_budget():
     """2x expected-move stress under the 1% / $100k budget → qty ≥ 1."""
     stress = 800.0  # 2 * $4 EM * 100
-    ctx = SizeContext(equity=100_000, buying_power=80_000,
-                      price_per_unit=stress, max_loss_per_unit=stress)
+    ctx = SizeContext(equity=100_000, buying_power=80_000, price_per_unit=stress, max_loss_per_unit=stress)
     assert VolTargetSizer(0.01).quantity(ctx) >= 1
 
 
@@ -66,6 +64,7 @@ def test_build_sizer_from_config():
 
 
 # ── Kill switch ------------------------------------------------------------
+
 
 def test_killswitch_trip_resume_persists(conn):
     ks = KillSwitch()
@@ -80,6 +79,7 @@ def test_killswitch_trip_resume_persists(conn):
 
 
 # ── Risk manager ------------------------------------------------------------
+
 
 def test_check_trade_approves_within_limits(conn):
     rm = RiskManager()
@@ -108,8 +108,9 @@ def test_check_trade_min_buying_power(conn):
 
 def test_check_trade_underlying_cap(conn):
     rm = RiskManager(RiskLimits(max_pct_per_underlying=0.25))
-    d = rm.check_trade("s1", "AAPL", est_cost=6000, equity=100_000,
-                       buying_power=500_000, underlying_exposure=20_000)
+    d = rm.check_trade(
+        "s1", "AAPL", est_cost=6000, equity=100_000, buying_power=500_000, underlying_exposure=20_000
+    )
     assert not d.approved and "underlying" in d.reason
 
 
@@ -125,15 +126,13 @@ def test_check_trade_strategy_daily_budget(conn):
 
 def test_check_trade_probation_multiplier(conn):
     rm = RiskManager()
-    d = rm.check_trade("s1", "AAPL", est_cost=100, equity=100_000,
-                       buying_power=50_000, lifecycle="probation")
+    d = rm.check_trade("s1", "AAPL", est_cost=100, equity=100_000, buying_power=50_000, lifecycle="probation")
     assert d.approved and d.qty_multiplier == 0.5
 
 
 def test_check_trade_paper_lifecycle_rejected_for_execution(conn):
     rm = RiskManager()
-    d = rm.check_trade("s1", "AAPL", est_cost=100, equity=100_000,
-                       buying_power=50_000, lifecycle="unknown")
+    d = rm.check_trade("s1", "AAPL", est_cost=100, equity=100_000, buying_power=50_000, lifecycle="unknown")
     assert not d.approved
 
 
@@ -157,7 +156,7 @@ def test_daily_loss_trips_killswitch(conn):
             {"ts": today + "T13:00:00+00:00", "eq": 100_000, "bp": 90_000, "pv": 100_000},
         )
     assert rm.check_daily_loss(96_000) is False  # -4% < 5%
-    assert rm.check_daily_loss(94_500) is True   # -5.5% → trip
+    assert rm.check_daily_loss(94_500) is True  # -5.5% → trip
     assert rm.killswitch.is_halted()
 
 
@@ -192,6 +191,7 @@ def test_resume_resets_rejection_streak(conn):
 
 def test_gcd_reject_does_not_increment_kill_switch_streak(conn):
     from framework.risk.manager import is_gcd_reject
+
     assert is_gcd_reject("leg ratio quantities should be relatively prime: GCD[11 11] = 11")
     rm = RiskManager(RiskLimits(max_consecutive_rejections=3))
     detail = "leg ratio quantities should be relatively prime: GCD[11 11] = 11"
@@ -200,16 +200,21 @@ def test_gcd_reject_does_not_increment_kill_switch_streak(conn):
     assert rm.record_broker_rejection("s1", detail) == 0
     assert rm.killswitch.is_halted() is False
     with db_engine.get_session() as s:
-        kinds = [r["event_type"] for r in s.execute(text("SELECT event_type FROM risk_events")).mappings().all()]
+        kinds = [
+            r["event_type"] for r in s.execute(text("SELECT event_type FROM risk_events")).mappings().all()
+        ]
     assert kinds == ["gcd_reject", "gcd_reject", "gcd_reject"]
 
 
 # ── Equity -------------------------------------------------------------------
 
+
 def _stub_client(equity=100_000, bp=80_000):
     c = MagicMock()
     c.get_account.return_value = {
-        "equity": str(equity), "buying_power": str(bp), "portfolio_value": str(equity),
+        "equity": str(equity),
+        "buying_power": str(bp),
+        "portfolio_value": str(equity),
     }
     return c
 

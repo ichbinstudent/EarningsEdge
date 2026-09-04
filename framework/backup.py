@@ -1,4 +1,5 @@
 """Nightly SQLite backup via the online backup API (hot-DB safe)."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime

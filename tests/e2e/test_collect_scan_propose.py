@@ -65,11 +65,9 @@ def _collect_phase(collector, monkeypatch) -> list:
     from earnings_edge.models import EarningsCandidate
 
     monkeypatch.setattr(
-        collector, "_investing_fetch",
-        lambda d: [
-            EarningsCandidate(ticker=t, timing="Post Market", source="investing")
-            for t in _tickers()
-        ],
+        collector,
+        "_investing_fetch",
+        lambda d: [EarningsCandidate(ticker=t, timing="Post Market", source="investing") for t in _tickers()],
     )
 
     def _finnhub_down(d):
@@ -94,21 +92,24 @@ def _persist_phase(tmp_db_path, candidates) -> None:
         s.execute(text(_CALENDAR_TRADES_DDL))
     for i, c in enumerate(candidates):
         price = 100.0 + i  # vary prices so rows aren't identical
-        insert_snapshot({
-            "ticker": c.ticker,
-            "earnings_date": EARNINGS_DATE.isoformat(),
-            "scan_date": SCAN_DATE.isoformat(),
-            "timing": c.timing,
-            "price": price,
-            "avg_volume_30d": 5_000_000,
-            "has_options": 1,
-            "data_source": "e2e_fixture",
-        })
+        insert_snapshot(
+            {
+                "ticker": c.ticker,
+                "earnings_date": EARNINGS_DATE.isoformat(),
+                "scan_date": SCAN_DATE.isoformat(),
+                "timing": c.timing,
+                "price": price,
+                "avg_volume_30d": 5_000_000,
+                "has_options": 1,
+                "data_source": "e2e_fixture",
+            }
+        )
     with db_engine.session_scope() as s:
         for i, c in enumerate(candidates):
             price = 100.0 + i  # vary prices so rows aren't identical
-            s.execute(text(
-                """
+            s.execute(
+                text(
+                    """
                 INSERT INTO calendar_call_trades (
                     ticker, earnings_date, scan_date,
                     near_expiry, far_expiry, strike,
@@ -116,18 +117,25 @@ def _persist_phase(tmp_db_path, candidates) -> None:
                     near_entry, far_entry, near_exit, far_exit,
                     net_debit, exit_value, pnl_dollars, return_on_debit
                 ) VALUES (:tk,:ed,:sc,:ne,:fe,:st,:nc,:fc,:n1,:f1,:n2,:f2,:nd,:ev,:pnl,:rod)
-                """),
+                """
+                ),
                 {
-                    "tk": c.ticker, "ed": EARNINGS_DATE.isoformat(), "sc": SCAN_DATE.isoformat(),
-                    "ne": near_expiry, "fe": far_expiry, "st": price,  # ATM: strike == price
+                    "tk": c.ticker,
+                    "ed": EARNINGS_DATE.isoformat(),
+                    "sc": SCAN_DATE.isoformat(),
+                    "ne": near_expiry,
+                    "fe": far_expiry,
+                    "st": price,  # ATM: strike == price
                     "nc": f"O:{c.ticker}{near_expiry.replace('-', '')}C{int(price):08d}",
                     "fc": f"O:{c.ticker}{far_expiry.replace('-', '')}C{int(price):08d}",
-                    "n1": 0.40, "f1": 1.00,   # near_entry, far_entry
-                    "n2": 0.05, "f2": 0.90,   # near_exit, far_exit (IV crush on near leg)
-                    "nd": 0.60,         # net_debit (combo ask convention)
-                    "ev": 0.85,         # exit_value
-                    "pnl": 25.0,        # pnl_dollars
-                    "rod": 0.42,         # return_on_debit
+                    "n1": 0.40,
+                    "f1": 1.00,  # near_entry, far_entry
+                    "n2": 0.05,
+                    "f2": 0.90,  # near_exit, far_exit (IV crush on near leg)
+                    "nd": 0.60,  # net_debit (combo ask convention)
+                    "ev": 0.85,  # exit_value
+                    "pnl": 25.0,  # pnl_dollars
+                    "rod": 0.42,  # return_on_debit
                 },
             )
 
@@ -185,9 +193,19 @@ def test_collect_scan_propose_pipeline(tmp_db_path, tmp_path, monkeypatch, test_
     # trade_json payload shape — what execute_proposal() will rehydrate
     payload = json.loads(row["trade_json"])
     assert {
-        "ticker", "earnings_date", "scan_date", "strategy", "side",
-        "entry_price", "exit_price", "pnl", "pnl_pct",
-        "features", "model_score", "ml_decision", "notes",
+        "ticker",
+        "earnings_date",
+        "scan_date",
+        "strategy",
+        "side",
+        "entry_price",
+        "exit_price",
+        "pnl",
+        "pnl_pct",
+        "features",
+        "model_score",
+        "ml_decision",
+        "notes",
     } <= set(payload)
     assert payload["earnings_date"] == EARNINGS_DATE.isoformat()
     assert payload["scan_date"] == SCAN_DATE.isoformat()

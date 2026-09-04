@@ -10,6 +10,7 @@ For every (ticker, scan_date) in the snapshot table where has_options=1:
 Usage:
   python backfill_options_chains.py --start 2024-01-01 --end 2025-01-01 --limit 100
 """
+
 from __future__ import annotations
 
 import argparse
@@ -52,7 +53,7 @@ def _parse_args():
 def bs_price(S: float, K: float, T: float, r: float, sigma: float, opt_type: str) -> float:
     if T <= 0 or sigma <= 0 or S <= 0 or K <= 0:
         return 0.0
-    d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
+    d1 = (math.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * math.sqrt(T))
     d2 = d1 - sigma * math.sqrt(T)
     if opt_type == "call":
         return S * norm.cdf(d1) - K * math.exp(-r * T) * norm.cdf(d2)
@@ -62,7 +63,7 @@ def bs_price(S: float, K: float, T: float, r: float, sigma: float, opt_type: str
 def delta(S: float, K: float, T: float, iv: float, opt_type: str, r: float = 0.045) -> float:
     if T <= 0 or iv <= 0 or S <= 0 or K <= 0:
         return float("nan")
-    d1 = (math.log(S / K) + (r + 0.5 * iv ** 2) * T) / (iv * math.sqrt(T))
+    d1 = (math.log(S / K) + (r + 0.5 * iv**2) * T) / (iv * math.sqrt(T))
     return float(norm.cdf(d1) if opt_type == "call" else norm.cdf(d1) - 1)
 
 
@@ -155,13 +156,11 @@ def backfill(client, snapshots_df, *, run_id, dry_run=False):
 
         # Alpaca bars allow up to ~100 symbols per call; chunk
         for chunk_start in range(0, len(uniq), 100):
-            chunk = uniq[chunk_start: chunk_start + 100]
+            chunk = uniq[chunk_start : chunk_start + 100]
             if api_calls > 0 and api_calls % 50 == 0:
                 time.sleep(1)  # be nice
 
-            bars_list, _ = client.bars(
-                symbols=chunk, timeframe="1D", start=sd, end=sd
-            )
+            bars_list, _ = client.bars(symbols=chunk, timeframe="1D", start=sd, end=sd)
             api_calls += 1
             if not bars_list:
                 continue
@@ -169,34 +168,36 @@ def backfill(client, snapshots_df, *, run_id, dry_run=False):
             rows = []
             for bar in bars_list:
                 ct = bar.get("symbol", "")
-                rows.append({
-                    "collector_run_id": run_id,
-                    "ticker": ticker,
-                    "scan_date": sd,
-                    "contract_ticker": ct,
-                    "underlying": ticker,
-                    "expiry": None,
-                    "strike": None,
-                    "contract_type": None,
-                    "style": None,
-                    "bid": None,
-                    "ask": None,
-                    "bid_size": None,
-                    "ask_size": None,
-                    "midpoint": None,
-                    "close": bar.get("c"),
-                    "open_price": bar.get("o"),
-                    "high": bar.get("h"),
-                    "low": bar.get("l"),
-                    "trade_count": bar.get("n"),
-                    "volume": bar.get("v"),
-                    "vwap": bar.get("vw"),
-                    "implied_volatility": None,
-                    "delta": None,
-                    "gamma": None,
-                    "theta": None,
-                    "vega": None,
-                })
+                rows.append(
+                    {
+                        "collector_run_id": run_id,
+                        "ticker": ticker,
+                        "scan_date": sd,
+                        "contract_ticker": ct,
+                        "underlying": ticker,
+                        "expiry": None,
+                        "strike": None,
+                        "contract_type": None,
+                        "style": None,
+                        "bid": None,
+                        "ask": None,
+                        "bid_size": None,
+                        "ask_size": None,
+                        "midpoint": None,
+                        "close": bar.get("c"),
+                        "open_price": bar.get("o"),
+                        "high": bar.get("h"),
+                        "low": bar.get("l"),
+                        "trade_count": bar.get("n"),
+                        "volume": bar.get("v"),
+                        "vwap": bar.get("vw"),
+                        "implied_volatility": None,
+                        "delta": None,
+                        "gamma": None,
+                        "theta": None,
+                        "vega": None,
+                    }
+                )
                 # Parse OCC for expiry/strike/contract_type
                 if len(ct) >= 6 and ct[-1] in "CP":
                     ctype_char = ct[-1]
@@ -205,11 +206,13 @@ def backfill(client, snapshots_df, *, run_id, dry_run=False):
                         expiry_part = ct[-16:-10]
                         int(strike_part)
                         int(expiry_part)
-                        rows[-1].update({
-                            "expiry": f"20{expiry_part[:2]}-{expiry_part[2:4]}-{expiry_part[4:6]}",
-                            "strike": int(strike_part) / 1000.0,
-                            "contract_type": "call" if ctype_char == "C" else "put",
-                        })
+                        rows[-1].update(
+                            {
+                                "expiry": f"20{expiry_part[:2]}-{expiry_part[2:4]}-{expiry_part[4:6]}",
+                                "strike": int(strike_part) / 1000.0,
+                                "contract_type": "call" if ctype_char == "C" else "put",
+                            }
+                        )
                     except (ValueError, IndexError):
                         pass
 
@@ -228,6 +231,7 @@ def main():
         raise RuntimeError("Pass --api-key + --api-secret or set APCA_API env vars")
 
     from earnings_edge.collectors.alpaca_options import AlpacaOptionsClient
+
     client = AlpacaOptionsClient(api_key=args.api_key, api_secret=args.api_secret)
 
     query = "SELECT * FROM snapshots WHERE has_options = 1"
@@ -249,12 +253,18 @@ def main():
         params["limit"] = int(args.limit)
 
     import pandas as pd
+
     df = pd.read_sql(text(query), get_engine(), params=params)
     if df.empty:
         logger.warning("No snapshots matching criteria")
         return
 
-    logger.info("Backfilling options for %d snapshots (%s to %s)", len(df), df['scan_date'].min(), df['scan_date'].max())
+    logger.info(
+        "Backfilling options for %d snapshots (%s to %s)",
+        len(df),
+        df["scan_date"].min(),
+        df["scan_date"].max(),
+    )
 
     run_id = f"backfill_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
     inserted, api_calls = backfill(client, df, run_id=run_id, dry_run=args.dry_run)

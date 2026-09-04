@@ -28,28 +28,27 @@ class TestDatabase(unittest.TestCase):
 
     def test_scan_runs_table_exists(self):
         with db_engine.get_session() as s:
-            tables = {r[0] for r in s.execute(
-                text("SELECT name FROM sqlite_master WHERE type='table'")
-            )}
+            tables = {r[0] for r in s.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))}
         self.assertIn("scan_runs", tables)
 
     def test_insert_scan_run(self):
         from earnings_edge.db import insert_scan_run
-        row_id = insert_scan_run({
-            "scan_timestamp": "2026-06-17T12:00:00Z",
-            "scanner_name": "Earnings Calendar",
-            "trigger_type": "test",
-            "candidate_count": 50,
-            "tier1_count": 3,
-            "tier2_count": 2,
-            "take_count": 1,
-            "duration_secs": 42.5,
-            "success": 1,
-        })
+
+        row_id = insert_scan_run(
+            {
+                "scan_timestamp": "2026-06-17T12:00:00Z",
+                "scanner_name": "Earnings Calendar",
+                "trigger_type": "test",
+                "candidate_count": 50,
+                "tier1_count": 3,
+                "tier2_count": 2,
+                "take_count": 1,
+                "duration_secs": 42.5,
+                "success": 1,
+            }
+        )
         with db_engine.get_session() as s:
-            row = s.execute(
-                text("SELECT * FROM scan_runs WHERE id = :id"), {"id": row_id}
-            ).mappings().first()
+            row = s.execute(text("SELECT * FROM scan_runs WHERE id = :id"), {"id": row_id}).mappings().first()
         self.assertEqual(row["scanner_name"], "Earnings Calendar")
         self.assertEqual(row["candidate_count"], 50)
 

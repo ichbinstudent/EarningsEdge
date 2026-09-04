@@ -48,12 +48,21 @@ class MarketChameleonBrowser:
 
         opts = webdriver.ChromeOptions()
         for flag in (
-            "--headless", "--no-sandbox", "--disable-dev-shm-usage",
-            "--disable-gpu", "--disable-extensions", "--disable-infobars",
-            "--blink-settings=imagesEnabled=false", "--disable-3d-apis",
-            "--mute-audio", "--no-first-run", "--no-default-browser-check",
-            "--disable-translate", "--disable-plugins",
-            "--disable-software-rasterizer", "--window-size=1920,1080",
+            "--headless",
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--disable-extensions",
+            "--disable-infobars",
+            "--blink-settings=imagesEnabled=false",
+            "--disable-3d-apis",
+            "--mute-audio",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-translate",
+            "--disable-plugins",
+            "--disable-software-rasterizer",
+            "--window-size=1920,1080",
         ):
             opts.add_argument(flag)
 
@@ -99,9 +108,7 @@ class MarketChameleonBrowser:
                     )
                     wait = WebDriverWait(self._driver, 8)
                     section = wait.until(
-                        EC.presence_of_element_located(
-                            (By.CLASS_NAME, "symbol-section-header-descr")
-                        )
+                        EC.presence_of_element_located((By.CLASS_NAME, "symbol-section-header-descr"))
                     )
 
                     win_rate, quarters = 0.0, 0

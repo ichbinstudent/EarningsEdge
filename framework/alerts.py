@@ -1,4 +1,5 @@
 """De-duped exception alerts for the approval chat only."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta

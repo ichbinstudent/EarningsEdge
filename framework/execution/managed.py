@@ -41,9 +41,13 @@ def record_open_positions(
     group; None for structures with no differential-expiry deadline.
     """
     return managed_positions_open(
-        legs, strategy, group_id,
-        order_id=order_id, entry_price=entry_price,
-        metadata=metadata, exit_by=exit_by,
+        legs,
+        strategy,
+        group_id,
+        order_id=order_id,
+        entry_price=entry_price,
+        metadata=metadata,
+        exit_by=exit_by,
     )
 
 
@@ -92,14 +96,16 @@ def open_groups() -> list:
                 expiry = datetime.strptime(meta["expiry"], "%Y-%m-%d").date()
             except ValueError:
                 pass
-        g.legs.append(LegPos(
-            symbol=row["symbol"],
-            side=meta.get("leg_side") or "buy",
-            qty=float(row.get("qty") or 1),
-            option_type=meta.get("option_type") or "",
-            strike=float(meta.get("strike") or 0),
-            expiry=expiry,
-        ))
+        g.legs.append(
+            LegPos(
+                symbol=row["symbol"],
+                side=meta.get("leg_side") or "buy",
+                qty=float(row.get("qty") or 1),
+                option_type=meta.get("option_type") or "",
+                strike=float(meta.get("strike") or 0),
+                expiry=expiry,
+            )
+        )
     return list(groups.values())
 
 

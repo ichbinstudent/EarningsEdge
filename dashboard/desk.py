@@ -2,6 +2,7 @@
 
 Same functions the Telegram bot calls — no second implementation.
 """
+
 from __future__ import annotations
 
 import os
@@ -76,10 +77,13 @@ def load_desk(*, get_positions: Callable | None = None) -> dict:
     try:
         entries = pending_trades_brief(30) if table_exists("pending_trades") else []
         exits = pending_exits()
-        raw_orphans = trade_events_list(event_type="orphan_found", limit=20) if table_exists("trade_events") else []
+        raw_orphans = (
+            trade_events_list(event_type="orphan_found", limit=20) if table_exists("trade_events") else []
+        )
         raw_assignments = (
             trade_events_list(event_type="assignment_detected", limit=20)
-            if table_exists("trade_events") else []
+            if table_exists("trade_events")
+            else []
         )
         jobs = job_runs_failed(10) if table_exists("job_runs") else []
 
@@ -109,9 +113,7 @@ def load_desk(*, get_positions: Callable | None = None) -> dict:
         assignments = _filter_events(raw_assignments)
     except Exception:
         entries, exits, orphans, assignments, jobs = [], [], [], [], []
-    inbox = assemble_inbox(
-        entries=entries, exits=exits, orphans=orphans,
-        assignments=assignments, jobs=jobs)
+    inbox = assemble_inbox(entries=entries, exits=exits, orphans=orphans, assignments=assignments, jobs=jobs)
     return {
         "kill": {
             "halted": bool(ks.get("halted")),
@@ -166,7 +168,10 @@ def run_desk_action(
             return {"ok": False, "banner": "⚠️ no broker client"}
         pos = ba.find_broker_pos(client.get_positions(), symbol)
         if not pos:
-            return {"ok": False, "banner": book_action_banner("adopt", {"ok": False, "error": "symbol not at broker"}, symbol)}
+            return {
+                "ok": False,
+                "banner": book_action_banner("adopt", {"ok": False, "error": "symbol not at broker"}, symbol),
+            }
         result = ba.adopt_orphan(pos, by=by)
         return {"ok": result.get("ok"), "banner": book_action_banner("adopt", result, symbol), **result}
     if op == "ignore":
@@ -189,27 +194,36 @@ def run_desk_action(
             return {"ok": False, "banner": "⚠️ no proposal store"}
         pid = int(payload.get("id") or 0)
         from earnings_edge.trade_approval import execute_proposal, reject_proposal
+
         if op == "exec":
             result = execute_proposal(store, pid, decided_by=_uid(by))
         else:
             result = reject_proposal(store, pid, decided_by=_uid(by))
         ok = bool(result.get("ok"))
-        banner = ("✅ Executed." if op == "exec" and ok else
-                  "❌ Skipped." if op == "skip" and ok else
-                  f"⚠️ {result.get('error') or result}")
+        banner = (
+            "✅ Executed."
+            if op == "exec" and ok
+            else "❌ Skipped."
+            if op == "skip" and ok
+            else f"⚠️ {result.get('error') or result}"
+        )
         return {"ok": ok, "banner": banner, **result}
 
     if op in ("exit_close", "exit_snooze"):
         pid = int(payload.get("id") or 0)
         from framework.positions.manager import ExitManager
+
         if client is None:
             return {"ok": False, "banner": "⚠️ no broker client"}
-        result = ExitManager(client).decide_exit(
-            pid, op == "exit_close", decided_by=_uid(by))
+        result = ExitManager(client).decide_exit(pid, op == "exit_close", decided_by=_uid(by))
         ok = bool(result.get("ok"))
-        banner = ("🔒 Exit filled." if op == "exit_close" and ok else
-                  "⏰ Exit snoozed." if op == "exit_snooze" and ok else
-                  f"⚠️ {result.get('error') or result}")
+        banner = (
+            "🔒 Exit filled."
+            if op == "exit_close" and ok
+            else "⏰ Exit snoozed."
+            if op == "exit_snooze" and ok
+            else f"⚠️ {result.get('error') or result}"
+        )
         return {"ok": ok, "banner": banner, **result}
 
     return {"ok": False, "banner": f"⚠️ unknown op {op}"}

@@ -1,4 +1,5 @@
 """Diagnose why R² is negative and try better configurations."""
+
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -21,7 +22,9 @@ from train_calendar_filter import BASE_FEATURES, apply_data_quality_gates, load_
 df = load_calendar_trades(DB)
 clean, quality = apply_data_quality_gates(df, 0.20)
 print(f"Clean rows: {len(clean)}")
-print(f"Target stats: mean={clean['return_on_debit'].mean():.3f} std={clean['return_on_debit'].std():.3f} min={clean['return_on_debit'].min():.3f} max={clean['return_on_debit'].max():.3f}")
+print(
+    f"Target stats: mean={clean['return_on_debit'].mean():.3f} std={clean['return_on_debit'].std():.3f} min={clean['return_on_debit'].min():.3f} max={clean['return_on_debit'].max():.3f}"
+)
 
 # Time split
 cut = pd.Timestamp("2025-07-01")
@@ -30,16 +33,42 @@ test_df = clean[clean["earnings_date"] >= cut]
 print(f"Train: {len(train_df)}, Test: {len(test_df)}")
 
 features_all = [c for c in BASE_FEATURES if c in clean.columns and clean[c].notna().any()]
-features_core = [c for c in features_all if c in [
-    "price", "avg_volume_30d", "atm_iv_near", "rv30", "iv30_rv30",
-    "hist_vol_3m", "term_slope", "expected_move_pct",
-    "net_debit", "moneyness", "debit_pct_price", "near_far_entry_ratio", "entry_width_days",
-    "actual_to_fair_ratio", "sigma_short_leg_fair"
-]]
-features_minimal = [c for c in features_all if c in [
-    "net_debit", "debit_pct_price", "moneyness", "atm_iv_near", "iv30_rv30",
-    "actual_to_fair_ratio", "term_slope"
-]]
+features_core = [
+    c
+    for c in features_all
+    if c
+    in [
+        "price",
+        "avg_volume_30d",
+        "atm_iv_near",
+        "rv30",
+        "iv30_rv30",
+        "hist_vol_3m",
+        "term_slope",
+        "expected_move_pct",
+        "net_debit",
+        "moneyness",
+        "debit_pct_price",
+        "near_far_entry_ratio",
+        "entry_width_days",
+        "actual_to_fair_ratio",
+        "sigma_short_leg_fair",
+    ]
+]
+features_minimal = [
+    c
+    for c in features_all
+    if c
+    in [
+        "net_debit",
+        "debit_pct_price",
+        "moneyness",
+        "atm_iv_near",
+        "iv30_rv30",
+        "actual_to_fair_ratio",
+        "term_slope",
+    ]
+]
 
 configs = [
     ("ridge_all_29feat_a1", Ridge(1.0), features_all),
@@ -50,8 +79,18 @@ configs = [
     ("ridge_minimal_7feat_a1", Ridge(1.0), features_minimal),
     ("ridge_minimal_7feat_a10", Ridge(10.0), features_minimal),
     ("lasso_7feat_a01", Lasso(0.01), features_minimal),
-    ("rf_shallow", RandomForestRegressor(n_estimators=200, max_depth=2, min_samples_leaf=15, random_state=42), features_core),
-    ("gbr_shallow", GradientBoostingRegressor(n_estimators=100, max_depth=2, min_samples_leaf=15, learning_rate=0.05, random_state=42), features_core),
+    (
+        "rf_shallow",
+        RandomForestRegressor(n_estimators=200, max_depth=2, min_samples_leaf=15, random_state=42),
+        features_core,
+    ),
+    (
+        "gbr_shallow",
+        GradientBoostingRegressor(
+            n_estimators=100, max_depth=2, min_samples_leaf=15, learning_rate=0.05, random_state=42
+        ),
+        features_core,
+    ),
 ]
 
 y_train = train_df["return_on_debit"].astype(float)
@@ -92,7 +131,17 @@ print("-" * 65)
 
 for name, model, feats in [
     ("logistic_core", LogisticRegression(max_iter=2000, class_weight="balanced", C=0.1), features_core),
-    ("rf_cls_shallow", RandomForestClassifier(n_estimators=200, max_depth=2, min_samples_leaf=15, class_weight="balanced_subsample", random_state=42), features_core),
+    (
+        "rf_cls_shallow",
+        RandomForestClassifier(
+            n_estimators=200,
+            max_depth=2,
+            min_samples_leaf=15,
+            class_weight="balanced_subsample",
+            random_state=42,
+        ),
+        features_core,
+    ),
 ]:
     numeric_pipeline = Pipeline([("imputer", SimpleImputer(strategy="median")), ("scaler", StandardScaler())])
     pre = ColumnTransformer([("num", numeric_pipeline, feats)])

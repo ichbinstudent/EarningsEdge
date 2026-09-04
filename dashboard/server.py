@@ -56,10 +56,12 @@ STATIC = Path(__file__).resolve().parent / "static"
 
 def _db_path() -> Path:
     from dashboard.desk import db_path
+
     return db_path()
 
 
 # ── panel registry ──────────────────────────────────────────────────────
+
 
 @dataclass
 class Panel:
@@ -79,10 +81,12 @@ def p_bot_health() -> dict:
             bot = "🟡 " + ", ".join(h.get("reasons") or ["not ready"])
         else:
             bot = "🟢 running" if h.get("status") == "ok" else "🟡 degraded"
-        return {"stats": {
-            "bot": bot,
-            "uptime": f"{h.get('uptime_secs', 0) / 3600:.1f} h",
-        }}
+        return {
+            "stats": {
+                "bot": bot,
+                "uptime": f"{h.get('uptime_secs', 0) / 3600:.1f} h",
+            }
+        }
     except Exception:
         return {"stats": {"bot": "🔴 unreachable", "uptime": "—"}}
 
@@ -96,16 +100,19 @@ def p_ff_backfill() -> dict:
     pct = (done / total_pairs * 100) if total_pairs else 0
     stats = {
         "progress": f"{done} / {total_pairs} ({pct:.0f}%)",
-        "ok": ok, "skipped": skipped,
+        "ok": ok,
+        "skipped": skipped,
         "last write": prog["last_at"] or "—",
     }
     if done >= total_pairs and total_pairs:
         avg_pr = prog.get("avg_pr")
-        stats.update({
-            "status": "✅ complete",
-            "avg premium_ratio": f"{avg_pr:.2f}" if avg_pr else "—",
-            "premium ≥ 1.2": f"{prog.get('rich', 0)} / {prog.get('premium_n', 0)}",
-        })
+        stats.update(
+            {
+                "status": "✅ complete",
+                "avg premium_ratio": f"{avg_pr:.2f}" if avg_pr else "—",
+                "premium ≥ 1.2": f"{prog.get('rich', 0)} / {prog.get('premium_n', 0)}",
+            }
+        )
     return {"stats": stats}
 
 
@@ -113,9 +120,18 @@ def p_latest_scans() -> dict:
     if not table_exists("scan_runs"):
         return {"empty": "no scans yet"}
     rows = scan_runs_recent(10)
-    return {"columns": ["scan_timestamp", "scanner_name", "trigger_type",
-                        "candidate_count", "take_count", "secs", "success"],
-            "rows": rows}
+    return {
+        "columns": [
+            "scan_timestamp",
+            "scanner_name",
+            "trigger_type",
+            "candidate_count",
+            "take_count",
+            "secs",
+            "success",
+        ],
+        "rows": rows,
+    }
 
 
 def p_scan_outputs() -> dict:
@@ -124,27 +140,31 @@ def p_scan_outputs() -> dict:
     latest, rows = scanner_scan_outputs_latest()
     if not latest:
         return {"empty": "no scan outputs yet"}
-    return {"title_suffix": latest, "columns": ["ticker", "earnings_date", "tier",
-                                                "display_status", "price"],
-            "rows": rows}
+    return {
+        "title_suffix": latest,
+        "columns": ["ticker", "earnings_date", "tier", "display_status", "price"],
+        "rows": rows,
+    }
 
 
 def p_proposals() -> dict:
     if not table_exists("pending_trades"):
         return {"empty": "no proposals yet"}
     rows = pending_trades_recent(20)
-    return {"columns": ["id", "created_at", "strategy", "ticker", "status",
-                        "score", "decided_at"], "rows": rows}
+    return {
+        "columns": ["id", "created_at", "strategy", "ticker", "status", "score", "decided_at"],
+        "rows": rows,
+    }
 
 
 def p_ff_ladders() -> dict:
     if not table_exists("ff_ladders"):
         return {"empty": "no ladders yet (table created on first arm)"}
     rows = ff_ladders_recent(20)
-    shown = [{k: r.get(k) for k in ("id", "ticker", "status", "rung", "order_id", "updated_at")}
-             for r in rows]
-    return {"columns": ["id", "ticker", "status", "rung", "order_id", "updated_at"],
-            "rows": shown}
+    shown = [
+        {k: r.get(k) for k in ("id", "ticker", "status", "rung", "order_id", "updated_at")} for r in rows
+    ]
+    return {"columns": ["id", "ticker", "status", "rung", "order_id", "updated_at"], "rows": shown}
 
 
 def p_positions() -> dict:
@@ -167,8 +187,14 @@ def p_calendar_stats() -> dict:
     if not table_exists("calendar_call_trades"):
         return {"empty": "no calendar trades yet"}
     r = calendar_call_trades_stats()
-    return {"stats": {"trades": r["n"], "avg debit": r["avg_debit"] or "—",
-                      "closed": r["closed"], "avg P&L": r["avg_pnl"] or "—"}}
+    return {
+        "stats": {
+            "trades": r["n"],
+            "avg debit": r["avg_debit"] or "—",
+            "closed": r["closed"],
+            "avg P&L": r["avg_pnl"] or "—",
+        }
+    }
 
 
 def p_picks() -> dict:
@@ -239,7 +265,7 @@ def p_backtest_summary() -> dict:
         "trades": len(df),
         "gross mean": f"{gross.mean:+.4f}",
         "net mean": f"{net.mean:+.4f}",
-        "net win%": f"{net.win_rate*100:.1f}%",
+        "net win%": f"{net.win_rate * 100:.1f}%",
         "cagr": f"{pm.cagr:+.2%}",
         "sharpe": f"{pm.sharpe:.2f}",
         "max dd": f"{pm.max_drawdown:.2%}",
@@ -268,6 +294,7 @@ PANELS: list[Panel] = [
 
 
 # ── state building + broadcast ───────────────────────────────────────────
+
 
 def build_panels() -> dict[str, dict]:
     out: dict[str, dict] = {}
@@ -313,9 +340,7 @@ class Hub:
         panels = await asyncio.to_thread(build_panels)
         self.latest = panels
         for pid, state in panels.items():
-            digest = hashlib.sha256(
-                json.dumps(state, sort_keys=True, default=str).encode()
-            ).hexdigest()
+            digest = hashlib.sha256(json.dumps(state, sort_keys=True, default=str).encode()).hexdigest()
             if self.hashes.get(pid) != digest:
                 self.hashes[pid] = digest
                 await self._broadcast({"type": "panel", **state})
@@ -334,17 +359,19 @@ class Hub:
         if not already_accepted:
             await ws.accept()
         self.clients.add(ws)
-        await ws.send_text(json.dumps({
-            "type": "hello",
-            "panels": [{"id": p.id, "title": p.title, "kind": p.kind} for p in PANELS],
-        }))
+        await ws.send_text(
+            json.dumps(
+                {
+                    "type": "hello",
+                    "panels": [{"id": p.id, "title": p.title, "kind": p.kind} for p in PANELS],
+                }
+            )
+        )
         # send current state immediately (build if nothing cached yet)
         if not self.latest:
             self.latest = await asyncio.to_thread(build_panels)
             self.hashes = {
-                pid: hashlib.sha256(
-                    json.dumps(st, sort_keys=True, default=str).encode()
-                ).hexdigest()
+                pid: hashlib.sha256(json.dumps(st, sort_keys=True, default=str).encode()).hexdigest()
                 for pid, st in self.latest.items()
             }
         for st in self.latest.values():
@@ -355,6 +382,7 @@ hub = Hub()
 
 
 # ── app ──────────────────────────────────────────────────────────────────
+
 
 def _client_host(request: Request) -> str:
     return (request.client.host if request.client else "") or ""
@@ -405,6 +433,7 @@ async def api_state(request):
 
 def _desk_sync():
     from earnings_edge.alpaca_trading import create_client
+
     try:
         client = create_client()
         getter = client.get_positions
@@ -436,13 +465,13 @@ async def api_me(request):
 def _action_sync(op: str, payload: dict, uid: int) -> dict:
     from earnings_edge.alpaca_trading import create_client
     from earnings_edge.trade_approval import PendingTradeStore
+
     try:
         client = create_client()
     except Exception:
         client = None
     store = PendingTradeStore(str(_db_path()))
-    return run_desk_action(
-        op, payload, by=f"webapp:{uid}", client=client, store=store)
+    return run_desk_action(op, payload, by=f"webapp:{uid}", client=client, store=store)
 
 
 async def api_action(request):

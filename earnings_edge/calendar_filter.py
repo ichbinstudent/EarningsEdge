@@ -85,7 +85,9 @@ def add_calendar_entry_features(row: Mapping[str, Any]) -> dict[str, Any]:
         features["abs_moneyness_error"] = None
 
     features["debit_pct_price"] = net_debit / price if price and net_debit is not None else None
-    features["near_far_entry_ratio"] = near_entry / far_entry if near_entry is not None and far_entry else None
+    features["near_far_entry_ratio"] = (
+        near_entry / far_entry if near_entry is not None and far_entry else None
+    )
 
     try:
         near_expiry = pd.to_datetime(features.get("near_expiry"))

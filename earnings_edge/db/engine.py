@@ -110,6 +110,7 @@ def wal_checkpoint(db_path: str | Path | None = None, mode: str = "PASSIVE") -> 
 
     if db_path is not None:
         import sqlite3
+
         path = Path(db_path)
         conn = sqlite3.connect(str(path), timeout=30)
         try:

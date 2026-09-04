@@ -17,6 +17,7 @@ from earnings_edge.backtest.stats import (
 
 # ── trade_stats --------------------------------------------------------------
 
+
 def test_trade_stats_known_list():
     stats = trade_stats([0.10, -0.05, 0.20, -0.02])
     assert stats.count == 4
@@ -56,6 +57,7 @@ def test_trade_stats_single_observation():
 
 # ── portfolio_metrics --------------------------------------------------------
 
+
 def test_portfolio_metrics_hand_computed():
     # equity 100 -> 110 -> 99 -> 121; period returns 0.10, -0.10, 0.2222...
     m = portfolio_metrics([100.0, 110.0, 99.0, 121.0], periods_per_year=252)
@@ -78,8 +80,7 @@ def test_portfolio_metrics_monotone_equity_no_drawdown():
 
 
 def test_portfolio_metrics_with_benchmark():
-    m = portfolio_metrics([100.0, 110.0, 99.0, 121.0],
-                          benchmark_curve=[100.0, 105.0, 100.0, 110.0])
+    m = portfolio_metrics([100.0, 110.0, 99.0, 121.0], benchmark_curve=[100.0, 105.0, 100.0, 110.0])
     assert m.benchmark_total_return == pytest.approx(0.10)
     assert m.excess_return == pytest.approx(0.21 - 0.10)
 
@@ -92,6 +93,7 @@ def test_portfolio_metrics_degenerate():
 
 
 # ── train_test_report --------------------------------------------------------
+
 
 def test_train_test_split_counts():
     returns = [0.01 * i for i in range(10)]
@@ -108,6 +110,7 @@ def test_train_test_split_is_chronological():
 
 
 # ── cross_sectional_test -----------------------------------------------------
+
 
 def test_cross_sectional_monotone_signal_significant():
     rng = np.random.default_rng(42)

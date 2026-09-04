@@ -1,4 +1,5 @@
 """Tests for the strategy framework."""
+
 from __future__ import annotations
 
 from datetime import date
@@ -30,10 +31,18 @@ from earnings_edge.trading_types import (
 # Helpers — build synthetic DataBundles for testing
 # ---------------------------------------------------------------------------
 
-def _make_snapshot(ticker: str, earnings_date: str, scan_date: str = "2025-01-01",
-                   price: float = 100.0, iv30_rv30: float = 1.3,
-                   term_slope: float = -0.05, pre_close: float = 98.0,
-                   post_close: float = 102.0, outcome_fetched: bool = True) -> dict:
+
+def _make_snapshot(
+    ticker: str,
+    earnings_date: str,
+    scan_date: str = "2025-01-01",
+    price: float = 100.0,
+    iv30_rv30: float = 1.3,
+    term_slope: float = -0.05,
+    pre_close: float = 98.0,
+    post_close: float = 102.0,
+    outcome_fetched: bool = True,
+) -> dict:
     return {
         "ticker": ticker,
         "earnings_date": earnings_date,
@@ -59,10 +68,16 @@ def _make_snapshot(ticker: str, earnings_date: str, scan_date: str = "2025-01-01
     }
 
 
-def _make_calendar_trade(ticker: str, earnings_date: str, scan_date: str = "2025-01-01",
-                         strike: float = 100.0, net_debit: float = 1.0,
-                         exit_value: float = 1.5, pnl: float = 0.5,
-                         price: float = 100.0) -> dict:
+def _make_calendar_trade(
+    ticker: str,
+    earnings_date: str,
+    scan_date: str = "2025-01-01",
+    strike: float = 100.0,
+    net_debit: float = 1.0,
+    exit_value: float = 1.5,
+    pnl: float = 0.5,
+    price: float = 100.0,
+) -> dict:
     return {
         "ticker": ticker,
         "earnings_date": earnings_date,
@@ -83,6 +98,7 @@ def _make_calendar_trade(ticker: str, earnings_date: str, scan_date: str = "2025
 # ---------------------------------------------------------------------------
 # Test 1: registry contents
 # ---------------------------------------------------------------------------
+
 
 def test_registry_has_9_strategies():
     strategies = list_strategies()
@@ -115,6 +131,7 @@ def test_get_strategy_missing():
 # Test 2: DataBundle construction
 # ---------------------------------------------------------------------------
 
+
 def test_databundle_empty():
     bundle = DataBundle(
         snapshots=pd.DataFrame(),
@@ -130,12 +147,15 @@ def test_databundle_empty():
 # Test 3: Stock Drift Strategy (PEAD)
 # ---------------------------------------------------------------------------
 
+
 def test_stock_drift():
-    snap = pd.DataFrame([
-        _make_snapshot("AAPL", "2025-01-15", pre_close=98.0, post_close=102.0),
-        _make_snapshot("MSFT", "2025-01-16", pre_close=200.0, post_close=201.0),
-        _make_snapshot("BAD", "2025-01-17", price=2.0, pre_close=1.5, post_close=1.2),  # below min price
-    ])
+    snap = pd.DataFrame(
+        [
+            _make_snapshot("AAPL", "2025-01-15", pre_close=98.0, post_close=102.0),
+            _make_snapshot("MSFT", "2025-01-16", pre_close=200.0, post_close=201.0),
+            _make_snapshot("BAD", "2025-01-17", price=2.0, pre_close=1.5, post_close=1.2),  # below min price
+        ]
+    )
     data = DataBundle(
         snapshots=snap,
         calendar_trades=pd.DataFrame(),
@@ -157,10 +177,12 @@ def test_stock_drift():
 
 
 def test_stock_drift_missing_prices():
-    snap = pd.DataFrame([
-        _make_snapshot("X", "2025-01-01", pre_close=0, post_close=0),  # zero pre_close → skipped
-        _make_snapshot("Y", "2025-01-02", outcome_fetched=False),  # missing outcome → skipped
-    ])
+    snap = pd.DataFrame(
+        [
+            _make_snapshot("X", "2025-01-01", pre_close=0, post_close=0),  # zero pre_close → skipped
+            _make_snapshot("Y", "2025-01-02", outcome_fetched=False),  # missing outcome → skipped
+        ]
+    )
     data = DataBundle(
         snapshots=snap,
         calendar_trades=pd.DataFrame(),
@@ -175,18 +197,27 @@ def test_stock_drift_missing_prices():
 # Test 4: Calendar Call ML (quality gates)
 # ---------------------------------------------------------------------------
 
+
 def test_calendar_call_quality_gates():
     # 3 trades: 1 clean, 1 bad moneyness, 1 negative debit
-    ct = pd.DataFrame([
-        _make_calendar_trade("A", "2025-01-10", strike=100.0, net_debit=1.0, exit_value=1.5, pnl=0.5),
-        _make_calendar_trade("B", "2025-01-11", strike=200.0, net_debit=1.0, exit_value=1.0, pnl=-1.0),  # moneyness 200/100=2 → bad
-        _make_calendar_trade("C", "2025-01-12", strike=100.0, net_debit=-0.5, exit_value=0.5, pnl=-1.0),  # negative debit
-    ])
-    snap = pd.DataFrame([
-        _make_snapshot("A", "2025-01-10"),
-        _make_snapshot("B", "2025-01-11"),
-        _make_snapshot("C", "2025-01-12"),
-    ])
+    ct = pd.DataFrame(
+        [
+            _make_calendar_trade("A", "2025-01-10", strike=100.0, net_debit=1.0, exit_value=1.5, pnl=0.5),
+            _make_calendar_trade(
+                "B", "2025-01-11", strike=200.0, net_debit=1.0, exit_value=1.0, pnl=-1.0
+            ),  # moneyness 200/100=2 → bad
+            _make_calendar_trade(
+                "C", "2025-01-12", strike=100.0, net_debit=-0.5, exit_value=0.5, pnl=-1.0
+            ),  # negative debit
+        ]
+    )
+    snap = pd.DataFrame(
+        [
+            _make_snapshot("A", "2025-01-10"),
+            _make_snapshot("B", "2025-01-11"),
+            _make_snapshot("C", "2025-01-12"),
+        ]
+    )
 
     data = DataBundle(
         snapshots=snap,
@@ -221,15 +252,20 @@ def test_calendar_call_no_trades():
 # Test 5: Calendar Call No-ML
 # ---------------------------------------------------------------------------
 
+
 def test_calendar_call_no_ml():
-    ct = pd.DataFrame([
-        _make_calendar_trade("A", "2025-01-10", strike=100.0, net_debit=1.0, exit_value=1.5, pnl=0.5),
-        _make_calendar_trade("B", "2025-01-11", strike=100.0, net_debit=1.2, exit_value=0.8, pnl=-0.4),
-    ])
-    snap = pd.DataFrame([
-        _make_snapshot("A", "2025-01-10"),
-        _make_snapshot("B", "2025-01-11"),
-    ])
+    ct = pd.DataFrame(
+        [
+            _make_calendar_trade("A", "2025-01-10", strike=100.0, net_debit=1.0, exit_value=1.5, pnl=0.5),
+            _make_calendar_trade("B", "2025-01-11", strike=100.0, net_debit=1.2, exit_value=0.8, pnl=-0.4),
+        ]
+    )
+    snap = pd.DataFrame(
+        [
+            _make_snapshot("A", "2025-01-10"),
+            _make_snapshot("B", "2025-01-11"),
+        ]
+    )
 
     data = DataBundle(
         snapshots=snap,
@@ -249,17 +285,22 @@ def test_calendar_call_no_ml():
 # Test 6: Calendar Call High-Conviction
 # ---------------------------------------------------------------------------
 
+
 def test_high_conviction_risk_overlay():
-    ct = pd.DataFrame([
-        # Cheap + high score → TAKE
-        _make_calendar_trade("A", "2025-01-10", strike=100.0, net_debit=1.5, exit_value=2.0, pnl=1.0),
-        # Expensive → SKIP_RISK
-        _make_calendar_trade("B", "2025-01-11", strike=100.0, net_debit=3.0, exit_value=3.5, pnl=1.5),
-    ])
-    snap = pd.DataFrame([
-        _make_snapshot("A", "2025-01-10"),
-        _make_snapshot("B", "2025-01-11"),
-    ])
+    ct = pd.DataFrame(
+        [
+            # Cheap + high score → TAKE
+            _make_calendar_trade("A", "2025-01-10", strike=100.0, net_debit=1.5, exit_value=2.0, pnl=1.0),
+            # Expensive → SKIP_RISK
+            _make_calendar_trade("B", "2025-01-11", strike=100.0, net_debit=3.0, exit_value=3.5, pnl=1.5),
+        ]
+    )
+    snap = pd.DataFrame(
+        [
+            _make_snapshot("A", "2025-01-10"),
+            _make_snapshot("B", "2025-01-11"),
+        ]
+    )
 
     data = DataBundle(
         snapshots=snap,
@@ -279,16 +320,21 @@ def test_high_conviction_risk_overlay():
 # Test 7: IV/RV Mean Reversion
 # ---------------------------------------------------------------------------
 
+
 def test_iv_rv_filter():
-    ct = pd.DataFrame([
-        _make_calendar_trade("A", "2025-01-10"),
-        _make_calendar_trade("B", "2025-01-11"),
-    ])
+    ct = pd.DataFrame(
+        [
+            _make_calendar_trade("A", "2025-01-10"),
+            _make_calendar_trade("B", "2025-01-11"),
+        ]
+    )
     # A has IV/RV = 1.5 (> 1.15 threshold), B has IV/RV = 1.0 (< 1.15 threshold)
-    snap = pd.DataFrame([
-        _make_snapshot("A", "2025-01-10", iv30_rv30=1.5),
-        _make_snapshot("B", "2025-01-11", iv30_rv30=1.0),
-    ])
+    snap = pd.DataFrame(
+        [
+            _make_snapshot("A", "2025-01-10", iv30_rv30=1.5),
+            _make_snapshot("B", "2025-01-11", iv30_rv30=1.0),
+        ]
+    )
 
     data = DataBundle(
         snapshots=snap,
@@ -307,16 +353,21 @@ def test_iv_rv_filter():
 # Test 8: Term Structure Steepener
 # ---------------------------------------------------------------------------
 
+
 def test_term_structure_filter():
-    ct = pd.DataFrame([
-        _make_calendar_trade("A", "2025-01-10"),
-        _make_calendar_trade("B", "2025-01-11"),
-    ])
+    ct = pd.DataFrame(
+        [
+            _make_calendar_trade("A", "2025-01-10"),
+            _make_calendar_trade("B", "2025-01-11"),
+        ]
+    )
     # A has term_slope = -0.05 (≤ -0.03), B has term_slope = -0.01 (> -0.03)
-    snap = pd.DataFrame([
-        _make_snapshot("A", "2025-01-10", term_slope=-0.05),
-        _make_snapshot("B", "2025-01-11", term_slope=-0.01),
-    ])
+    snap = pd.DataFrame(
+        [
+            _make_snapshot("A", "2025-01-10", term_slope=-0.05),
+            _make_snapshot("B", "2025-01-11", term_slope=-0.01),
+        ]
+    )
 
     data = DataBundle(
         snapshots=snap,
@@ -335,15 +386,18 @@ def test_term_structure_filter():
 # Test 9: Earnings Quality
 # ---------------------------------------------------------------------------
 
+
 def test_earnings_quality():
-    snap = pd.DataFrame([
-        # Large move (> 5% threshold) with outcome
-        _make_snapshot("A", "2025-01-10", pre_close=100.0, post_close=110.0),  # +10%
-        # Another large move
-        _make_snapshot("B", "2025-01-11", pre_close=50.0, post_close=45.0),  # -10%
-        # Small move (< 5%)
-        _make_snapshot("C", "2025-01-12", pre_close=200.0, post_close=201.0),  # +0.5%
-    ])
+    snap = pd.DataFrame(
+        [
+            # Large move (> 5% threshold) with outcome
+            _make_snapshot("A", "2025-01-10", pre_close=100.0, post_close=110.0),  # +10%
+            # Another large move
+            _make_snapshot("B", "2025-01-11", pre_close=50.0, post_close=45.0),  # -10%
+            # Small move (< 5%)
+            _make_snapshot("C", "2025-01-12", pre_close=200.0, post_close=201.0),  # +0.5%
+        ]
+    )
 
     data = DataBundle(
         snapshots=snap,
@@ -364,9 +418,11 @@ def test_earnings_quality():
 
 
 def test_earnings_quality_no_outcome():
-    snap = pd.DataFrame([
-        _make_snapshot("A", "2025-01-10", outcome_fetched=False),
-    ])
+    snap = pd.DataFrame(
+        [
+            _make_snapshot("A", "2025-01-10", outcome_fetched=False),
+        ]
+    )
     data = DataBundle(
         snapshots=snap,
         calendar_trades=pd.DataFrame(),
@@ -381,17 +437,26 @@ def test_earnings_quality_no_outcome():
 # Test 10: Debit Size Exploit
 # ---------------------------------------------------------------------------
 
+
 def test_debit_size_filter():
-    ct = pd.DataFrame([
-        # Cheap entry: debit_pct = 2.5 / 500 = 0.005 ≤ 0.03
-        _make_calendar_trade("CHEAP", "2025-01-10", scan_date="2025-01-01", price=500.0, net_debit=2.5, strike=500.0),
-        # Expensive entry: debit_pct = 5.0 / 10 = 0.50 > 0.03
-        _make_calendar_trade("EXP", "2025-01-11", scan_date="2025-01-01", price=10.0, net_debit=5.0, strike=10.0),
-    ])
-    snap = pd.DataFrame([
-        _make_snapshot("CHEAP", "2025-01-10", scan_date="2025-01-01", price=500.0),
-        _make_snapshot("EXP", "2025-01-11", scan_date="2025-01-01", price=10.0),
-    ])
+    ct = pd.DataFrame(
+        [
+            # Cheap entry: debit_pct = 2.5 / 500 = 0.005 ≤ 0.03
+            _make_calendar_trade(
+                "CHEAP", "2025-01-10", scan_date="2025-01-01", price=500.0, net_debit=2.5, strike=500.0
+            ),
+            # Expensive entry: debit_pct = 5.0 / 10 = 0.50 > 0.03
+            _make_calendar_trade(
+                "EXP", "2025-01-11", scan_date="2025-01-01", price=10.0, net_debit=5.0, strike=10.0
+            ),
+        ]
+    )
+    snap = pd.DataFrame(
+        [
+            _make_snapshot("CHEAP", "2025-01-10", scan_date="2025-01-01", price=500.0),
+            _make_snapshot("EXP", "2025-01-11", scan_date="2025-01-01", price=10.0),
+        ]
+    )
 
     data = DataBundle(
         snapshots=snap,
@@ -410,6 +475,7 @@ def test_debit_size_filter():
 # Test 11: Placeholder strategies (data-gathering)
 # ---------------------------------------------------------------------------
 
+
 def test_short_straddle():
     data = DataBundle(
         snapshots=pd.DataFrame(),
@@ -419,7 +485,10 @@ def test_short_straddle():
     )
     result = ShortStraddleStrategy().run(data)
     assert result.trades == []
-    assert "bid/ask" in result.summary.get("note", "").lower() or "multi-strike" in result.summary.get("note", "").lower()
+    assert (
+        "bid/ask" in result.summary.get("note", "").lower()
+        or "multi-strike" in result.summary.get("note", "").lower()
+    )
     assert result.name == "short_straddle"
 
 
@@ -427,10 +496,13 @@ def test_short_straddle():
 # Test 12: run_all entry point
 # ---------------------------------------------------------------------------
 
+
 def test_run_all():
-    snap = pd.DataFrame([
-        _make_snapshot("AAPL", "2025-01-10", pre_close=98.0, post_close=102.0),
-    ])
+    snap = pd.DataFrame(
+        [
+            _make_snapshot("AAPL", "2025-01-10", pre_close=98.0, post_close=102.0),
+        ]
+    )
     data = DataBundle(
         snapshots=snap,
         calendar_trades=pd.DataFrame(),
@@ -448,6 +520,7 @@ def test_run_all():
 # Test 13: Trade dataclass
 # ---------------------------------------------------------------------------
 
+
 def test_trade_is_winner():
     trade = Trade("AAPL", date(2025, 1, 10), date(2025, 1, 1), "test", "LONG", 100.0, pnl=5.0)
     assert trade.is_winner()
@@ -459,6 +532,7 @@ def test_trade_is_winner():
 # ---------------------------------------------------------------------------
 # Test 14: StrategyResult dataframe
 # ---------------------------------------------------------------------------
+
 
 def test_strategy_result_dataframe():
     trades = [

@@ -21,10 +21,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 GETTEX_ORIGIN = "https://www.gettex.de"
-LSEG_AUTH_SAML = (
-    "https://lseg-widgets.financial.com/auth/api/v1/sessions/samllogin"
-    "?profile=wlib_gettex"
-)
+LSEG_AUTH_SAML = "https://lseg-widgets.financial.com/auth/api/v1/sessions/samllogin?profile=wlib_gettex"
 LSEG_AUTH_TOKEN = "https://lseg-widgets.financial.com/auth/api/v1/tokens"
 LSEG_FIND = "https://lseg-widgets.financial.com/rest/api/find/securities"
 LSEG_QUOTE = "https://lseg-widgets.financial.com/rest/api/quote/info"
@@ -35,10 +32,7 @@ LSEG_QUOTE = "https://lseg-widgets.financial.com/rest/api/quote/info"
 KNOWN_EXCHANGES = ("GTX", "GER", "FRA", "DUS", "HAM", "MUN", "STU", "HAN")
 DEFAULT_EXCHANGES = ("GTX", "GER", "FRA")
 
-QUOTE_FIDS = (
-    "q.RIC,q._TRDPRC_1,q._BID,q._ASK,q._BIDSIZE,q._ASKSIZE,"
-    "q._TRDTIM_1,q._TRADE_DATE,q._DSPLY_NAME"
-)
+QUOTE_FIDS = "q.RIC,q._TRDPRC_1,q._BID,q._ASK,q._BIDSIZE,q._ASKSIZE,q._TRDTIM_1,q._TRADE_DATE,q._DSPLY_NAME"
 INSTRUMENT_FIDS = "x.RIC"
 
 _UA = "Mozilla/5.0"
@@ -57,9 +51,10 @@ class GettexCollector:
     ):
         self.data_dir = data_dir
         os.makedirs(self.data_dir, exist_ok=True)
-        self.exchanges = tuple(
-            e.strip().upper() for e in (exchanges or DEFAULT_EXCHANGES) if e.strip()
-        ) or DEFAULT_EXCHANGES
+        self.exchanges = (
+            tuple(e.strip().upper() for e in (exchanges or DEFAULT_EXCHANGES) if e.strip())
+            or DEFAULT_EXCHANGES
+        )
         self.batch_size = max(1, int(batch_size))
         self.max_workers = max(1, int(max_workers))
         self._jwt = ""
@@ -144,8 +139,7 @@ class GettexCollector:
         page = 0
         while True:
             url = (
-                f"{LSEG_FIND}?fids={INSTRUMENT_FIDS}&exchanges={ex}"
-                f"&secTypes=STO&pageSize=5000&pageNo={page}"
+                f"{LSEG_FIND}?fids={INSTRUMENT_FIDS}&exchanges={ex}&secTypes=STO&pageSize=5000&pageNo={page}"
             )
             payload = self._get_json(url)
             if not payload:
@@ -171,11 +165,7 @@ class GettexCollector:
         exchanges = exchanges or self.exchanges
         now = time.monotonic()
         cache_key = ",".join(exchanges)
-        if (
-            not force
-            and self._rics_cache.get(cache_key)
-            and (now - self._rics_cached_at) < ttl_secs
-        ):
+        if not force and self._rics_cache.get(cache_key) and (now - self._rics_cached_at) < ttl_secs:
             return list(self._rics_cache[cache_key])
         rics: list[str] = []
         seen: set[str] = set()
@@ -200,9 +190,7 @@ class GettexCollector:
     def fetch_quotes(self, rics: list[str]) -> list[dict]:
         if not rics:
             return []
-        batches = [
-            rics[i:i + self.batch_size] for i in range(0, len(rics), self.batch_size)
-        ]
+        batches = [rics[i : i + self.batch_size] for i in range(0, len(rics), self.batch_size)]
         if len(batches) == 1 or self.max_workers == 1:
             out: list[dict] = []
             for batch in batches:

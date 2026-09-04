@@ -4,6 +4,7 @@
 One-shot dev tool: reads data/earnings_ml.db, emits declarative models that
 mirror the existing schema exactly (same names/types/pk, defaults preserved).
 """
+
 from pathlib import Path
 
 from sqlalchemy import create_engine, text
@@ -38,8 +39,11 @@ CLASS_NAMES = {
     "trade_events": "TradeEvent",
 }
 
-PY_TYPES = {"TEXT": ("Optional[str]", "Text"), "INTEGER": ("Optional[int]", "Integer"),
-            "REAL": ("Optional[float]", "REAL")}
+PY_TYPES = {
+    "TEXT": ("Optional[str]", "Text"),
+    "INTEGER": ("Optional[int]", "Integer"),
+    "REAL": ("Optional[float]", "REAL"),
+}
 
 HEADER = '''"""Declarative models mirroring the existing SQLite schema.
 
@@ -71,8 +75,14 @@ def main() -> None:
     # Direct engine (no configure()) so introspection never writes schema.
     eng = create_engine(f"sqlite:///{DB}")
     with eng.connect() as con:
-        tables = [r[0] for r in con.execute(text(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name != 'sqlite_sequence' ORDER BY name"))]
+        tables = [
+            r[0]
+            for r in con.execute(
+                text(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name != 'sqlite_sequence' ORDER BY name"
+                )
+            )
+        ]
         parts = [HEADER]
         for t in tables:
             parts.append(f"\n\nclass {CLASS_NAMES[t]}(Base):\n    __tablename__ = {t!r}\n")

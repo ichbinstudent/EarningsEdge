@@ -5,7 +5,15 @@ import designer_cli
 
 def test_designer_cli_basic(capsys):
     # simulate: designer_cli.py --spot 100 --leg "buy call 100 2026-10-16 1 5.0 0.3" --forecast-rv 0.4
-    args = ["designer_cli.py", "--spot", "100", "--leg", "buy call 100 2026-10-16 1 5.0 0.3", "--forecast-rv", "0.4"]
+    args = [
+        "designer_cli.py",
+        "--spot",
+        "100",
+        "--leg",
+        "buy call 100 2026-10-16 1 5.0 0.3",
+        "--forecast-rv",
+        "0.4",
+    ]
     with patch("sys.argv", args):
         ret = designer_cli.main()
         assert ret == 0
@@ -13,6 +21,7 @@ def test_designer_cli_basic(capsys):
         assert "POSITION SUMMARY" in captured.out
         assert "RV SCENARIO SIMULATION" in captured.out
         assert "max_loss: -500.0" in captured.out
+
 
 def test_designer_cli_parse_error(capsys):
     args = ["designer_cli.py", "--spot", "100", "--leg", "buy call 100"]
@@ -28,23 +37,37 @@ def test_designer_cli_auto_price_iv_from_chain(tmp_path, capsys):
 
     db = tmp_path / "c.db"
     configure(db)
-    insert_options_chain_rows([{
-        "ticker": "XYZ",
-        "scan_date": "2026-08-21",
-        "contract_ticker": "XYZ261016C00100000",
-        "expiry": "2026-10-16",
-        "strike": 100.0,
-        "contract_type": "call",
-        "volume": 100,
-        "implied_volatility": 0.30,
-        "delta": 0.50,
-        "midpoint": 5.0,
-        "close": 5.0,
-    }])
+    insert_options_chain_rows(
+        [
+            {
+                "ticker": "XYZ",
+                "scan_date": "2026-08-21",
+                "contract_ticker": "XYZ261016C00100000",
+                "expiry": "2026-10-16",
+                "strike": 100.0,
+                "contract_type": "call",
+                "volume": 100,
+                "implied_volatility": 0.30,
+                "delta": 0.50,
+                "midpoint": 5.0,
+                "close": 5.0,
+            }
+        ]
+    )
 
-    args = ["designer_cli.py", "--spot", "100", "--ticker", "XYZ",
-            "--db", str(db),
-            "--leg", "buy call 100 2026-10-16 1 auto auto", "--forecast-rv", "0.3"]
+    args = [
+        "designer_cli.py",
+        "--spot",
+        "100",
+        "--ticker",
+        "XYZ",
+        "--db",
+        str(db),
+        "--leg",
+        "buy call 100 2026-10-16 1 auto auto",
+        "--forecast-rv",
+        "0.3",
+    ]
     with patch("sys.argv", args):
         ret = designer_cli.main()
         assert ret == 0

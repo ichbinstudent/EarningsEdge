@@ -102,14 +102,14 @@ def train(target: str, model_type: str, min_rows: int, large_move_threshold: flo
         X_train, y_train = X, y
         X_test = y_test = None
     else:
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.25, random_state=42, stratify=y
-        )
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
 
-    numeric_pipeline = Pipeline([
-        ("imputer", SimpleImputer(strategy="median")),
-        ("scaler", StandardScaler()),
-    ])
+    numeric_pipeline = Pipeline(
+        [
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scaler", StandardScaler()),
+        ]
+    )
     pre = ColumnTransformer([("num", numeric_pipeline, available)])
 
     if model_type == "logistic":
@@ -162,7 +162,9 @@ def train(target: str, model_type: str, min_rows: int, large_move_threshold: flo
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Train ML screener from earnings_ml.db")
-    p.add_argument("--target", choices=["beat_expected_move", "large_move", "direction_up"], default="beat_expected_move")
+    p.add_argument(
+        "--target", choices=["beat_expected_move", "large_move", "direction_up"], default="beat_expected_move"
+    )
     p.add_argument("--model", choices=["logistic", "random_forest"], default="random_forest")
     p.add_argument("--min-rows", type=int, default=100)
     p.add_argument("--large-move-threshold", type=float, default=5.0)

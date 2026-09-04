@@ -16,11 +16,16 @@ from earnings_edge.signals import (
 )
 
 
-def _chain_row(expiry: str, strike: float, ctype: str, *, vol: float = 100,
-               iv: float = 0.30, delta: float = 0.50) -> dict:
+def _chain_row(
+    expiry: str, strike: float, ctype: str, *, vol: float = 100, iv: float = 0.30, delta: float = 0.50
+) -> dict:
     return {
-        "expiry": expiry, "strike": strike, "contract_type": ctype,
-        "volume": vol, "implied_volatility": iv, "delta": delta,
+        "expiry": expiry,
+        "strike": strike,
+        "contract_type": ctype,
+        "volume": vol,
+        "implied_volatility": iv,
+        "delta": delta,
     }
 
 
@@ -31,7 +36,7 @@ def _sample_chain() -> pd.DataFrame:
         # usable expiry 2026-09-25 (34d out from AS_OF)
         _chain_row("2026-09-25", 100, "call", vol=500, iv=0.40, delta=0.52),  # ATM-ish
         _chain_row("2026-09-25", 105, "call", vol=200, iv=0.30, delta=0.25),  # 25d call
-        _chain_row("2026-09-25", 95, "put", vol=300, iv=0.45, delta=-0.26),   # 25d put
+        _chain_row("2026-09-25", 95, "put", vol=300, iv=0.45, delta=-0.26),  # 25d put
         _chain_row("2026-09-25", 90, "put", vol=50, iv=0.60, delta=-0.10),
         # later expiry also usable but front one wins
         _chain_row("2026-12-18", 100, "call", vol=10, iv=0.35, delta=0.50),
@@ -91,7 +96,7 @@ def test_zscore_insufficient_history():
 
 def test_ts_momentum_twelve_minus_one():
     # 252 bars rising 0.1% per day; momentum skips the 22 most recent bars
-    bars = [{"c": 100.0 * (1.001 ** i)} for i in range(252)]
+    bars = [{"c": 100.0 * (1.001**i)} for i in range(252)]
     mom = compute_ts_momentum(bars)
     expected = bars[-23]["c"] / bars[0]["c"] - 1.0
     assert mom == pytest.approx(expected, rel=1e-9)
@@ -109,30 +114,36 @@ def test_relative_momentum_ratio():
 
 
 def test_chain_signals_tolerates_bad_expiry_strings():
-    df = pd.DataFrame([
-        _chain_row("not-a-date", 100, "call", vol=10, iv=0.9, delta=0.5),
-        _chain_row(None, 100, "call", vol=10, iv=0.9, delta=0.5),
-        _chain_row("2026-09-25", 100, "call", vol=10, iv=0.4, delta=0.5),
-    ])
+    df = pd.DataFrame(
+        [
+            _chain_row("not-a-date", 100, "call", vol=10, iv=0.9, delta=0.5),
+            _chain_row(None, 100, "call", vol=10, iv=0.9, delta=0.5),
+            _chain_row("2026-09-25", 100, "call", vol=10, iv=0.4, delta=0.5),
+        ]
+    )
     sig = compute_chain_signals(df, as_of=AS_OF)
     assert sig["atm_iv"] == pytest.approx(0.4)  # bad rows skipped, not fatal
 
 
 def test_enrich_chain_with_bs_fills_missing_iv_and_delta():
     from earnings_edge.signals import enrich_chain_with_bs
-    df = pd.DataFrame([
-        # missing IV/delta but has midpoint -> backfilled from BSM
-        _chain_row("2026-09-25", 100, "call", vol=10, iv=None, delta=None) | {"midpoint": 5.0},
-        # IV present -> untouched
-        _chain_row("2026-09-25", 105, "call", vol=10, iv=0.33, delta=0.25),
-    ])
+
+    df = pd.DataFrame(
+        [
+            # missing IV/delta but has midpoint -> backfilled from BSM
+            _chain_row("2026-09-25", 100, "call", vol=10, iv=None, delta=None) | {"midpoint": 5.0},
+            # IV present -> untouched
+            _chain_row("2026-09-25", 105, "call", vol=10, iv=0.33, delta=0.25),
+        ]
+    )
     out = enrich_chain_with_bs(df, spot=100.0, r=0.045, as_of=AS_OF)
     iv0 = out.loc[0, "implied_volatility"]
     d0 = out.loc[0, "delta"]
     assert iv0 is not None and 0.05 < iv0 < 1.5  # solved from the $5 mid
-    assert d0 is not None and 0.3 < d0 < 0.8     # near-ATM call
+    assert d0 is not None and 0.3 < d0 < 0.8  # near-ATM call
     # the $5 mid must round-trip through BSM at the solved IV
     from earnings_edge.option_math import black_scholes_price
+
     T = 34 / 365
     assert black_scholes_price(100.0, 100.0, T, 0.045, iv0, "call") == pytest.approx(5.0, abs=0.01)
     assert out.loc[1, "implied_volatility"] == pytest.approx(0.33)  # preserved
@@ -140,12 +151,14 @@ def test_enrich_chain_with_bs_fills_missing_iv_and_delta():
 
 def test_enrich_chain_with_bs_no_midpoint_leaves_nulls():
     from earnings_edge.signals import enrich_chain_with_bs
+
     df = pd.DataFrame([_chain_row("2026-09-25", 100, "call", vol=10, iv=None, delta=None)])
     out = enrich_chain_with_bs(df, spot=100.0, r=0.045, as_of=AS_OF)
     assert out.loc[0, "implied_volatility"] is None
 
 
 # ── contract market lookup (designer chain integration) ------------------------
+
 
 def _chain_db(tmp_path):
     conn = sqlite3.connect(tmp_path / "c.db")
@@ -158,13 +171,11 @@ def _chain_db(tmp_path):
     """)
     conn.execute(
         "INSERT INTO options_chain VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        ("XYZ", "2026-08-21", "XYZ260918C00100000", "2026-09-18", 100.0, "call",
-         100, None, None, 5.10, 5.0),
+        ("XYZ", "2026-08-21", "XYZ260918C00100000", "2026-09-18", 100.0, "call", 100, None, None, 5.10, 5.0),
     )
     conn.execute(
         "INSERT INTO options_chain VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        ("XYZ", "2026-08-21", "XYZ260918C00105000", "2026-09-18", 105.0, "call",
-         50, 0.28, 0.25, 2.40, 2.35),
+        ("XYZ", "2026-08-21", "XYZ260918C00105000", "2026-09-18", 105.0, "call", 50, 0.28, 0.25, 2.40, 2.35),
     )
     conn.commit()
     return conn
@@ -172,27 +183,31 @@ def _chain_db(tmp_path):
 
 def test_contract_market_solves_iv_from_mid(tmp_path):
     from earnings_edge.signals import contract_market
+
     conn = _chain_db(tmp_path)
-    m = contract_market(conn, "XYZ", "call", 100.0, "2026-09-18",
-                        spot=100.0, r=0.045, as_of="2026-08-22")
+    m = contract_market(conn, "XYZ", "call", 100.0, "2026-09-18", spot=100.0, r=0.045, as_of="2026-08-22")
     assert m is not None
     assert m["price"] == pytest.approx(5.10)
     assert 0.05 < m["iv"] < 1.5  # solved, not null
     from earnings_edge.option_math import black_scholes_price
+
     T = 27 / 365
     assert black_scholes_price(100.0, 100.0, T, 0.045, m["iv"], "call") == pytest.approx(5.10, abs=0.01)
 
 
 def test_contract_market_prefers_stored_iv(tmp_path):
     from earnings_edge.signals import contract_market
+
     conn = _chain_db(tmp_path)
-    m = contract_market(conn, "XYZ", "call", 105.0, "2026-09-18",
-                        spot=100.0, r=0.045, as_of="2026-08-22")
+    m = contract_market(conn, "XYZ", "call", 105.0, "2026-09-18", spot=100.0, r=0.045, as_of="2026-08-22")
     assert m["iv"] == pytest.approx(0.28)
 
 
 def test_contract_market_missing_contract(tmp_path):
     from earnings_edge.signals import contract_market
+
     conn = _chain_db(tmp_path)
-    assert contract_market(conn, "XYZ", "put", 100.0, "2026-09-18",
-                           spot=100.0, r=0.045, as_of="2026-08-22") is None
+    assert (
+        contract_market(conn, "XYZ", "put", 100.0, "2026-09-18", spot=100.0, r=0.045, as_of="2026-08-22")
+        is None
+    )

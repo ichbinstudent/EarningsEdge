@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Dedup snapshots by (ticker, earnings_date, scan_date, timing, data_source), keeping lowest id."""
+
 import shutil
 import sys
 from pathlib import Path

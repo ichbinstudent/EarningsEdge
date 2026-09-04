@@ -4,14 +4,12 @@ If TELEGRAM_APPROVAL_CHAT_ID (or TELEGRAM_APPROVAL_CHAT_IDS) is unset or
 unparseable, *nobody* may halt, resume, promote, restart, execute, or close.
 An empty allow-list is not “everyone” — that was the old fail-open hole.
 """
+
 from __future__ import annotations
 
 import os
 
-AUTH_REFUSED = (
-    "⛔ Operator lock is on and this chat is not authorized "
-    "(set TELEGRAM_APPROVAL_CHAT_ID)."
-)
+AUTH_REFUSED = "⛔ Operator lock is on and this chat is not authorized (set TELEGRAM_APPROVAL_CHAT_ID)."
 AUTH_UNCONFIGURED = (
     "⛔ Operator lock is unconfigured — halt / execute / close / promote / "
     "restart are disabled until TELEGRAM_APPROVAL_CHAT_ID is set."

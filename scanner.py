@@ -43,6 +43,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 # ── Single-ticker analysis ───────────────────────────────────────────
 
+
 def _analyze(args: argparse.Namespace, scanner: EarningsScanner, log: logging.Logger) -> None:
     ticker = args.analyze.strip().upper()
     print(f"\n=== ANALYZING {ticker} ===\n")
@@ -54,8 +55,10 @@ def _analyze(args: argparse.Namespace, scanner: EarningsScanner, log: logging.Lo
 
     m = report.metrics
     print(f"SPY IV/RV: {report.spy_iv_rv:.2f}")
-    print(f"Thresholds — pass: {report.iv_rv_pass_threshold:.2f}, "
-          f"near-miss: {report.iv_rv_near_miss_threshold:.2f}\n")
+    print(
+        f"Thresholds — pass: {report.iv_rv_pass_threshold:.2f}, "
+        f"near-miss: {report.iv_rv_near_miss_threshold:.2f}\n"
+    )
 
     status = "PASS" if report.passed else ("NEAR MISS" if report.near_miss else "FAIL")
     if report.passed and report.tier in (1, 2):
@@ -91,6 +94,7 @@ def _analyze(args: argparse.Namespace, scanner: EarningsScanner, log: logging.Lo
 
 # ── Full scan ─────────────────────────────────────────────────────────
 
+
 def _scan(args: argparse.Namespace, scanner: EarningsScanner, log: logging.Logger) -> None:
     running = True
     while running:
@@ -110,7 +114,9 @@ def _scan(args: argparse.Namespace, scanner: EarningsScanner, log: logging.Logge
                 print(f"TIER 2: {', '.join(result.tier2) or 'None'}")
                 print(f"NEAR MISSES: {', '.join(nm.ticker for nm in result.near_misses) or 'None'}")
             else:
-                _print_recommended("RECOMMENDED TRADES:", result.tier1 + result.tier2, result.reports, args, scanner)
+                _print_recommended(
+                    "RECOMMENDED TRADES:", result.tier1 + result.tier2, result.reports, args, scanner
+                )
                 _print_near_misses(result.near_misses, result.reports)
 
             if args.webhook:
@@ -126,6 +132,7 @@ def _scan(args: argparse.Namespace, scanner: EarningsScanner, log: logging.Logge
 
 
 # ── Display helpers ───────────────────────────────────────────────────
+
 
 def _print_recommended(label, tickers, reports, args, scanner):
     print(f"\n{label}")
@@ -178,12 +185,13 @@ def _print_iron_fly(scanner, ticker, indent="    "):
     print(f"{indent}--------------------")
     print(f"{indent}IRON FLY:")
     print(f"{indent}  Exp: {fly.expiration}")
-    print(f"{indent}  SHORT: ${fly.short_put_strike}P/${fly.short_call_strike}C "
-          f"for ${fly.total_credit} credit")
-    print(f"{indent}  LONG:  ${fly.long_put_strike}P/${fly.long_call_strike}C "
-          f"for ${fly.total_debit} debit")
-    print(f"{indent}  Break-evens: {fly.lower_breakeven}-{fly.upper_breakeven}, "
-          f"R/R: 1:{fly.risk_reward_ratio}")
+    print(
+        f"{indent}  SHORT: ${fly.short_put_strike}P/${fly.short_call_strike}C for ${fly.total_credit} credit"
+    )
+    print(f"{indent}  LONG:  ${fly.long_put_strike}P/${fly.long_call_strike}C for ${fly.total_debit} debit")
+    print(
+        f"{indent}  Break-evens: {fly.lower_breakeven}-{fly.upper_breakeven}, R/R: 1:{fly.risk_reward_ratio}"
+    )
 
 
 def _send_webhook(args, scanner, result: ScanResult):
@@ -208,7 +216,8 @@ def _send_webhook(args, scanner, result: ScanResult):
                 fly = scanner.calculate_iron_fly_strikes(t)
                 if fly.ok:
                     lines += [
-                        "", "**Iron Fly**:",
+                        "",
+                        "**Iron Fly**:",
                         f"▫️ Exp: `{fly.expiration}`",
                         f"▫️ Short: `{fly.short_put_strike}P/{fly.short_call_strike}C` for `{fly.total_credit}`",
                         f"▫️ Long: `{fly.long_put_strike}P/{fly.long_call_strike}C` for `{fly.total_debit}`",
@@ -247,6 +256,7 @@ def _send_webhook(args, scanner, result: ScanResult):
 
 
 # ── Main ──────────────────────────────────────────────────────────────
+
 
 def main() -> None:
     args = _build_parser().parse_args()

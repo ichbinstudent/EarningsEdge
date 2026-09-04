@@ -16,18 +16,22 @@ def _run_main(env, account=None, lse_ok=True, halted=False):
         client.get_account.side_effect = account
     ks = MagicMock()
     ks.status.return_value = {"halted": halted, "reason": "test" if halted else None}
-    with patch.dict("os.environ", env, clear=True), \
-         patch("earnings_edge.alpaca_trading.create_client", return_value=client), \
-         patch("earnings_edge.market_data_provider.LSEProvider") as lse, \
-         patch("framework.risk.killswitch.KillSwitch", return_value=ks), \
-         patch("requests.get") as tg:
+    with (
+        patch.dict("os.environ", env, clear=True),
+        patch("earnings_edge.alpaca_trading.create_client", return_value=client),
+        patch("earnings_edge.market_data_provider.LSEProvider") as lse,
+        patch("framework.risk.killswitch.KillSwitch", return_value=ks),
+        patch("requests.get") as tg,
+    ):
         lse.return_value.healthy.return_value = lse_ok
         tg.return_value.status_code = 200
         return preflight.main()
 
 
 GOOD_ENV = {
-    "TELEGRAM_BOT_TOKEN": "t", "APCA_API_KEY_ID": "k", "APCA_API_SECRET_KEY": "s",
+    "TELEGRAM_BOT_TOKEN": "t",
+    "APCA_API_KEY_ID": "k",
+    "APCA_API_SECRET_KEY": "s",
     "LSE_API_KEY": "l",
 }
 

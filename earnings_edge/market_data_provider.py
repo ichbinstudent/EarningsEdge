@@ -58,8 +58,16 @@ RISK_FREE_RATE = 0.04
 _PERIOD_DAYS = {"1d": 7, "5d": 10, "1mo": 35, "3mo": 100, "6mo": 200, "1y": 370}
 
 _CHAIN_COLUMNS = [
-    "contractSymbol", "strike", "bid", "ask", "lastPrice",
-    "impliedVolatility", "openInterest", "volume", "delta", "inTheMoney",
+    "contractSymbol",
+    "strike",
+    "bid",
+    "ask",
+    "lastPrice",
+    "impliedVolatility",
+    "openInterest",
+    "volume",
+    "delta",
+    "inTheMoney",
 ]
 
 
@@ -109,11 +117,13 @@ class YahooProvider:
     def __init__(self, session=None):
         if session is None:
             from .config import session as default_session
+
             session = default_session
         self._session = session
 
     def _ticker(self, ticker: str):
         import yfinance as yf
+
         return yf.Ticker(ticker, session=self._session)
 
     def healthy(self, timeout: float = 6.0) -> bool:
@@ -138,8 +148,7 @@ class YahooProvider:
 
     def option_chain(self, ticker: str, expiry: str) -> OptionChainData:
         chain = self._ticker(ticker).option_chain(expiry)
-        return OptionChainData(calls=chain.calls, puts=chain.puts,
-                               oi_available=True, source=self.name)
+        return OptionChainData(calls=chain.calls, puts=chain.puts, oi_available=True, source=self.name)
 
 
 class PolygonProvider:
@@ -188,8 +197,11 @@ class PolygonProvider:
                 return resp.json()
             except Exception as exc:  # includes HTTPError
                 last_exc = exc
-                if isinstance(exc, requests.HTTPError) and exc.response is not None \
-                        and exc.response.status_code in (403, 404):
+                if (
+                    isinstance(exc, requests.HTTPError)
+                    and exc.response is not None
+                    and exc.response.status_code in (403, 404)
+                ):
                     raise
                 limiter.throttled()
         raise ValueError(f"Polygon GET {path} failed after retries: {last_exc}")
@@ -201,11 +213,10 @@ class PolygonProvider:
         if day not in self._grouped_cache:
             data = self._get(
                 f"/v2/aggs/grouped/locale/us/market/stocks/{day}",
-                {"adjusted": "true"}, kind="stock",
+                {"adjusted": "true"},
+                kind="stock",
             )
-            self._grouped_cache[day] = {
-                r["T"]: r for r in data.get("results", [])
-            }
+            self._grouped_cache[day] = {r["T"]: r for r in data.get("results", [])}
             # keep cache bounded
             while len(self._grouped_cache) > 4:
                 self._grouped_cache.pop(next(iter(self._grouped_cache)))
@@ -261,13 +272,16 @@ class PolygonProvider:
     def _bars_to_df(bars: list[dict]) -> pd.DataFrame:
         if not bars:
             return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"])
-        df = pd.DataFrame({
-            "Open": [b["o"] for b in bars],
-            "High": [b["h"] for b in bars],
-            "Low": [b["l"] for b in bars],
-            "Close": [b["c"] for b in bars],
-            "Volume": [b["v"] for b in bars],
-        }, index=pd.to_datetime([b["t"] for b in bars], unit="ms").normalize())
+        df = pd.DataFrame(
+            {
+                "Open": [b["o"] for b in bars],
+                "High": [b["h"] for b in bars],
+                "Low": [b["l"] for b in bars],
+                "Close": [b["c"] for b in bars],
+                "Volume": [b["v"] for b in bars],
+            },
+            index=pd.to_datetime([b["t"] for b in bars], unit="ms").normalize(),
+        )
         df.index.name = "Date"
         return df
 
@@ -337,10 +351,7 @@ class PolygonProvider:
         today = date.today()
         T = max((datetime.strptime(expiry, "%Y-%m-%d").date() - today).days, 1) / 365.0
 
-        contracts = [
-            c for c in self._contracts(ticker)
-            if c.get("expiration_date") == expiry
-        ]
+        contracts = [c for c in self._contracts(ticker) if c.get("expiration_date") == expiry]
         if not contracts:
             raise ValueError(f"No contracts for {ticker} {expiry}")
 
@@ -369,21 +380,25 @@ class PolygonProvider:
                     parity_iv[ctype] = iv
                 if np.isfinite(iv):
                     delta = black_scholes_delta(spot, strike, T, RISK_FREE_RATE, iv, ctype)
-            frames[ctype] = pd.DataFrame([{
-                "contractSymbol": best["ticker"],
-                "strike": strike,
-                "bid": close,
-                "ask": close,
-                "lastPrice": close,
-                "impliedVolatility": iv,
-                "openInterest": 0,
-                "volume": volume,
-                "delta": delta,
-                "inTheMoney": (spot > strike) if ctype == "call" else (spot < strike),
-            }], columns=_CHAIN_COLUMNS)
+            frames[ctype] = pd.DataFrame(
+                [
+                    {
+                        "contractSymbol": best["ticker"],
+                        "strike": strike,
+                        "bid": close,
+                        "ask": close,
+                        "lastPrice": close,
+                        "impliedVolatility": iv,
+                        "openInterest": 0,
+                        "volume": volume,
+                        "delta": delta,
+                        "inTheMoney": (spot > strike) if ctype == "call" else (spot < strike),
+                    }
+                ],
+                columns=_CHAIN_COLUMNS,
+            )
 
-        return OptionChainData(calls=frames["call"], puts=frames["put"],
-                               oi_available=False, source=self.name)
+        return OptionChainData(calls=frames["call"], puts=frames["put"], oi_available=False, source=self.name)
 
 
 class LSEProvider:
@@ -425,6 +440,7 @@ class LSEProvider:
     def client(self):
         if self._client is None:
             from lse import LSE  # lazy import: optional dependency
+
             self._client = LSE(api_key=self._key)
         return self._client
 
@@ -468,8 +484,7 @@ class LSEProvider:
         days = _PERIOD_DAYS.get(period, 100)
         start = (date.today() - timedelta(days=days)).isoformat()
         try:
-            rows = self._call(lambda: self.client.candles(
-                ticker, "1d", start=start, order="asc", limit=5000))
+            rows = self._call(lambda: self.client.candles(ticker, "1d", start=start, order="asc", limit=5000))
         except Exception as exc:
             logger.info("LSE history(%s, %s) failed: %s", ticker, period, exc)
             return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"])
@@ -482,13 +497,16 @@ class LSEProvider:
     def _rows_to_df(rows: list[dict]) -> pd.DataFrame:
         if not rows:
             return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"])
-        df = pd.DataFrame({
-            "Open": [float(r["open"]) for r in rows],
-            "High": [float(r["high"]) for r in rows],
-            "Low": [float(r["low"]) for r in rows],
-            "Close": [float(r["close"]) for r in rows],
-            "Volume": [float(r.get("volume") or 0) for r in rows],
-        }, index=pd.to_datetime([r["timestamp"] for r in rows], utc=True).tz_convert(None).normalize())
+        df = pd.DataFrame(
+            {
+                "Open": [float(r["open"]) for r in rows],
+                "High": [float(r["high"]) for r in rows],
+                "Low": [float(r["low"]) for r in rows],
+                "Close": [float(r["close"]) for r in rows],
+                "Volume": [float(r.get("volume") or 0) for r in rows],
+            },
+            index=pd.to_datetime([r["timestamp"] for r in rows], utc=True).tz_convert(None).normalize(),
+        )
         df.index.name = "Date"
         return df
 
@@ -506,17 +524,11 @@ class LSEProvider:
 
     def options_expiries(self, ticker: str) -> list[str]:
         today = date.today().isoformat()
-        expiries = {
-            r["expiry"] for r in self._chain(ticker)
-            if r.get("expiry") and r["expiry"] >= today
-        }
+        expiries = {r["expiry"] for r in self._chain(ticker) if r.get("expiry") and r["expiry"] >= today}
         return sorted(expiries)
 
     def option_chain(self, ticker: str, expiry: str) -> OptionChainData:
-        rows = [
-            r for r in self._chain(ticker)
-            if r.get("expiry") == expiry and r.get("strike") is not None
-        ]
+        rows = [r for r in self._chain(ticker) if r.get("expiry") == expiry and r.get("strike") is not None]
         if not rows:
             raise ValueError(f"No LSE contracts for {ticker} {expiry}")
 
@@ -529,23 +541,27 @@ class LSEProvider:
                 last = r.get("last_price")
                 last = float(last) if last is not None else np.nan
                 spot = r.get("underlying_price")
-                records.append({
-                    "contractSymbol": r.get("ticker", ""),
-                    "strike": strike,
-                    "bid": last,
-                    "ask": last,
-                    "lastPrice": last,
-                    "impliedVolatility": r.get("iv") if r.get("iv") is not None else np.nan,
-                    "openInterest": 0,
-                    "volume": float(r.get("volume_today") or 0),
-                    "delta": r.get("delta") if r.get("delta") is not None else np.nan,
-                    "inTheMoney": (spot > strike) if ctype == "call" else (spot < strike)
-                    if spot is not None else False,
-                })
+                records.append(
+                    {
+                        "contractSymbol": r.get("ticker", ""),
+                        "strike": strike,
+                        "bid": last,
+                        "ask": last,
+                        "lastPrice": last,
+                        "impliedVolatility": r.get("iv") if r.get("iv") is not None else np.nan,
+                        "openInterest": 0,
+                        "volume": float(r.get("volume_today") or 0),
+                        "delta": r.get("delta") if r.get("delta") is not None else np.nan,
+                        "inTheMoney": (spot > strike)
+                        if ctype == "call"
+                        else (spot < strike)
+                        if spot is not None
+                        else False,
+                    }
+                )
             frames[ctype] = pd.DataFrame(records, columns=_CHAIN_COLUMNS)
 
-        return OptionChainData(calls=frames["call"], puts=frames["put"],
-                               oi_available=False, source=self.name)
+        return OptionChainData(calls=frames["call"], puts=frames["put"], oi_available=False, source=self.name)
 
 
 class ResilientProvider:
@@ -581,8 +597,9 @@ class ResilientProvider:
         self._call_count = 0
         self._active = self._first_healthy()
         if self._active is not self._order[0]:
-            logger.warning("Market data provider: %s unhealthy — starting on %s",
-                           self._order[0].name, self._active.name)
+            logger.warning(
+                "Market data provider: %s unhealthy — starting on %s", self._order[0].name, self._active.name
+            )
         else:
             logger.info("Market data provider: using %s", self._active.name)
 
@@ -627,8 +644,7 @@ class ResilientProvider:
                 if idx >= len(self._order) - 1:
                     break
                 nxt = self._order[idx + 1]
-                logger.warning("%s %s failed (%s) — switching to %s",
-                               provider.name, method, exc, nxt.name)
+                logger.warning("%s %s failed (%s) — switching to %s", provider.name, method, exc, nxt.name)
                 with self._lock:
                     if self._active is provider:
                         self._active = nxt

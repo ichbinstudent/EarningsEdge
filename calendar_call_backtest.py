@@ -10,6 +10,7 @@ Strategy modeled per event:
 PnL is per one calendar spread contract, multiplied by 100. This uses Polygon EOD
 option aggregate closes and skips rows where either leg lacks entry/exit prices.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -77,7 +78,9 @@ def parse_date(s: str) -> date:
     return datetime.strptime(s, "%Y-%m-%d").date()
 
 
-def first_option_close_on_or_after(pg: PolygonClient, option_ticker: str, start: date, max_days: int = 5) -> float | None:
+def first_option_close_on_or_after(
+    pg: PolygonClient, option_ticker: str, start: date, max_days: int = 5
+) -> float | None:
     bars = pg.daily_bars(option_ticker, start, start + timedelta(days=max_days), limit=10)
     bars = [b for b in bars if b.get("c") is not None]
     if not bars:
@@ -85,7 +88,9 @@ def first_option_close_on_or_after(pg: PolygonClient, option_ticker: str, start:
     return float(bars[0]["c"])
 
 
-def select_calendar_calls(pg: PolygonClient, ticker: str, spot: float, as_of: date, earnings_date: date) -> tuple[dict, dict, date, date] | None:
+def select_calendar_calls(
+    pg: PolygonClient, ticker: str, spot: float, as_of: date, earnings_date: date
+) -> tuple[dict, dict, date, date] | None:
     contracts = pg.option_contracts(
         ticker,
         as_of=as_of,
@@ -284,7 +289,9 @@ def summarize() -> None:
         if "model_score" in r and r["model_score"] is not None:
             rec = "TAKE" if r["model_recommendation"] else "SKIP"
             score = f" model={r['model_score']:.3f}/{rec}"
-        print(f"  {r['ticker']} {r['earnings_date']} strike={r['strike']} debit={r['net_debit']:.2f} exit={r['exit_value']:.2f} pnl=${r['pnl_dollars']:.2f}{score}")
+        print(
+            f"  {r['ticker']} {r['earnings_date']} strike={r['strike']} debit={r['net_debit']:.2f} exit={r['exit_value']:.2f} pnl=${r['pnl_dollars']:.2f}{score}"
+        )
 
     model_rows = [r for r in rows if "model_recommendation" in r and r["model_recommendation"] is not None]
     if model_rows:
@@ -302,17 +309,24 @@ def summarize() -> None:
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Backtest earnings calendar-call trades from earnings_ml.db snapshots")
+    p = argparse.ArgumentParser(
+        description="Backtest earnings calendar-call trades from earnings_ml.db snapshots"
+    )
     p.add_argument("--limit", type=int, help="Max new snapshots to process")
     p.add_argument("--rate-sleep", type=float, default=13.0)
     p.add_argument("--api-key", help="Polygon API key; defaults to POLYGON_API_KEY env via PolygonClient")
     p.add_argument("--summary-only", action="store_true")
     p.add_argument("--model", type=Path, help="Trained calendar-call filter .joblib artifact to score trades")
     p.add_argument("--model-threshold", type=float, default=0.55, help="Probability threshold for TAKE/SKIP")
-    p.add_argument("--score-existing", action="store_true", help="Score already-stored trades with --model before summarizing")
+    p.add_argument(
+        "--score-existing",
+        action="store_true",
+        help="Score already-stored trades with --model before summarizing",
+    )
     args = p.parse_args()
 
     import os
+
     key = args.api_key or os.environ.get("POLYGON_API_KEY")
     if not key and not args.summary_only:
         raise RuntimeError("POLYGON_API_KEY not set")
@@ -326,7 +340,9 @@ def main() -> None:
         raise RuntimeError("--score-existing requires --model")
     if args.score_existing and artifact is not None:
         score_summary = score_existing_trades(artifact, model_name=model_name, threshold=args.model_threshold)
-        print(f"Scored existing trades: {score_summary['scored']}; rejected by data gates: {score_summary['rejected']}")
+        print(
+            f"Scored existing trades: {score_summary['scored']}; rejected by data gates: {score_summary['rejected']}"
+        )
 
     if not args.summary_only:
         assert key is not None
@@ -342,13 +358,15 @@ def main() -> None:
         """
         rows = pd.read_sql(text(sql), get_engine()).to_dict(orient="records")
         if args.limit:
-            rows = rows[:args.limit]
+            rows = rows[: args.limit]
         print(f"Processing {len(rows)} snapshots")
         ok = 0
         skipped = 0
         for i, row in enumerate(rows, start=1):
             print(f"[{i}/{len(rows)}] {row['ticker']} {row['earnings_date']}")
-            trade = build_trade(pg, row, artifact=artifact, model_name=model_name, threshold=args.model_threshold)
+            trade = build_trade(
+                pg, row, artifact=artifact, model_name=model_name, threshold=args.model_threshold
+            )
             if not trade:
                 skipped += 1
                 print("  skip: missing calendar-call leg/price")

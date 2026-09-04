@@ -5,6 +5,7 @@ Provides:
 - Bridge: Strategy TAKE list → Alpaca order submission
 - PositionManager: track fills, open positions, exits, PnL
 """
+
 from __future__ import annotations
 
 import logging
@@ -69,11 +70,13 @@ class AlpacaTradingClient:
         self.base_url = PAPER_BASE if self.paper else "https://api.alpaca.markets/v2"
         self.data_url = DATA_BASE
         self.session = requests.Session()
-        self.session.headers.update({
-            "APCA-API-KEY-ID": self.api_key,
-            "APCA-API-SECRET-KEY": self.api_secret,
-            "Content-Type": "application/json",
-        })
+        self.session.headers.update(
+            {
+                "APCA-API-KEY-ID": self.api_key,
+                "APCA-API-SECRET-KEY": self.api_secret,
+                "Content-Type": "application/json",
+            }
+        )
         logger.debug("AlpacaTradingClient initialized (paper=%s)", paper)
 
     def _request(
@@ -93,16 +96,16 @@ class AlpacaTradingClient:
                 # 401/404 are deterministic — retrying them just burns rate budget
                 if resp.status_code == 401:
                     from framework.alerts import DEDUPER
+
                     DEDUPER.emit(
                         "alpaca_401",
-                        "🛑 Alpaca 401 — invalid API keys. "
-                        "Broker calls will fail until keys are fixed.",
+                        "🛑 Alpaca 401 — invalid API keys. Broker calls will fail until keys are fixed.",
                     )
                     raise AlpacaAuthError(401, "Invalid API keys")
                 if resp.status_code == 404:
                     raise AlpacaNotFoundError(404, f"Not found: {path}")
                 if resp.status_code == 429:
-                    wait = 2 ** attempt
+                    wait = 2**attempt
                     logger.warning("Rate limited, waiting %ds", wait)
                     time.sleep(wait)
                     continue
@@ -122,7 +125,7 @@ class AlpacaTradingClient:
                 if attempt == retry:
                     raise
                 logger.warning("Request failed: %s (retry %d)", e, attempt + 1)
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
         return {}
 
     # ──────────────────────── Account & Portfolio ────────────────────────
@@ -204,7 +207,9 @@ class AlpacaTradingClient:
         if not symbols:
             return {}
         symbol_str = ",".join(symbols)
-        result = self._request("GET", "/options/snapshots", params={"symbols": symbol_str}, base=self.data_url)
+        result = self._request(
+            "GET", "/options/snapshots", params={"symbols": symbol_str}, base=self.data_url
+        )
         return result.get("snapshots", {})
 
     def get_options_chain_snapshots(self, underlying: str, page_limit: int = 250) -> dict[str, dict]:
@@ -216,8 +221,9 @@ class AlpacaTradingClient:
         out: dict[str, dict] = {}
         params: dict = {"limit": page_limit}
         while True:
-            result = self._request("GET", f"/options/snapshots/{underlying}",
-                                   params=params, base=self.data_url)
+            result = self._request(
+                "GET", f"/options/snapshots/{underlying}", params=params, base=self.data_url
+            )
             for sym, snap in (result.get("snapshots") or {}).items():
                 q = snap.get("latestQuote") or {}
                 bp, ap = q.get("bp"), q.get("ap")
@@ -232,7 +238,8 @@ class AlpacaTradingClient:
     def get_stock_latest_trade(self, symbol: str) -> float | None:
         """Latest stock trade price (data API)."""
         result = self._request(
-            "GET", f"/stocks/{symbol}/trades/latest",
+            "GET",
+            f"/stocks/{symbol}/trades/latest",
             base="https://data.alpaca.markets/v2",
         )
         trade = result.get("trade") or {}
@@ -455,7 +462,10 @@ class AlpacaTradingClient:
             # exc-policy: keep broad, ensure visibility
             record_event("silent_failure", f"alpaca_trading get_positions: {e}")
             import logging
-            logging.getLogger(__name__).error("position fetch failed (treating as empty): %s", e, exc_info=True)
+
+            logging.getLogger(__name__).error(
+                "position fetch failed (treating as empty): %s", e, exc_info=True
+            )
             return set()
 
     def is_optionable(self, symbol: str) -> bool:
@@ -561,9 +571,9 @@ class OrderResult:
     filled_avg_price: float | None
     created_at: str
     raw: dict
-    exit_by: date | None = None   # structural exit deadline, set by the
-                                      # caller (StrategyBridge.execute_trade)
-                                      # — not derivable from Alpaca's response
+    exit_by: date | None = None  # structural exit deadline, set by the
+    # caller (StrategyBridge.execute_trade)
+    # — not derivable from Alpaca's response
 
     @classmethod
     def from_alpaca(cls, raw: dict, strategy: str = "") -> OrderResult:

@@ -9,7 +9,6 @@ restarts because it lives in the ``risk_state`` table.
 """
 
 
-
 import logging
 from datetime import UTC, datetime
 
@@ -43,10 +42,14 @@ class KillSwitch:
     def trip(self, reason: str, by: str = "system") -> None:
         logger.error("KILL SWITCH TRIPPED by %s: %s", by, reason)
         risk_state_set_halted(
-            True, reason=reason, tripped_at=_utcnow(), tripped_by=by,
+            True,
+            reason=reason,
+            tripped_at=_utcnow(),
+            tripped_by=by,
         )
         risk_events_insert("trip", f"{by}: {reason}")
         from framework.alerts import DEDUPER
+
         DEDUPER.emit(
             "kill_switch",
             f"🛑 KILL SWITCH TRIPPED by {by}: {reason} — no orders will submit until /resume.",
@@ -58,7 +61,6 @@ class KillSwitch:
         risk_events_insert("resume", by)
 
 
-def record_event(event_type: str, detail: str,
-                 strategy: str | None = None) -> None:
+def record_event(event_type: str, detail: str, strategy: str | None = None) -> None:
     """Append an audit row to ``risk_events``."""
     risk_events_insert(event_type, detail, strategy=strategy)

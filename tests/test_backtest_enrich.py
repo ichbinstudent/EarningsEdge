@@ -13,8 +13,7 @@ from earnings_edge.trading_types import StrategyResult, Trade
 DAY0 = date(2026, 1, 5)
 
 
-def _trade(pnl: float, *, premiums: list[float], margin: float,
-           scan_offset: int = 0) -> Trade:
+def _trade(pnl: float, *, premiums: list[float], margin: float, scan_offset: int = 0) -> Trade:
     return Trade(
         ticker="XYZ",
         earnings_date=DAY0 + timedelta(days=scan_offset + 2),
@@ -53,7 +52,7 @@ def test_enrich_contract_scaling():
 
 def test_enrich_return_on_margin_and_net_win_rate():
     trades = [
-        _trade(1.0, premiums=[1.0], margin=500.0, scan_offset=0),   # net = 100 - 0.65
+        _trade(1.0, premiums=[1.0], margin=500.0, scan_offset=0),  # net = 100 - 0.65
         _trade(-0.5, premiums=[1.0], margin=500.0, scan_offset=1),  # net = -50 - 0.65
     ]
     out = enrich_result(_result(trades))
@@ -63,8 +62,7 @@ def test_enrich_return_on_margin_and_net_win_rate():
 
 
 def test_enrich_train_test_split_is_chronological():
-    trades = [_trade(1.0 if i < 7 else -1.0, premiums=[1.0], margin=100.0,
-                     scan_offset=i) for i in range(10)]
+    trades = [_trade(1.0 if i < 7 else -1.0, premiums=[1.0], margin=100.0, scan_offset=i) for i in range(10)]
     out = enrich_result(_result(trades))
     train = out.summary["train_stats"]
     test = out.summary["test_stats"]

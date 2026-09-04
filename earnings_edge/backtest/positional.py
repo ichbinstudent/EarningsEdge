@@ -22,6 +22,7 @@ plus multi-strike structures priced from snapshot ATM IV:
                          structure is inverted (backwardated). PnL from
                          direction + vega expansion.
 """
+
 from __future__ import annotations
 
 import logging
@@ -39,6 +40,7 @@ logger = logging.getLogger("positional_strategies")
 # Short Straddle — sell premium when vol is overpriced
 # ---------------------------------------------------------------------------
 
+
 class ShortStraddle:
     """Sell a straddle when:
     - IV/RV ratio >= iv_rv_min (premium is rich)
@@ -48,11 +50,17 @@ class ShortStraddle:
     PnL (percent-of-price): expected_move_pct - |actual_move_pct|
     Positive when realized vol < implied vol.
     """
+
     name = "short_straddle"
 
-    def __init__(self, iv_rv_min: float = 1.2, min_expected_move: float = 6.0,
-                 model_threshold: float = 5.0, model_path: str = "data/models",
-                 model_type: str = "gradient_boosting"):
+    def __init__(
+        self,
+        iv_rv_min: float = 1.2,
+        min_expected_move: float = 6.0,
+        model_threshold: float = 5.0,
+        model_path: str = "data/models",
+        model_type: str = "gradient_boosting",
+    ):
         self.iv_rv_min = iv_rv_min
         self.min_expected_move = min_expected_move
         self.model_threshold = model_threshold
@@ -88,10 +96,24 @@ class ShortStraddle:
         if filtered.empty:
             return StrategyResult(self.name, [])
 
-        feature_cols = [c for c in ["price","avg_volume_30d","atm_iv_near","rv30","iv30_rv30",
-                         "hist_vol_3m","sigma_baseline_1y","sigma_short_leg","sigma_short_leg_fair",
-                         "actual_to_fair_ratio","term_slope","term_structure_valid"]
-                         if c in filtered.columns]
+        feature_cols = [
+            c
+            for c in [
+                "price",
+                "avg_volume_30d",
+                "atm_iv_near",
+                "rv30",
+                "iv30_rv30",
+                "hist_vol_3m",
+                "sigma_baseline_1y",
+                "sigma_short_leg",
+                "sigma_short_leg_fair",
+                "actual_to_fair_ratio",
+                "term_slope",
+                "term_structure_valid",
+            ]
+            if c in filtered.columns
+        ]
 
         trades = []
         for _, row in filtered.iterrows():
@@ -110,21 +132,27 @@ class ShortStraddle:
             expected_row = float(row[expected])
             pnl = expected_row - abs(actual_move)
 
-            trades.append(Trade(
-                ticker=row["ticker"],
-                earnings_date=row["earnings_date"] if isinstance(row["earnings_date"], date) else date.fromisoformat(str(row["earnings_date"])),
-                scan_date=row["scan_date"] if isinstance(row["scan_date"], date) else date.fromisoformat(str(row["scan_date"])),
-                strategy=self.name,
-                side="SHORT_STRADDLE",
-                entry_price=abs(expected_row),
-                exit_price=abs(actual_move),
-                pnl=pnl,
-                pnl_pct=pnl,
-                features={"iv_rv": row.get("iv30_rv30"), "atm_iv": row.get("atm_iv_near")},
-                model_score=model_score,
-                ml_decision="TAKE",
-                notes=f"ep={expected_row:.2f} am={actual_move:.2f}"
-            ))
+            trades.append(
+                Trade(
+                    ticker=row["ticker"],
+                    earnings_date=row["earnings_date"]
+                    if isinstance(row["earnings_date"], date)
+                    else date.fromisoformat(str(row["earnings_date"])),
+                    scan_date=row["scan_date"]
+                    if isinstance(row["scan_date"], date)
+                    else date.fromisoformat(str(row["scan_date"])),
+                    strategy=self.name,
+                    side="SHORT_STRADDLE",
+                    entry_price=abs(expected_row),
+                    exit_price=abs(actual_move),
+                    pnl=pnl,
+                    pnl_pct=pnl,
+                    features={"iv_rv": row.get("iv30_rv30"), "atm_iv": row.get("atm_iv_near")},
+                    model_score=model_score,
+                    ml_decision="TAKE",
+                    notes=f"ep={expected_row:.2f} am={actual_move:.2f}",
+                )
+            )
 
         if not trades:
             return StrategyResult(self.name, [])
@@ -132,19 +160,24 @@ class ShortStraddle:
         taken = trades
         total_pnl = sum(t.pnl for t in taken)
         win_rate = sum(1 for t in taken if t.pnl > 0) / len(taken)
-        return StrategyResult(self.name, trades, {
-            "total": len(trades),
-            "taken": len(taken),
-            "avg_pnl": np.mean([t.pnl for t in taken]),
-            "total_pnl": float(round(total_pnl, 4)),
-            "win_rate": win_rate,
-            "iv_rv_min": self.iv_rv_min,
-        })
+        return StrategyResult(
+            self.name,
+            trades,
+            {
+                "total": len(trades),
+                "taken": len(taken),
+                "avg_pnl": np.mean([t.pnl for t in taken]),
+                "total_pnl": float(round(total_pnl, 4)),
+                "win_rate": win_rate,
+                "iv_rv_min": self.iv_rv_min,
+            },
+        )
 
 
 # ---------------------------------------------------------------------------
 # Long Straddle — buy premium when vol is cheap and model predicts big move
 # ---------------------------------------------------------------------------
+
 
 class LongStraddle:
     """Buy a straddle when:
@@ -154,11 +187,17 @@ class LongStraddle:
 
     PnL (percent-of-price): |actual_move_pct| - expected_move_pct
     """
+
     name = "long_straddle"
 
-    def __init__(self, iv_rv_max: float = 1.0, min_expected_move: float = 4.0,
-                 model_threshold: float = 7.0, model_path: str = "data/models",
-                 model_type: str = "gradient_boosting"):
+    def __init__(
+        self,
+        iv_rv_max: float = 1.0,
+        min_expected_move: float = 4.0,
+        model_threshold: float = 7.0,
+        model_path: str = "data/models",
+        model_type: str = "gradient_boosting",
+    ):
         self.iv_rv_max = iv_rv_max
         self.min_expected_move = min_expected_move
         self.model_threshold = model_threshold
@@ -193,10 +232,24 @@ class LongStraddle:
         if filtered.empty:
             return StrategyResult(self.name, [])
 
-        feature_cols = [c for c in ["price","avg_volume_30d","atm_iv_near","rv30","iv30_rv30",
-                         "hist_vol_3m","sigma_baseline_1y","sigma_short_leg","sigma_short_leg_fair",
-                         "actual_to_fair_ratio","term_slope","term_structure_valid"]
-                         if c in filtered.columns]
+        feature_cols = [
+            c
+            for c in [
+                "price",
+                "avg_volume_30d",
+                "atm_iv_near",
+                "rv30",
+                "iv30_rv30",
+                "hist_vol_3m",
+                "sigma_baseline_1y",
+                "sigma_short_leg",
+                "sigma_short_leg_fair",
+                "actual_to_fair_ratio",
+                "term_slope",
+                "term_structure_valid",
+            ]
+            if c in filtered.columns
+        ]
 
         trades = []
         for _, row in filtered.iterrows():
@@ -214,51 +267,66 @@ class LongStraddle:
             expected_row = float(row[expected])
             pnl = abs(actual_move) - expected_row
 
-            trades.append(Trade(
-                ticker=row["ticker"],
-                earnings_date=row["earnings_date"] if isinstance(row["earnings_date"], date) else date.fromisoformat(str(row["earnings_date"])),
-                scan_date=row["scan_date"] if isinstance(row["scan_date"], date) else date.fromisoformat(str(row["scan_date"])),
-                strategy=self.name,
-                side="LONG_STRADDLE",
-                entry_price=abs(expected_row),
-                exit_price=abs(actual_move),
-                pnl=pnl,
-                pnl_pct=pnl,
-                features={"iv_rv": row.get("iv30_rv30")},
-                model_score=model_score,
-                ml_decision="TAKE",
-                notes=f"ep={expected_row:.2f} am={actual_move:.2f}"
-            ))
+            trades.append(
+                Trade(
+                    ticker=row["ticker"],
+                    earnings_date=row["earnings_date"]
+                    if isinstance(row["earnings_date"], date)
+                    else date.fromisoformat(str(row["earnings_date"])),
+                    scan_date=row["scan_date"]
+                    if isinstance(row["scan_date"], date)
+                    else date.fromisoformat(str(row["scan_date"])),
+                    strategy=self.name,
+                    side="LONG_STRADDLE",
+                    entry_price=abs(expected_row),
+                    exit_price=abs(actual_move),
+                    pnl=pnl,
+                    pnl_pct=pnl,
+                    features={"iv_rv": row.get("iv30_rv30")},
+                    model_score=model_score,
+                    ml_decision="TAKE",
+                    notes=f"ep={expected_row:.2f} am={actual_move:.2f}",
+                )
+            )
 
         if not trades:
             return StrategyResult(self.name, [])
 
         win_rate = sum(1 for t in trades if t.pnl > 0) / len(trades)
-        return StrategyResult(self.name, trades, {
-            "total": len(trades),
-            "taken": len(trades),
-            "avg_pnl": np.mean([t.pnl for t in trades]),
-            "total_pnl": round(sum(t.pnl for t in trades), 4),
-            "win_rate": win_rate,
-            "iv_rv_max": self.iv_rv_max,
-        })
+        return StrategyResult(
+            self.name,
+            trades,
+            {
+                "total": len(trades),
+                "taken": len(trades),
+                "avg_pnl": np.mean([t.pnl for t in trades]),
+                "total_pnl": round(sum(t.pnl for t in trades), 4),
+                "win_rate": win_rate,
+                "iv_rv_max": self.iv_rv_max,
+            },
+        )
 
 
 # ---------------------------------------------------------------------------
 # Directional Call
 # ---------------------------------------------------------------------------
 
+
 class DirectionalCall:
     """Buy a call when direction model predicts UP and magnitude model
     predicts large move.
     PnL: actual_move_pct - expected_move_pct
     """
+
     name = "directional_call"
 
-    def __init__(self, magnitude_threshold: float = 6.0,
-                 iv_rv_max: float = 1.3,
-                 model_path: str = "data/models",
-                 model_type: str = "gradient_boosting"):
+    def __init__(
+        self,
+        magnitude_threshold: float = 6.0,
+        iv_rv_max: float = 1.3,
+        model_path: str = "data/models",
+        model_type: str = "gradient_boosting",
+    ):
         self.magnitude_threshold = magnitude_threshold
         self.iv_rv_max = iv_rv_max
         self.magnitude_model = self._load_model("magnitude", model_path, model_type)
@@ -290,10 +358,24 @@ class DirectionalCall:
         if filtered.empty:
             return StrategyResult(self.name, [])
 
-        feature_cols = [c for c in ["price","avg_volume_30d","atm_iv_near","rv30","iv30_rv30",
-                         "hist_vol_3m","sigma_baseline_1y","sigma_short_leg","sigma_short_leg_fair",
-                         "actual_to_fair_ratio","term_slope","term_structure_valid"]
-                         if c in filtered.columns]
+        feature_cols = [
+            c
+            for c in [
+                "price",
+                "avg_volume_30d",
+                "atm_iv_near",
+                "rv30",
+                "iv30_rv30",
+                "hist_vol_3m",
+                "sigma_baseline_1y",
+                "sigma_short_leg",
+                "sigma_short_leg_fair",
+                "actual_to_fair_ratio",
+                "term_slope",
+                "term_structure_valid",
+            ]
+            if c in filtered.columns
+        ]
 
         trades = []
         for _, row in filtered.iterrows():
@@ -321,47 +403,62 @@ class DirectionalCall:
             premium = float(row[expected])
             pnl = actual_move - premium
 
-            trades.append(Trade(
-                ticker=row["ticker"],
-                earnings_date=row["earnings_date"] if isinstance(row["earnings_date"], date) else date.fromisoformat(str(row["earnings_date"])),
-                scan_date=row["scan_date"] if isinstance(row["scan_date"], date) else date.fromisoformat(str(row["scan_date"])),
-                strategy=self.name,
-                side="LONG_CALL",
-                entry_price=abs(premium),
-                exit_price=actual_move,
-                pnl=pnl,
-                pnl_pct=pnl,
-                features={"direction": pred_dir, "predicted_magnitude": pred_mag},
-                model_score=pred_mag,
-                ml_decision="TAKE",
-                notes=f"dir=UP mag={pred_mag:.2f} premium={premium:.2f}"
-            ))
+            trades.append(
+                Trade(
+                    ticker=row["ticker"],
+                    earnings_date=row["earnings_date"]
+                    if isinstance(row["earnings_date"], date)
+                    else date.fromisoformat(str(row["earnings_date"])),
+                    scan_date=row["scan_date"]
+                    if isinstance(row["scan_date"], date)
+                    else date.fromisoformat(str(row["scan_date"])),
+                    strategy=self.name,
+                    side="LONG_CALL",
+                    entry_price=abs(premium),
+                    exit_price=actual_move,
+                    pnl=pnl,
+                    pnl_pct=pnl,
+                    features={"direction": pred_dir, "predicted_magnitude": pred_mag},
+                    model_score=pred_mag,
+                    ml_decision="TAKE",
+                    notes=f"dir=UP mag={pred_mag:.2f} premium={premium:.2f}",
+                )
+            )
 
         if not trades:
             return StrategyResult(self.name, [])
 
         win_rate = sum(1 for t in trades if t.pnl > 0) / len(trades)
-        return StrategyResult(self.name, trades, {
-            "total": len(trades),
-            "taken": len(trades),
-            "avg_pnl": float(np.mean([t.pnl for t in trades])),
-            "total_pnl": round(sum(t.pnl for t in trades), 4),
-            "win_rate": win_rate,
-        })
+        return StrategyResult(
+            self.name,
+            trades,
+            {
+                "total": len(trades),
+                "taken": len(trades),
+                "avg_pnl": float(np.mean([t.pnl for t in trades])),
+                "total_pnl": round(sum(t.pnl for t in trades), 4),
+                "win_rate": win_rate,
+            },
+        )
 
 
 # ---------------------------------------------------------------------------
 # Directional Put
 # ---------------------------------------------------------------------------
 
+
 class DirectionalPut:
     """Buy a put when model predicts DOWN direction and large magnitude."""
+
     name = "directional_put"
 
-    def __init__(self, magnitude_threshold: float = 6.0,
-                 iv_rv_max: float = 1.3,
-                 model_path: str = "data/models",
-                 model_type: str = "gradient_boosting"):
+    def __init__(
+        self,
+        magnitude_threshold: float = 6.0,
+        iv_rv_max: float = 1.3,
+        model_path: str = "data/models",
+        model_type: str = "gradient_boosting",
+    ):
         self.magnitude_threshold = magnitude_threshold
         self.iv_rv_max = iv_rv_max
         self.magnitude_model = self._load_model("magnitude", model_path, model_type)
@@ -393,10 +490,24 @@ class DirectionalPut:
         if filtered.empty:
             return StrategyResult(self.name, [])
 
-        feature_cols = [c for c in ["price","avg_volume_30d","atm_iv_near","rv30","iv30_rv30",
-                         "hist_vol_3m","sigma_baseline_1y","sigma_short_leg","sigma_short_leg_fair",
-                         "actual_to_fair_ratio","term_slope","term_structure_valid"]
-                         if c in filtered.columns]
+        feature_cols = [
+            c
+            for c in [
+                "price",
+                "avg_volume_30d",
+                "atm_iv_near",
+                "rv30",
+                "iv30_rv30",
+                "hist_vol_3m",
+                "sigma_baseline_1y",
+                "sigma_short_leg",
+                "sigma_short_leg_fair",
+                "actual_to_fair_ratio",
+                "term_slope",
+                "term_structure_valid",
+            ]
+            if c in filtered.columns
+        ]
 
         trades = []
         for _, row in filtered.iterrows():
@@ -424,48 +535,64 @@ class DirectionalPut:
             premium = float(row[expected])
             pnl = -actual_move - premium
 
-            trades.append(Trade(
-                ticker=row["ticker"],
-                earnings_date=row["earnings_date"] if isinstance(row["earnings_date"], date) else date.fromisoformat(str(row["earnings_date"])),
-                scan_date=row["scan_date"] if isinstance(row["scan_date"], date) else date.fromisoformat(str(row["scan_date"])),
-                strategy=self.name,
-                side="LONG_PUT",
-                entry_price=abs(premium),
-                exit_price=-actual_move,
-                pnl=pnl,
-                pnl_pct=pnl,
-                features={"direction": pred_dir, "predicted_magnitude": pred_mag},
-                model_score=pred_mag,
-                ml_decision="TAKE",
-                notes=f"dir=DOWN mag={pred_mag:.2f} premium={premium:.2f}"
-            ))
+            trades.append(
+                Trade(
+                    ticker=row["ticker"],
+                    earnings_date=row["earnings_date"]
+                    if isinstance(row["earnings_date"], date)
+                    else date.fromisoformat(str(row["earnings_date"])),
+                    scan_date=row["scan_date"]
+                    if isinstance(row["scan_date"], date)
+                    else date.fromisoformat(str(row["scan_date"])),
+                    strategy=self.name,
+                    side="LONG_PUT",
+                    entry_price=abs(premium),
+                    exit_price=-actual_move,
+                    pnl=pnl,
+                    pnl_pct=pnl,
+                    features={"direction": pred_dir, "predicted_magnitude": pred_mag},
+                    model_score=pred_mag,
+                    ml_decision="TAKE",
+                    notes=f"dir=DOWN mag={pred_mag:.2f} premium={premium:.2f}",
+                )
+            )
 
         if not trades:
             return StrategyResult(self.name, [])
 
         win_rate = sum(1 for t in trades if t.pnl > 0) / len(trades)
-        return StrategyResult(self.name, trades, {
-            "total": len(trades),
-            "taken": len(trades),
-            "avg_pnl": float(np.mean([t.pnl for t in trades])),
-            "total_pnl": round(sum(t.pnl for t in trades), 4),
-            "win_rate": win_rate,
-        })
+        return StrategyResult(
+            self.name,
+            trades,
+            {
+                "total": len(trades),
+                "taken": len(trades),
+                "avg_pnl": float(np.mean([t.pnl for t in trades])),
+                "total_pnl": round(sum(t.pnl for t in trades), 4),
+                "win_rate": win_rate,
+            },
+        )
 
 
 # ---------------------------------------------------------------------------
 # Volatility Risk Premium
 # ---------------------------------------------------------------------------
 
+
 class VolRiskPremium:
     """Structural short-vol: sell premium whenever IV/RV is extreme (>= threshold),
     regardless of model. Uses model magnitude only as a tiebreaker.
     """
+
     name = "vol_risk_premium"
 
-    def __init__(self, iv_rv_min: float = 1.4, min_expected_move: float = 6.0,
-                 model_path: str = "data/models",
-                 model_type: str = "gradient_boosting"):
+    def __init__(
+        self,
+        iv_rv_min: float = 1.4,
+        min_expected_move: float = 6.0,
+        model_path: str = "data/models",
+        model_type: str = "gradient_boosting",
+    ):
         self.iv_rv_min = iv_rv_min
         self.min_expected_move = min_expected_move
         self.model = self._load_model(model_path, model_type)
@@ -497,10 +624,24 @@ class VolRiskPremium:
         if filtered.empty:
             return StrategyResult(self.name, [])
 
-        feature_cols = [c for c in ["price","avg_volume_30d","atm_iv_near","rv30","iv30_rv30",
-                         "hist_vol_3m","sigma_baseline_1y","sigma_short_leg","sigma_short_leg_fair",
-                         "actual_to_fair_ratio","term_slope","term_structure_valid"]
-                         if c in filtered.columns]
+        feature_cols = [
+            c
+            for c in [
+                "price",
+                "avg_volume_30d",
+                "atm_iv_near",
+                "rv30",
+                "iv30_rv30",
+                "hist_vol_3m",
+                "sigma_baseline_1y",
+                "sigma_short_leg",
+                "sigma_short_leg_fair",
+                "actual_to_fair_ratio",
+                "term_slope",
+                "term_structure_valid",
+            ]
+            if c in filtered.columns
+        ]
 
         trades = []
         for _, row in filtered.iterrows():
@@ -516,33 +657,43 @@ class VolRiskPremium:
             premium = float(row[expected])
             pnl = premium - abs(actual_move)
 
-            trades.append(Trade(
-                ticker=row["ticker"],
-                earnings_date=row["earnings_date"] if isinstance(row["earnings_date"], date) else date.fromisoformat(str(row["earnings_date"])),
-                scan_date=row["scan_date"] if isinstance(row["scan_date"], date) else date.fromisoformat(str(row["scan_date"])),
-                strategy=self.name,
-                side="SHORT_VOL",
-                entry_price=abs(premium),
-                exit_price=abs(actual_move),
-                pnl=pnl,
-                pnl_pct=pnl,
-                features={"iv_rv": row.get("iv30_rv30")},
-                model_score=model_score,
-                ml_decision="TAKE",
-                notes=f"iv_rv={row.get('iv30_rv30'):.2f} ep={premium:.2f} am={actual_move:.2f}"
-            ))
+            trades.append(
+                Trade(
+                    ticker=row["ticker"],
+                    earnings_date=row["earnings_date"]
+                    if isinstance(row["earnings_date"], date)
+                    else date.fromisoformat(str(row["earnings_date"])),
+                    scan_date=row["scan_date"]
+                    if isinstance(row["scan_date"], date)
+                    else date.fromisoformat(str(row["scan_date"])),
+                    strategy=self.name,
+                    side="SHORT_VOL",
+                    entry_price=abs(premium),
+                    exit_price=abs(actual_move),
+                    pnl=pnl,
+                    pnl_pct=pnl,
+                    features={"iv_rv": row.get("iv30_rv30")},
+                    model_score=model_score,
+                    ml_decision="TAKE",
+                    notes=f"iv_rv={row.get('iv30_rv30'):.2f} ep={premium:.2f} am={actual_move:.2f}",
+                )
+            )
 
         if not trades:
             return StrategyResult(self.name, [])
 
         win_rate = sum(1 for t in trades if t.pnl > 0) / len(trades)
-        return StrategyResult(self.name, trades, {
-            "total": len(trades),
-            "taken": len(trades),
-            "avg_pnl": float(np.mean([t.pnl for t in trades])),
-            "total_pnl": round(sum(t.pnl for t in trades), 4),
-            "win_rate": win_rate,
-        })
+        return StrategyResult(
+            self.name,
+            trades,
+            {
+                "total": len(trades),
+                "taken": len(trades),
+                "avg_pnl": float(np.mean([t.pnl for t in trades])),
+                "total_pnl": round(sum(t.pnl for t in trades), 4),
+                "win_rate": win_rate,
+            },
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@ of a blind re-scrape.
 
 Pure read queries + list selection: no network, no writes.
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -27,8 +28,7 @@ DEFAULT_MIN_EVENTS = 3
 # A "usable" outcome for the hist gate — same predicate as
 # fwd_factor_ladder.hist_rms_move / ensure_hist_moves.
 _USABLE_OUTCOME = (
-    "actual_move_pct IS NOT NULL AND outcome_fetched_at IS NOT NULL "
-    "AND outcome_fetched_at != 'unavailable'"
+    "actual_move_pct IS NOT NULL AND outcome_fetched_at IS NOT NULL AND outcome_fetched_at != 'unavailable'"
 )
 
 
@@ -76,7 +76,8 @@ def repair_candidates(
     rows = snapshots_hist_repair_stats()
     cands = [
         (r["ticker"], int(r["usable"] or 0), int(r["liquid"] or 0))
-        for r in rows if int(r["usable"] or 0) < min_events
+        for r in rows
+        if int(r["usable"] or 0) < min_events
     ]
     if liquid_only:
         cands = [c for c in cands if c[2] == 1]
@@ -90,14 +91,10 @@ def iv_null_stats(conn: sqlite3.Connection) -> dict:
     Includes the training-critical subset (labeled rows) since those are the
     rows the model actually learns from.
     """
-    cols = ["atm_iv_near", "atm_call_iv", "atm_put_iv", "rv30", "hist_vol_3m",
-            "iv30_rv30", "sigma_short_leg"]
-    total = conn.execute(
-        "SELECT COUNT(*) FROM snapshots WHERE has_options=1"
-    ).fetchone()[0]
+    cols = ["atm_iv_near", "atm_call_iv", "atm_put_iv", "rv30", "hist_vol_3m", "iv30_rv30", "sigma_short_leg"]
+    total = conn.execute("SELECT COUNT(*) FROM snapshots WHERE has_options=1").fetchone()[0]
     labeled = conn.execute(
-        "SELECT COUNT(*) FROM snapshots WHERE has_options=1 "
-        "AND actual_move_pct IS NOT NULL"
+        "SELECT COUNT(*) FROM snapshots WHERE has_options=1 AND actual_move_pct IS NOT NULL"
     ).fetchone()[0]
     out: dict = {"has_options_rows": total, "labeled_rows": labeled, "columns": {}}
     for col in cols:

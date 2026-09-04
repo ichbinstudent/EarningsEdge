@@ -6,6 +6,7 @@ the live signal layer (live_signals.py), the approval flow (trade_approval.py),
 and the execution bridge (alpaca_bridge.py) all exchange Trade / StrategyResult /
 DataBundle objects. Keep this module free of strategy logic.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -18,18 +19,20 @@ import pandas as pd
 # Trade abstraction
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class Trade:
     """A single strategy trade to be backtested or scored live."""
+
     ticker: str
     earnings_date: date
     scan_date: date
     strategy: str
-    side: str                 # LONG, SHORT, SPREAD, CALENDAR
-    entry_price: float        # raw cost basis (debit or mid-price or spread)
-    exit_price: float = 0.0   # 0 = not yet closed
-    pnl: float = 0.0          # absolute PnL (dollars for options, percent for stock)
-    pnl_pct: float = 0.0      # return_on_debit for options, simple return for stock
+    side: str  # LONG, SHORT, SPREAD, CALENDAR
+    entry_price: float  # raw cost basis (debit or mid-price or spread)
+    exit_price: float = 0.0  # 0 = not yet closed
+    pnl: float = 0.0  # absolute PnL (dollars for options, percent for stock)
+    pnl_pct: float = 0.0  # return_on_debit for options, simple return for stock
     features: dict[str, Any] = field(default_factory=dict)
     model_score: float | None = None
     ml_decision: str = "SKIP"
@@ -42,6 +45,7 @@ class Trade:
 # ---------------------------------------------------------------------------
 # DataBundle — everything a strategy needs (no DB/network calls)
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class DataBundle:
@@ -78,6 +82,7 @@ class DataBundle:
 # Result of one strategy backtest
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class StrategyResult:
     name: str
@@ -89,18 +94,20 @@ class StrategyResult:
             return pd.DataFrame()
         rows = []
         for t in self.trades:
-            rows.append({
-                "ticker": t.ticker,
-                "earnings_date": t.earnings_date,
-                "scan_date": t.scan_date,
-                "strategy": t.strategy,
-                "side": t.side,
-                "entry_price": t.entry_price,
-                "exit_price": t.exit_price,
-                "pnl": t.pnl,
-                "pnl_pct": t.pnl_pct,
-                "model_score": t.model_score,
-                "ml_decision": t.ml_decision,
-                "notes": t.notes,
-            })
+            rows.append(
+                {
+                    "ticker": t.ticker,
+                    "earnings_date": t.earnings_date,
+                    "scan_date": t.scan_date,
+                    "strategy": t.strategy,
+                    "side": t.side,
+                    "entry_price": t.entry_price,
+                    "exit_price": t.exit_price,
+                    "pnl": t.pnl,
+                    "pnl_pct": t.pnl_pct,
+                    "model_score": t.model_score,
+                    "ml_decision": t.ml_decision,
+                    "notes": t.notes,
+                }
+            )
         return pd.DataFrame(rows)

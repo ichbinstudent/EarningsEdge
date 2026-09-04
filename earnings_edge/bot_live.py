@@ -12,6 +12,7 @@ Usage:
     ...
     await pm.finish("✅ done")
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -27,6 +28,7 @@ SPARK_BLOCKS = "▁▂▃▄▅▆▇█"
 # ---------------------------------------------------------------------------
 # Pure text helpers (unit-tested)
 # ---------------------------------------------------------------------------
+
 
 def spinner_frame(tick: int) -> str:
     return SPINNER[tick % len(SPINNER)]
@@ -58,24 +60,20 @@ def sparkline(values: list[float], width: int = 16) -> str:
     span = hi - lo
     if span <= 0:
         return SPARK_BLOCKS[3] * len(vals)
-    return "".join(
-        SPARK_BLOCKS[min(7, int((v - lo) / span * 7.999))] for v in vals
-    )
+    return "".join(SPARK_BLOCKS[min(7, int((v - lo) / span * 7.999))] for v in vals)
 
 
-def progress_text(title: str, stage: str, started: float, tick: int,
-                  now: float | None = None) -> str:
+def progress_text(title: str, stage: str, started: float, tick: int, now: float | None = None) -> str:
     """One frame of the animated progress message (plain text)."""
     elapsed = fmt_duration((now if now is not None else time.monotonic()) - started)
     bar = "▓" * (1 + tick % 3) + "░" * (3 - (1 + tick % 3))
-    return (f"{spinner_frame(tick)} {title}\n"
-            f"{bar} {stage}\n"
-            f"⏱ {elapsed}")
+    return f"{spinner_frame(tick)} {title}\n{bar} {stage}\n⏱ {elapsed}"
 
 
 # ---------------------------------------------------------------------------
 # Telegram glue
 # ---------------------------------------------------------------------------
+
 
 class ProgressMessage:
     """A message that animates (spinner + stage + elapsed) until finished.
@@ -100,7 +98,8 @@ class ProgressMessage:
     async def start(self) -> None:
         self._started = time.monotonic()
         self._msg = await self._bot.send_message(
-            chat_id=self._chat_id, text=progress_text(self._title, self._stage, self._started, 0))
+            chat_id=self._chat_id, text=progress_text(self._title, self._stage, self._started, 0)
+        )
         self._task = asyncio.create_task(self._loop())
 
     async def attach(self, message) -> None:
@@ -108,8 +107,7 @@ class ProgressMessage:
         self._started = time.monotonic()
         self._msg = message
         try:
-            await message.edit_text(
-                progress_text(self._title, self._stage, self._started, 0))
+            await message.edit_text(progress_text(self._title, self._stage, self._started, 0))
         except Exception as exc:
             logger.debug("progress attach edit skipped: %s", exc)
         self._task = asyncio.create_task(self._loop())
@@ -131,8 +129,7 @@ class ProgressMessage:
             except Exception as exc:
                 logger.info("progress final edit failed (%s) — sending new message", exc)
                 try:
-                    await self._bot.send_message(
-                        chat_id=self._chat_id, text=text, reply_markup=reply_markup)
+                    await self._bot.send_message(chat_id=self._chat_id, text=text, reply_markup=reply_markup)
                 except Exception:
                     pass
 
@@ -143,7 +140,8 @@ class ProgressMessage:
                 self._tick += 1
                 try:
                     await self._msg.edit_text(
-                        progress_text(self._title, self._stage, self._started, self._tick))
+                        progress_text(self._title, self._stage, self._started, self._tick)
+                    )
                 except Exception as exc:
                     # "Message is not modified" / transient — keep animating
                     logger.debug("progress edit skipped: %s", exc)

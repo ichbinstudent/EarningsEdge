@@ -22,6 +22,7 @@ CONTRACT_MULTIPLIER = 100  # shares per US equity option contract
 
 # ── Realistic fills ──────────────────────────────────────────────────
 
+
 def realistic_fill(
     mid: float,
     bid: float,
@@ -68,9 +69,7 @@ def realistic_fill(
 
     depths = [d for d in (volume, open_interest) if d is not None]
     depth = min(depths) if depths else None
-    liquidity_multiplier = (
-        1.0 + max(0.0, 1.0 - depth / low_liquidity_ref) if depth is not None else 1.0
-    )
+    liquidity_multiplier = 1.0 + max(0.0, 1.0 - depth / low_liquidity_ref) if depth is not None else 1.0
 
     deviation = spread_participation * liquidity_multiplier
     if is_otm:
@@ -85,6 +84,7 @@ def realistic_fill(
 
 
 # ── Commissions ──────────────────────────────────────────────────────
+
 
 def ibkr_commission(premium_per_contract: float, contracts: int = 1) -> float:
     """Worst-case IBKR per-contract commission tier, in dollars.
@@ -108,15 +108,16 @@ def ibkr_commission(premium_per_contract: float, contracts: int = 1) -> float:
 
 # ── REG-T margin ─────────────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class OptionLeg:
     """One option leg for margin purposes (quantity fixed at 1 contract)."""
 
-    action: str            # "buy" | "sell"
-    kind: str              # "call" | "put"
+    action: str  # "buy" | "sell"
+    kind: str  # "call" | "put"
     strike: float
     underlying_price: float
-    premium: float         # quoted price per share
+    premium: float  # quoted price per share
 
 
 def _naked_short_margin(leg: OptionLeg) -> float:
@@ -135,9 +136,7 @@ def _naked_short_margin(leg: OptionLeg) -> float:
     else:
         base = leg.strike
         otm_amount = max(0.0, leg.underlying_price - leg.strike)
-    return (
-        max(0.20 * base - otm_amount, 0.10 * base) + leg.premium
-    ) * CONTRACT_MULTIPLIER
+    return (max(0.20 * base - otm_amount, 0.10 * base) + leg.premium) * CONTRACT_MULTIPLIER
 
 
 def _vertical_spread_margin(legs: Sequence[OptionLeg]) -> float | None:
@@ -198,6 +197,7 @@ def regt_margin(legs: Sequence[OptionLeg]) -> float:
 
 
 # ── Capacity ─────────────────────────────────────────────────────────
+
 
 def capacity_cap(
     volume: float | None,

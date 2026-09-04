@@ -113,13 +113,21 @@ class EarningsScanner:
         # Build candidate list — include all timings, not just pre/post
         candidates: list[EarningsCandidate] = []
         for s in post_stocks:
-            candidates.append(EarningsCandidate(
-                ticker=s.ticker, timing=s.timing, earnings_date=post_date,
-            ))
+            candidates.append(
+                EarningsCandidate(
+                    ticker=s.ticker,
+                    timing=s.timing,
+                    earnings_date=post_date,
+                )
+            )
         for s in pre_stocks:
-            candidates.append(EarningsCandidate(
-                ticker=s.ticker, timing=s.timing, earnings_date=pre_date,
-            ))
+            candidates.append(
+                EarningsCandidate(
+                    ticker=s.ticker,
+                    timing=s.timing,
+                    earnings_date=pre_date,
+                )
+            )
 
         logger.info(f"{len(candidates)} candidates")
 
@@ -174,10 +182,6 @@ class EarningsScanner:
             key=lambda t: reports[t].metrics.actual_to_fair_ratio or 0,
             reverse=True,
         )
-        near_misses = [
-            NearMiss(ticker=t, reason=r.reason)
-            for t, r in reports.items()
-            if r.near_miss
-        ]
+        near_misses = [NearMiss(ticker=t, reason=r.reason) for t, r in reports.items() if r.near_miss]
 
         return ScanResult(tier1=tier1, tier2=tier2, near_misses=near_misses, reports=reports)

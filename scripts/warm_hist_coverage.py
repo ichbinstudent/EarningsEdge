@@ -17,6 +17,7 @@ Usage:
   PYTHONUNBUFFERED=1 .venv/bin/python3.12 scripts/warm_hist_coverage.py \
       --mode universe [--all] [--limit N] [--min-events 3] [--sleep 0.3]
 """
+
 import argparse
 import logging
 import sys
@@ -33,8 +34,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 logger = logging.getLogger("warm_hist")
 
 
-def repair_universe(tickers, sleep: float = 0.3, progress_every: int = 25,
-                    ensure_fn=None) -> dict:
+def repair_universe(tickers, sleep: float = 0.3, progress_every: int = 25, ensure_fn=None) -> dict:
     """Run ensure_hist_moves over an explicit ticker list.
 
     ``ensure_fn`` is injectable for tests; defaults to
@@ -43,6 +43,7 @@ def repair_universe(tickers, sleep: float = 0.3, progress_every: int = 25,
     """
     if ensure_fn is None:
         from earnings_edge.fwd_factor_ladder import ensure_hist_moves
+
         ensure_fn = ensure_hist_moves
     from earnings_edge.coverage import hist_move_coverage
 
@@ -92,11 +93,11 @@ def _upcoming_tickers(days: int) -> list[str]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("days", nargs="?", type=int, default=7,
-                    help="upcoming mode: days ahead to warm")
+    ap.add_argument("days", nargs="?", type=int, default=7, help="upcoming mode: days ahead to warm")
     ap.add_argument("--mode", choices=["upcoming", "universe"], default="upcoming")
-    ap.add_argument("--all", action="store_true",
-                    help="universe mode: include non-liquid tickers (default: liquid only)")
+    ap.add_argument(
+        "--all", action="store_true", help="universe mode: include non-liquid tickers (default: liquid only)"
+    )
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--min-events", type=int, default=3)
     ap.add_argument("--sleep", type=float, default=0.3)
@@ -104,11 +105,9 @@ def main() -> None:
 
     if args.mode == "universe":
         from earnings_edge.coverage import repair_candidates
-        tickers = repair_candidates(
-            min_events=args.min_events, liquid_only=not args.all
-        )
-        logger.info("universe repair: %d under-covered tickers (liquid_only=%s)",
-                    len(tickers), not args.all)
+
+        tickers = repair_candidates(min_events=args.min_events, liquid_only=not args.all)
+        logger.info("universe repair: %d under-covered tickers (liquid_only=%s)", len(tickers), not args.all)
     else:
         tickers = _upcoming_tickers(args.days)
         logger.info("unique upcoming tickers: %d", len(tickers))
@@ -117,13 +116,20 @@ def main() -> None:
         tickers = tickers[: args.limit]
 
     result = repair_universe(tickers, sleep=args.sleep)
-    logger.info("done: %d processed, %d failed, %.0fs",
-                result["processed"], result["failed"], result["elapsed_s"])
+    logger.info(
+        "done: %d processed, %d failed, %.0fs", result["processed"], result["failed"], result["elapsed_s"]
+    )
     if args.mode == "universe":
         b, a = result["coverage_before"], result["coverage_after"]
-        logger.info("hist-gate coverage over repaired universe: %d/%d (%.1f%%) -> %d/%d (%.1f%%)",
-                    b["covered"], b["universe"], b["pct"],
-                    a["covered"], a["universe"], a["pct"])
+        logger.info(
+            "hist-gate coverage over repaired universe: %d/%d (%.1f%%) -> %d/%d (%.1f%%)",
+            b["covered"],
+            b["universe"],
+            b["pct"],
+            a["covered"],
+            a["universe"],
+            a["pct"],
+        )
 
 
 if __name__ == "__main__":

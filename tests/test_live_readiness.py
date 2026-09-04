@@ -1,4 +1,5 @@
 """Gating tests for Alpaca live-readiness: mode switch, last-look, sizers, chain cache."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -60,9 +61,13 @@ def test_paper_lifecycle_vetoed_on_live_broker(tmp_path):
     configure(tmp_path / "fw.db")
     rm = RiskManager()
     d = rm.check_trade(
-        "calendar_call_ml", "AAPL", est_cost=100,
-        equity=100_000, buying_power=50_000,
-        lifecycle="paper", live_broker=True,
+        "calendar_call_ml",
+        "AAPL",
+        est_cost=100,
+        equity=100_000,
+        buying_power=50_000,
+        lifecycle="paper",
+        live_broker=True,
     )
     assert not d.approved
     assert "live broker" in d.reason
@@ -72,9 +77,13 @@ def test_live_entries_fail_closed_without_day_start(tmp_path):
     configure(tmp_path / "fw.db")
     rm = RiskManager()
     d = rm.check_trade(
-        "calendar_call_ml", "AAPL", est_cost=100,
-        equity=100_000, buying_power=50_000,
-        lifecycle="probation", live_broker=True,
+        "calendar_call_ml",
+        "AAPL",
+        est_cost=100,
+        equity=100_000,
+        buying_power=50_000,
+        lifecycle="probation",
+        live_broker=True,
     )
     assert not d.approved
     assert "day-start" in d.reason
@@ -109,7 +118,9 @@ def test_last_look_vetoes_wide_spread_and_fat_debit():
     fat = last_look_veto(legs, tight, spot=10.0, proposed_debit=2.0)
     assert fat and "spot" in fat
     through = last_look_veto(
-        legs, tight, spot=100.0,
+        legs,
+        tight,
+        spot=100.0,
         proposed_debit=2.0 * MAX_DEBIT_VS_MID + 0.5,
     )
     assert through and "mid" in through
@@ -120,8 +131,10 @@ def test_hourly_chain_allows_two_hours(tmp_path):
     configure(tmp_path / "ml.db")
     now1 = datetime(2026, 8, 22, 14, 0, tzinfo=UTC)
     now2 = datetime(2026, 8, 22, 15, 0, tzinfo=UTC)
-    snap = {"dailyBar": {"c": 1.5, "o": 1.4, "h": 1.6, "l": 1.3, "n": 1, "v": 10, "vw": 1.5},
-            "latestQuote": {"bp": 1.4, "ap": 1.6, "bs": 1, "as": 1}}
+    snap = {
+        "dailyBar": {"c": 1.5, "o": 1.4, "h": 1.6, "l": 1.3, "n": 1, "v": 10, "vw": 1.5},
+        "latestQuote": {"bp": 1.4, "ap": 1.6, "bs": 1, "as": 1},
+    }
     r1 = row_for_contract("run1", "AAPL", "AAPL260828C00200000", snap, now=now1)
     r2 = row_for_contract("run2", "AAPL", "AAPL260828C00200000", snap, now=now2)
     assert r1["captured_hour"] == "2026-08-22T14"
@@ -137,20 +150,25 @@ def test_hourly_chain_allows_two_hours(tmp_path):
 def test_default_underlyings_prefer_upcoming(tmp_path):
     configure(tmp_path / "ml.db")
     with db_engine.session_scope() as s:
-        s.execute(text(
-            "INSERT INTO snapshots (ticker, earnings_date, scan_date, has_options) "
-            "VALUES ('AAA', date('now','+3 days'), date('now'), 1)"
-        ))
-        s.execute(text(
-            "INSERT INTO snapshots (ticker, earnings_date, scan_date, has_options) "
-            "VALUES ('ZZZ', date('now','-30 days'), date('now'), 1)"
-        ))
+        s.execute(
+            text(
+                "INSERT INTO snapshots (ticker, earnings_date, scan_date, has_options) "
+                "VALUES ('AAA', date('now','+3 days'), date('now'), 1)"
+            )
+        )
+        s.execute(
+            text(
+                "INSERT INTO snapshots (ticker, earnings_date, scan_date, has_options) "
+                "VALUES ('ZZZ', date('now','-30 days'), date('now'), 1)"
+            )
+        )
     tickers = default_underlyings(max_tickers=10)
     assert tickers[0] == "AAA"
 
 
 def test_preflight_live_requires_flag(monkeypatch):
     import scripts.preflight as preflight
+
     monkeypatch.setenv("ALPACA_LIVE", "1")
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "t")
     monkeypatch.setenv("APCA_API_KEY_ID", "k")
@@ -163,10 +181,12 @@ def test_preflight_live_requires_flag(monkeypatch):
     client.get_clock.return_value = {"is_open": True}
     ks = MagicMock()
     ks.status.return_value = {"halted": False, "reason": None}
-    with patch("earnings_edge.alpaca_trading.create_client", return_value=client), \
-         patch("earnings_edge.market_data_provider.LSEProvider") as lse, \
-         patch("framework.risk.killswitch.KillSwitch", return_value=ks), \
-         patch("requests.get") as tg:
+    with (
+        patch("earnings_edge.alpaca_trading.create_client", return_value=client),
+        patch("earnings_edge.market_data_provider.LSEProvider") as lse,
+        patch("framework.risk.killswitch.KillSwitch", return_value=ks),
+        patch("requests.get") as tg,
+    ):
         lse.return_value.healthy.return_value = True
         tg.return_value.status_code = 200
         preflight.RESULTS.clear()

@@ -31,6 +31,7 @@ def _utcnow() -> str:
 
 # ── Pricing policies ---------------------------------------------------------
 
+
 class PricingPolicy:
     """Yields the sequence of limit prices to work an order at."""
 
@@ -60,8 +61,7 @@ class LimitWalkPolicy(PricingPolicy):
 
     name = "limit_walk"
 
-    def __init__(self, steps: int = 3, step_improve_bps: float = 25.0,
-                 final_improve_bps: float = 100.0):
+    def __init__(self, steps: int = 3, step_improve_bps: float = 25.0, final_improve_bps: float = 100.0):
         if steps < 1:
             raise ValueError("steps must be >= 1")
         self.steps = steps
@@ -80,6 +80,7 @@ class LimitWalkPolicy(PricingPolicy):
 
 # ── Managed order -------------------------------------------------------------
 
+
 @dataclass
 class ManagedOrder:
     """Result of a managed submit/chase cycle."""
@@ -88,7 +89,7 @@ class ManagedOrder:
     side: str
     qty: int
     policy: str
-    state: str = "working"           # working | filled | partial | canceled | exhausted | error
+    state: str = "working"  # working | filled | partial | canceled | exhausted | error
     order_ids: list[str] = field(default_factory=list)
     filled_qty: float = 0.0
     filled_avg_price: float | None = None
@@ -167,23 +168,31 @@ class OrderManager:
         # Never market: resting limit orders at computed prices only
         # (DEFAULT_ORDER_TYPE="limit" invariant, enforced framework-side).
         if price is None:
-            logger.warning("refusing market submit: no limit price for %s",
-                           legs[0]["symbol"] if legs else "?")
+            logger.warning(
+                "refusing market submit: no limit price for %s", legs[0]["symbol"] if legs else "?"
+            )
             raise ValueError("no limit price — refusing to submit a market order")
         for attempt in range(1, 4):
             try:
                 if len(legs) == 1:
                     leg = legs[0]
                     order = self.client.submit_order(
-                        symbol=leg["symbol"], qty=qty * leg.get("ratio_qty", 1), side=leg["side"],
+                        symbol=leg["symbol"],
+                        qty=qty * leg.get("ratio_qty", 1),
+                        side=leg["side"],
                         order_type="limit",
-                        limit_price=price, time_in_force=tif, client_order_id=cid,
+                        limit_price=price,
+                        time_in_force=tif,
+                        client_order_id=cid,
                     )
                 else:
                     order = self.client.submit_multi_leg_order(
-                        legs=legs, qty=qty,
+                        legs=legs,
+                        qty=qty,
                         order_type="limit",
-                        limit_price=price, time_in_force=tif, client_order_id=cid,
+                        limit_price=price,
+                        time_in_force=tif,
+                        client_order_id=cid,
                     )
                 return order["id"]
             except Exception as exc:
@@ -193,6 +202,7 @@ class OrderManager:
                 logger.warning("submit API error (attempt %d/3): %s", attempt, exc)
                 self._sleep(1.0 * (2 ** (attempt - 1)))
         raise RuntimeError("Submit failed")
+
     def _poll_fill(self, order_id: str) -> tuple[float, float | None] | None:
         """(filled_qty, avg_price) once any fill is seen, else None.
         Calculates net price from legs if the parent order is empty."""

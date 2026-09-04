@@ -119,9 +119,7 @@ class OutcomeService:
                 failed += 1
                 record_snapshot_outcome_failure(row["id"], max_retries)
 
-        logger.info(
-            "Outcomes complete: %d updated, %d no data", updated, failed
-        )
+        logger.info("Outcomes complete: %d updated, %d no data", updated, failed)
         return {
             "updated": updated,
             "failed": failed,
@@ -187,13 +185,7 @@ class OutcomeService:
             return None
 
         actual_move_pct = ((post_close - pre_close) / pre_close) * 100
-        direction = (
-            "UP"
-            if actual_move_pct > 0.5
-            else "DOWN"
-            if actual_move_pct < -0.5
-            else "FLAT"
-        )
+        direction = "UP" if actual_move_pct > 0.5 else "DOWN" if actual_move_pct < -0.5 else "FLAT"
 
         # Max intraday range across earnings day + following two days.
         max_range_pct = 0.0

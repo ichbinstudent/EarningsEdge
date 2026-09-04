@@ -21,8 +21,7 @@ pytestmark = pytest.mark.e2e
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
 TODAY = date(2026, 8, 5)
-EVENT_DATES = [date(2026, 4, 29), date(2026, 1, 28), date(2025, 10, 29),
-               date(2025, 7, 30)]
+EVENT_DATES = [date(2026, 4, 29), date(2026, 1, 28), date(2025, 10, 29), date(2025, 7, 30)]
 
 
 def _ms(d: date) -> int:
@@ -56,10 +55,16 @@ def _seed(conn, ticker, ed, has_options, usable_outcome):
             (ticker, earnings_date, scan_date, timing, has_options,
              actual_move_pct, actual_move_direction, outcome_fetched_at)
            VALUES (?,?,?,?,?,?,?,?)""",
-        (ticker, ed.isoformat(), ed.isoformat(), "Post Market", has_options,
-         6.0 if usable_outcome else None,
-         "UP" if usable_outcome else None,
-         "2026-08-01T00:00:00" if usable_outcome else None),
+        (
+            ticker,
+            ed.isoformat(),
+            ed.isoformat(),
+            "Post Market",
+            has_options,
+            6.0 if usable_outcome else None,
+            "UP" if usable_outcome else None,
+            "2026-08-01T00:00:00" if usable_outcome else None,
+        ),
     )
     conn.commit()
 

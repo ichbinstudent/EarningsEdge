@@ -6,6 +6,7 @@ Live trade generation is earnings_edge/live_signals.py, driven by the
 TOML strategies in strategies/*.toml. Shared types (Trade, DataBundle,
 StrategyResult) live in earnings_edge/trading_types.py.
 """
+
 from earnings_edge.backtest.calendar import (
     CalendarCallHighConviction,
     CalendarCallNoML,

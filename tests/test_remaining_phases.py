@@ -1,4 +1,5 @@
 """Gating tests for remaining professionalization phases (desk, loop, signals)."""
+
 from __future__ import annotations
 
 import json
@@ -34,17 +35,37 @@ def test_inbox_lists_four_live_kinds_and_expires_stale():
     fresh = (NOW - timedelta(hours=1)).isoformat()
     inbox = assemble_inbox(
         entries=[
-            {"id": 1, "ticker": "FRESH", "side": "CALENDAR", "strategy": "calendar_call_ml",
-             "created_at": fresh},
-            {"id": 2, "ticker": "STALE", "side": "CALENDAR", "strategy": "calendar_call_ml",
-             "created_at": stale},
+            {
+                "id": 1,
+                "ticker": "FRESH",
+                "side": "CALENDAR",
+                "strategy": "calendar_call_ml",
+                "created_at": fresh,
+            },
+            {
+                "id": 2,
+                "ticker": "STALE",
+                "side": "CALENDAR",
+                "strategy": "calendar_call_ml",
+                "created_at": stale,
+            },
         ],
-        exits=[{"id": 9, "ticker": "META", "rule": "time", "strategy": "ff_ladder",
-                "created_at": fresh, "reason": "event day"}],
-        orphans=[{"symbol": "ATLO260918C00030000", "ticker": "ATLO", "ts": fresh,
-                  "detail": "at broker, not local"}],
+        exits=[
+            {
+                "id": 9,
+                "ticker": "META",
+                "rule": "time",
+                "strategy": "ff_ladder",
+                "created_at": fresh,
+                "reason": "event day",
+            }
+        ],
+        orphans=[
+            {"symbol": "ATLO260918C00030000", "ticker": "ATLO", "ts": fresh, "detail": "at broker, not local"}
+        ],
         jobs=[{"id": 3, "job_name": "scan", "error": "dns", "finished_at": fresh}],
-        now=NOW, ttl_hours=8,
+        now=NOW,
+        ttl_hours=8,
     )
     kinds = {i.kind for i in inbox.live}
     assert {"entry", "exit", "orphan", "job"} <= kinds
@@ -67,32 +88,48 @@ def test_health_ready_vs_no_lock_and_stale_scan():
         lock_held=True,
         last_equity_ts=NOW.isoformat(),
         last_scan_ts=NOW.isoformat(),
-        clock_ok=True, now=NOW, market_open=True, weekday=True,
+        clock_ok=True,
+        now=NOW,
+        market_open=True,
+        weekday=True,
     )
     assert ok["ready"] is True
     no_lock = health_ready(
         lock_held=False,
         last_equity_ts=NOW.isoformat(),
         last_scan_ts=NOW.isoformat(),
-        clock_ok=True, now=NOW, market_open=True, weekday=True,
+        clock_ok=True,
+        now=NOW,
+        market_open=True,
+        weekday=True,
     )
     assert no_lock["ready"] is False and "no lock" in no_lock["reasons"]
     stale = health_ready(
         lock_held=True,
         last_equity_ts=NOW.isoformat(),
         last_scan_ts=(NOW - timedelta(hours=30)).isoformat(),
-        clock_ok=True, now=NOW, market_open=True, weekday=True,
+        clock_ok=True,
+        now=NOW,
+        market_open=True,
+        weekday=True,
     )
     assert stale["ready"] is False and "scan stale" in stale["reasons"]
 
 
 def test_status_view_has_required_fields(tmp_path):
     configure(tmp_path / "s.db")
-    text = status_view( market_open=True, pending_proposals=1, pending_exits=0,
-        last_scan_ts=NOW.isoformat(), last_equity_ts=NOW.isoformat(),
+    text = status_view(
+        market_open=True,
+        pending_proposals=1,
+        pending_exits=0,
+        last_scan_ts=NOW.isoformat(),
+        last_equity_ts=NOW.isoformat(),
         reconcile_summary="broker=2 matched=1 orphans=1",
-        broker_ok=True, broker_count=3, orphan_count=1,
-        sha="abc1234", started_at=NOW.isoformat(),
+        broker_ok=True,
+        broker_count=3,
+        orphan_count=1,
+        sha="abc1234",
+        started_at=NOW.isoformat(),
     )
     assert "<b>Last scan:</b>" in text
     assert "<b>Last equity snapshot:</b>" in text or "<b>Equity:</b>" in text
@@ -102,11 +139,17 @@ def test_status_view_has_required_fields(tmp_path):
     assert "<b>Orphans: 1</b>" in text
     assert "<b>Rev:</b> <code>abc1234</code>" in text
     assert "<b>Started:</b>" in text
-    mon = monitor_view( tick=0, last_scan_ts=NOW.isoformat(),
-                       last_equity_ts=NOW.isoformat(),
-                       reconcile_summary="broker=2 matched=1 orphans=1",
-                       broker_ok=True, broker_count=3, orphan_count=1,
-                       sha="abc1234", started_at=NOW.isoformat())
+    mon = monitor_view(
+        tick=0,
+        last_scan_ts=NOW.isoformat(),
+        last_equity_ts=NOW.isoformat(),
+        reconcile_summary="broker=2 matched=1 orphans=1",
+        broker_ok=True,
+        broker_count=3,
+        orphan_count=1,
+        sha="abc1234",
+        started_at=NOW.isoformat(),
+    )
     assert "orphans 1" in mon and "Last scan:" in mon and "reachable" in mon
     assert "Last reconcile:" in mon and "orphans=1" in mon
     assert "Last equity snapshot:" in mon
@@ -138,25 +181,59 @@ def test_scan_zero_candidates_no_propose_and_one_retry():
 def test_reconcile_snapshot_orphan_and_assignment(tmp_path):
     configure(tmp_path / "r.db")
     from framework.execution.managed import record_open_positions
-    record_open_positions([{"symbol": "NU260814C00014000", "side": "sell", "ratio_qty": 25,
-          "option_type": "call", "strike": 14.0, "expiry": date(2026, 8, 14)}],
-        "debit_size_exploit", group_id="nu-short",
-        metadata={"side": "CALENDAR", "leg_side": "sell", "option_type": "call",
-                  "earnings_date": "2026-08-13"},
+
+    record_open_positions(
+        [
+            {
+                "symbol": "NU260814C00014000",
+                "side": "sell",
+                "ratio_qty": 25,
+                "option_type": "call",
+                "strike": 14.0,
+                "expiry": date(2026, 8, 14),
+            }
+        ],
+        "debit_size_exploit",
+        group_id="nu-short",
+        metadata={
+            "side": "CALENDAR",
+            "leg_side": "sell",
+            "option_type": "call",
+            "earnings_date": "2026-08-13",
+        },
     )
     client = MagicMock()
     client.get_positions.return_value = [
-        {"symbol": "NU260814C00014000", "qty": "-25", "side": "short",
-         "avg_entry_price": "0.4", "current_price": "0.1", "market_value": "-250",
-         "unrealized_pl": "750"},
-        {"symbol": "ATLO260918C00030000", "qty": "-1", "side": "short",
-         "avg_entry_price": "1", "current_price": "4", "market_value": "-400",
-         "unrealized_pl": "-300"},
-        {"symbol": "NU", "qty": "-2500", "side": "short",
-         "avg_entry_price": "14", "current_price": "15", "market_value": "-37500",
-         "unrealized_pl": "-2500"},
+        {
+            "symbol": "NU260814C00014000",
+            "qty": "-25",
+            "side": "short",
+            "avg_entry_price": "0.4",
+            "current_price": "0.1",
+            "market_value": "-250",
+            "unrealized_pl": "750",
+        },
+        {
+            "symbol": "ATLO260918C00030000",
+            "qty": "-1",
+            "side": "short",
+            "avg_entry_price": "1",
+            "current_price": "4",
+            "market_value": "-400",
+            "unrealized_pl": "-300",
+        },
+        {
+            "symbol": "NU",
+            "qty": "-2500",
+            "side": "short",
+            "avg_entry_price": "14",
+            "current_price": "15",
+            "market_value": "-37500",
+            "unrealized_pl": "-2500",
+        },
     ]
     from framework.alerts import DEDUPER
+
     DEDUPER.reset()
     report = Reconciler(client).run()
     with db_engine.get_session() as s:
@@ -185,14 +262,24 @@ def test_backup_invoke(tmp_path):
 
 def test_calendar_reasons_skip_vs_no_quote():
     import pandas as pd
+
     skip = {
-        "ticker": "SKIPCO", "strike": 50, "near_expiry": "2026-08-20",
-        "far_expiry": "2026-09-17", "net_debit_ask": 1.1, "net_debit": 1.1,
+        "ticker": "SKIPCO",
+        "strike": 50,
+        "near_expiry": "2026-08-20",
+        "far_expiry": "2026-09-17",
+        "net_debit_ask": 1.1,
+        "net_debit": 1.1,
         "model_decision": "SKIP",
     }
     noq = {
-        "ticker": "NOQ", "strike": None, "near_expiry": None, "far_expiry": None,
-        "net_debit_ask": None, "net_debit": None, "model_decision": "TAKE",
+        "ticker": "NOQ",
+        "strike": None,
+        "near_expiry": None,
+        "far_expiry": None,
+        "net_debit_ask": None,
+        "net_debit": None,
+        "model_decision": "TAKE",
     }
     assert calendar_row_reason(skip) == "model_skip"
     assert calendar_row_reason(noq) == "no_quote"
@@ -209,21 +296,30 @@ def test_mid_cap_refuse_no_submit():
     client = MagicMock()
     client.position_symbols.return_value = set()
     client.get_account.return_value = {"equity": "100000", "buying_power": "50000"}
+
     # mid 1.00, proposed debit 2.00 → through cap
     def _snap(symbol):
         # near sold cheap, far expensive → positive combo mid ~2.00
         if "0731" in symbol:
             return {"latestQuote": {"bp": 0.90, "ap": 1.10}}
         return {"latestQuote": {"bp": 2.90, "ap": 3.10}}
+
     client.get_option_snapshot.side_effect = _snap
     from earnings_edge.trading_types import Trade
+
     bridge = StrategyBridge(client=client)
     trade = Trade(
-        ticker="AAPL", earnings_date=date(2026, 7, 29), scan_date=date(2026, 7, 28),
-        strategy="calendar_call_ml", side="CALENDAR", entry_price=3.50,
+        ticker="AAPL",
+        earnings_date=date(2026, 7, 29),
+        scan_date=date(2026, 7, 28),
+        strategy="calendar_call_ml",
+        side="CALENDAR",
+        entry_price=3.50,
         features={
-            "near_strike": 190, "far_strike": 190,
-            "near_expiry": date(2026, 7, 31), "far_expiry": date(2026, 8, 28),
+            "near_strike": 190,
+            "far_strike": 190,
+            "near_expiry": date(2026, 7, 31),
+            "far_expiry": date(2026, 8, 28),
         },
         ml_decision="TAKE",
     )
@@ -326,7 +422,7 @@ def test_collect_desk_facts_feeds_monitor(tmp_path):
     assert facts["orphan_count"] == 1
     assert facts["reconcile_summary"] == "broker=2 matched=1 orphans=1"
     assert facts["last_equity_ts"]
-    mon = monitor_view( tick=0, **desk_view_kwargs(facts))
+    mon = monitor_view(tick=0, **desk_view_kwargs(facts))
     assert "Last reconcile:" in mon and "orphans=1" in mon
     assert "reachable" in mon and "orphans 1" in mon
     assert "Last equity snapshot:" in mon
@@ -344,6 +440,7 @@ def test_collect_desk_facts_feeds_monitor(tmp_path):
 
 def test_scan_fail_emit_lands_in_outbox():
     from framework.alerts import DEDUPER
+
     DEDUPER.reset()
     msg = DEDUPER.emit("scan_fail", "scan Earnings Calendar failed: No candidates")
     assert msg is not None
@@ -353,10 +450,21 @@ def test_scan_fail_emit_lands_in_outbox():
 def test_reconcile_missing_emits_missing_alert(tmp_path):
     from framework.alerts import DEDUPER
     from framework.execution.managed import record_open_positions
+
     configure(tmp_path / "miss.db")
-    record_open_positions([{"symbol": "GONE260828C00100000", "side": "sell", "ratio_qty": 1,
-          "option_type": "call", "strike": 100.0, "expiry": date(2026, 8, 28)}],
-        "ff_ladder", group_id="gone",
+    record_open_positions(
+        [
+            {
+                "symbol": "GONE260828C00100000",
+                "side": "sell",
+                "ratio_qty": 1,
+                "option_type": "call",
+                "strike": 100.0,
+                "expiry": date(2026, 8, 28),
+            }
+        ],
+        "ff_ladder",
+        group_id="gone",
         metadata={"side": "CALENDAR", "leg_side": "sell", "option_type": "call"},
     )
     client = MagicMock()
@@ -372,6 +480,7 @@ def test_flush_alerts_pushes_scan_fail_to_approval_chat():
 
     from bot import TradingBot
     from framework.alerts import DEDUPER
+
     DEDUPER.reset()
     DEDUPER.emit("scan_fail", "scan Earnings Calendar failed: No candidates")
     pushed = []
@@ -379,6 +488,7 @@ def test_flush_alerts_pushes_scan_fail_to_approval_chat():
     class _Stub:
         async def _push_risk_alert(self, text):
             pushed.append(text)
+
         _flush_alerts = TradingBot._flush_alerts
 
     asyncio.run(_Stub()._flush_alerts())
@@ -389,6 +499,7 @@ def test_flush_alerts_pushes_scan_fail_to_approval_chat():
 def test_kill_switch_trip_emits(tmp_path):
     from framework.alerts import DEDUPER
     from framework.risk.killswitch import KillSwitch
+
     configure(tmp_path / "ks.db")
     DEDUPER.reset()
     KillSwitch().trip("manual halt via bot", "operator")
@@ -403,10 +514,15 @@ def test_sha_and_started_at_exist():
 
 def test_main_keyboard_has_expected_desk_keys():
     from bot import MAIN_KB
+
     flat = [c for row in MAIN_KB for c in row]
     assert flat == [
-        "🖥 Status", "💼 Positions",
-        "📡 Signals", "📥 Pending",
-        "🎯 Picks", "📐 Designer",
-        "⚙️ Jobs", "🛠 Settings",
+        "🖥 Status",
+        "💼 Positions",
+        "📡 Signals",
+        "📥 Pending",
+        "🎯 Picks",
+        "📐 Designer",
+        "⚙️ Jobs",
+        "🛠 Settings",
     ]

@@ -74,16 +74,18 @@ def _seed_fixture_db(db_path) -> None:
         net_debit = 0.60
         pnl = 12.0 if i % 2 == 0 else -6.0
         move = 8.0 if i % 2 == 0 else -8.0
-        insert_snapshot({
-            "ticker": ticker,
-            "earnings_date": EARNINGS_DATE.isoformat(),
-            "scan_date": SCAN_DATE.isoformat(),
-            "timing": "Post Market",
-            "price": price,
-            "avg_volume_30d": 5_000_000,
-            "has_options": 1,
-            "data_source": "e2e_fixture",
-        })
+        insert_snapshot(
+            {
+                "ticker": ticker,
+                "earnings_date": EARNINGS_DATE.isoformat(),
+                "scan_date": SCAN_DATE.isoformat(),
+                "timing": "Post Market",
+                "price": price,
+                "avg_volume_30d": 5_000_000,
+                "has_options": 1,
+                "data_source": "e2e_fixture",
+            }
+        )
     with db_engine.session_scope() as s:
         for i in range(N_TICKERS):
             ticker = f"E2EBT{i:02d}"
@@ -91,13 +93,16 @@ def _seed_fixture_db(db_path) -> None:
             net_debit = 0.60
             pnl = 12.0 if i % 2 == 0 else -6.0
             move = 8.0 if i % 2 == 0 else -8.0
-            s.execute(text(
-                "UPDATE snapshots SET pre_earnings_close = :p, "
-                "post_earnings_close = :q, actual_move_pct = :m WHERE ticker = :t"),
+            s.execute(
+                text(
+                    "UPDATE snapshots SET pre_earnings_close = :p, "
+                    "post_earnings_close = :q, actual_move_pct = :m WHERE ticker = :t"
+                ),
                 {"p": price, "q": price * (1 + move / 100), "m": move, "t": ticker},
             )
-            s.execute(text(
-                """
+            s.execute(
+                text(
+                    """
                 INSERT INTO calendar_call_trades (
                     ticker, earnings_date, scan_date,
                     near_expiry, far_expiry, strike,
@@ -105,14 +110,25 @@ def _seed_fixture_db(db_path) -> None:
                     near_entry, far_entry, near_exit, far_exit,
                     net_debit, exit_value, pnl_dollars, return_on_debit
                 ) VALUES (:tk,:ed,:sc,:ne,:fe,:st,:nc,:fc,:n1,:f1,:n2,:f2,:nd,:ev,:pnl,:rod)
-                """),
+                """
+                ),
                 {
-                    "tk": ticker, "ed": EARNINGS_DATE.isoformat(), "sc": SCAN_DATE.isoformat(),
-                    "ne": near_expiry, "fe": far_expiry, "st": price,
-                    "nc": f"O:{ticker}NEAR", "fc": f"O:{ticker}FAR",
-                    "n1": 0.40, "f1": 1.00,
-                    "n2": 0.05, "f2": 0.90,
-                    "nd": net_debit, "ev": 100.0, "pnl": pnl, "rod": pnl / (net_debit * 100),
+                    "tk": ticker,
+                    "ed": EARNINGS_DATE.isoformat(),
+                    "sc": SCAN_DATE.isoformat(),
+                    "ne": near_expiry,
+                    "fe": far_expiry,
+                    "st": price,
+                    "nc": f"O:{ticker}NEAR",
+                    "fc": f"O:{ticker}FAR",
+                    "n1": 0.40,
+                    "f1": 1.00,
+                    "n2": 0.05,
+                    "f2": 0.90,
+                    "nd": net_debit,
+                    "ev": 100.0,
+                    "pnl": pnl,
+                    "rod": pnl / (net_debit * 100),
                 },
             )
 
@@ -123,12 +139,20 @@ def test_backtest_cli_produces_report_artifact(tmp_db_path, tmp_path):
 
     proc = subprocess.run(
         [
-            sys.executable, "backtest.py",
-            "--db", str(tmp_db_path),
-            "--strategies", "calendar_call_no_ml", "earnings_quality",
-            "--output", str(report),
+            sys.executable,
+            "backtest.py",
+            "--db",
+            str(tmp_db_path),
+            "--strategies",
+            "calendar_call_no_ml",
+            "earnings_quality",
+            "--output",
+            str(report),
         ],
-        cwd=CLI_ROOT, capture_output=True, text=True, timeout=300,
+        cwd=CLI_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=300,
     )
     assert proc.returncode == 0, f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
 

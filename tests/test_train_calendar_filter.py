@@ -40,7 +40,9 @@ class CalendarFilterTrainingTests(unittest.TestCase):
         self.assertEqual(target.tolist(), [0.25, -0.10, 1.50])
 
     def test_expected_return_uses_regression_model_with_predict_not_classifier(self):
-        pipe = build_model_pipeline(["net_debit", "debit_pct_price"], target="expected_return", model_name="ridge", random_state=42)
+        pipe = build_model_pipeline(
+            ["net_debit", "debit_pct_price"], target="expected_return", model_name="ridge", random_state=42
+        )
 
         self.assertTrue(is_regression_target("expected_return"))
         self.assertTrue(hasattr(pipe.named_steps["model"], "predict"))
@@ -110,9 +112,7 @@ class CvEvaluateTests(unittest.TestCase):
             for key in ("accuracy", "f1", "auc"):
                 self.assertTrue(math.isfinite(fold["metrics"][key]))
         for key in ("accuracy", "f1", "auc"):
-            expected_mean = float(
-                np.nanmean([f["metrics"][key] for f in result["folds"]])
-            )
+            expected_mean = float(np.nanmean([f["metrics"][key] for f in result["folds"]]))
             self.assertTrue(math.isfinite(result["mean"][key]))
             self.assertAlmostEqual(result["mean"][key], expected_mean)
             self.assertTrue(math.isfinite(result["std"][key]))
@@ -130,56 +130,60 @@ class CvCliTests(unittest.TestCase):
             debit = float(rng.uniform(0.5, 3.0))
             ret = float(rng.uniform(-0.8, 1.2))
             exit_value = debit * (1.0 + ret)
-            sid = insert_snapshot({
-                "ticker": "SYN",
-                "earnings_date": earnings_date,
-                "scan_date": earnings_date,
-                "price": 100.0,
-                "avg_volume_30d": 1e6,
-                "market_cap": 1e9,
-                "has_options": 1,
-                "days_to_expiry": 30,
-                "total_open_interest": 5000.0,
-                "atm_iv_near": 0.6,
-                "rv30": 0.4,
-                "iv30_rv30": 1.5,
-                "hist_vol_3m": 0.45,
-                "term_slope": 0.02,
-                "term_structure_valid": 1,
-                "expected_move_pct": 0.08,
-                "expected_move_dollars": 8.0,
-                "straddle_price": 5.0,
-                "atm_call_delta": 0.5,
-                "atm_put_delta": -0.5,
-                "atm_call_iv": 0.6,
-                "atm_put_iv": 0.6,
-                "sigma_baseline_1y": 0.4,
-                "sigma_short_leg": 0.6,
-                "sigma_short_leg_fair": 0.5,
-                "actual_to_fair_ratio": 1.2,
-                "mc_win_rate": 0.5,
-                "mc_quarters": 8,
-                "data_source": f"t{i}",
-            })
-            calendar_call_trades_upsert({
-                "snapshot_id": sid,
-                "ticker": "SYN",
-                "earnings_date": earnings_date,
-                "scan_date": earnings_date,
-                "near_expiry": "2023-01-20",
-                "far_expiry": "2023-02-17",
-                "strike": 100.0,
-                "near_call_ticker": "O:SYNNEAR",
-                "far_call_ticker": "O:SYNFAR",
-                "near_entry": debit * 0.7,
-                "far_entry": debit * 0.5,
-                "near_exit": 0.1,
-                "far_exit": exit_value,
-                "net_debit": debit,
-                "pnl_dollars": 100.0 * debit * ret,
-                "return_on_debit": ret,
-                "exit_value": exit_value,
-            })
+            sid = insert_snapshot(
+                {
+                    "ticker": "SYN",
+                    "earnings_date": earnings_date,
+                    "scan_date": earnings_date,
+                    "price": 100.0,
+                    "avg_volume_30d": 1e6,
+                    "market_cap": 1e9,
+                    "has_options": 1,
+                    "days_to_expiry": 30,
+                    "total_open_interest": 5000.0,
+                    "atm_iv_near": 0.6,
+                    "rv30": 0.4,
+                    "iv30_rv30": 1.5,
+                    "hist_vol_3m": 0.45,
+                    "term_slope": 0.02,
+                    "term_structure_valid": 1,
+                    "expected_move_pct": 0.08,
+                    "expected_move_dollars": 8.0,
+                    "straddle_price": 5.0,
+                    "atm_call_delta": 0.5,
+                    "atm_put_delta": -0.5,
+                    "atm_call_iv": 0.6,
+                    "atm_put_iv": 0.6,
+                    "sigma_baseline_1y": 0.4,
+                    "sigma_short_leg": 0.6,
+                    "sigma_short_leg_fair": 0.5,
+                    "actual_to_fair_ratio": 1.2,
+                    "mc_win_rate": 0.5,
+                    "mc_quarters": 8,
+                    "data_source": f"t{i}",
+                }
+            )
+            calendar_call_trades_upsert(
+                {
+                    "snapshot_id": sid,
+                    "ticker": "SYN",
+                    "earnings_date": earnings_date,
+                    "scan_date": earnings_date,
+                    "near_expiry": "2023-01-20",
+                    "far_expiry": "2023-02-17",
+                    "strike": 100.0,
+                    "near_call_ticker": "O:SYNNEAR",
+                    "far_call_ticker": "O:SYNFAR",
+                    "near_entry": debit * 0.7,
+                    "far_entry": debit * 0.5,
+                    "near_exit": 0.1,
+                    "far_exit": exit_value,
+                    "net_debit": debit,
+                    "pnl_dollars": 100.0 * debit * ret,
+                    "return_on_debit": ret,
+                    "exit_value": exit_value,
+                }
+            )
 
     def test_cv_cli_writes_no_artifacts(self):
         script = Path(__file__).resolve().parents[1] / "train_calendar_filter.py"
@@ -216,9 +220,7 @@ class CvCliTests(unittest.TestCase):
             result = json.loads(proc.stdout)
             self.assertEqual(result["target"], "expected_return")
             self.assertEqual(len(result["folds"]), 3)
-            leftovers = [
-                p for p in tmp_path.rglob("*") if p.suffix in {".joblib", ".json"}
-            ]
+            leftovers = [p for p in tmp_path.rglob("*") if p.suffix in {".joblib", ".json"}]
             self.assertEqual(leftovers, [])
 
 

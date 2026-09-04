@@ -69,9 +69,11 @@ def test_registry_limits_drive_risk_gate(tmp_path):
     assert seeded == len(reg.configs)
     assert reg.sync_lifecycle() == 0  # idempotent
     with db_engine.get_session() as s:
-        row = s.execute(
-            text("SELECT lifecycle FROM strategy_state WHERE name = 'calendar_call_ml'")
-        ).mappings().first()
+        row = (
+            s.execute(text("SELECT lifecycle FROM strategy_state WHERE name = 'calendar_call_ml'"))
+            .mappings()
+            .first()
+        )
     assert row["lifecycle"] == "paper"
 
     limits = reg.limits_for("calendar_call_ml")
@@ -79,24 +81,33 @@ def test_registry_limits_drive_risk_gate(tmp_path):
 
     # Small trade: approved
     d = rm.check_trade(
-        "calendar_call_ml", "AAPL",
-        est_cost=1_000.0, equity=100_000.0, buying_power=50_000.0,
+        "calendar_call_ml",
+        "AAPL",
+        est_cost=1_000.0,
+        equity=100_000.0,
+        buying_power=50_000.0,
     )
     assert d.approved, d.reason
     assert d.qty_multiplier == 1.0
 
     # Over the TOML per-trade cap (10% of buying power): vetoed
     d = rm.check_trade(
-        "calendar_call_ml", "AAPL",
-        est_cost=6_000.0, equity=100_000.0, buying_power=50_000.0,
+        "calendar_call_ml",
+        "AAPL",
+        est_cost=6_000.0,
+        equity=100_000.0,
+        buying_power=50_000.0,
     )
     assert not d.approved
     assert "buying power" in d.reason
 
     # Probation lifecycle halves size via the multiplier
     d = rm.check_trade(
-        "calendar_call_ml", "AAPL",
-        est_cost=1_000.0, equity=100_000.0, buying_power=50_000.0,
+        "calendar_call_ml",
+        "AAPL",
+        est_cost=1_000.0,
+        equity=100_000.0,
+        buying_power=50_000.0,
         lifecycle="probation",
     )
     assert d.approved
@@ -105,8 +116,11 @@ def test_registry_limits_drive_risk_gate(tmp_path):
     # Kill switch: every new entry vetoed while halted
     rm.killswitch.trip("integration test halt", by="pytest")
     d = rm.check_trade(
-        "calendar_call_ml", "AAPL",
-        est_cost=100.0, equity=100_000.0, buying_power=50_000.0,
+        "calendar_call_ml",
+        "AAPL",
+        est_cost=100.0,
+        equity=100_000.0,
+        buying_power=50_000.0,
     )
     assert not d.approved
     assert "kill switch" in d.reason

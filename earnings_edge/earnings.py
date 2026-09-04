@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 
 try:  # Chrome TLS impersonation defeats Investing.com's 403 bot wall
     from curl_cffi import requests as cffi_requests
+
     _HAS_CFFI = True
 except ImportError:  # pragma: no cover
     cffi_requests = None
@@ -72,8 +73,10 @@ def _investing_earnings(date_: date) -> list[EarningsCandidate]:
             span = row.find("span", class_="genToolTip")
             tooltip = span.get("data-tooltip", "") if span and span.has_attr("data-tooltip") else ""
             timing = (
-                "Pre Market" if "Before" in tooltip
-                else "Post Market" if "After" in tooltip
+                "Pre Market"
+                if "Before" in tooltip
+                else "Post Market"
+                if "After" in tooltip
                 else "During Market"
             )
             stocks.append(EarningsCandidate(ticker=ticker, timing=timing))
@@ -83,6 +86,7 @@ def _investing_earnings(date_: date) -> list[EarningsCandidate]:
 
 
 # ── Source: Finnhub ───────────────────────────────────────────────────
+
 
 def _finnhub_earnings(date_: date) -> list[EarningsCandidate]:
     """Fetch earnings from Finnhub API."""
@@ -110,16 +114,13 @@ def _finnhub_earnings(date_: date) -> list[EarningsCandidate]:
         if not symbol:
             continue
         hour = e.get("hour", "").lower()
-        timing = (
-            "Pre Market" if hour == "bmo"
-            else "Post Market" if hour == "amc"
-            else "During Market"
-        )
+        timing = "Pre Market" if hour == "bmo" else "Post Market" if hour == "amc" else "During Market"
         stocks.append(EarningsCandidate(ticker=symbol, timing=timing))
     return stocks
 
 
 # ── Source: DoltHub ───────────────────────────────────────────────────
+
 
 def _dolthub_earnings(date_: date) -> list[EarningsCandidate]:
     """Fetch earnings from a local DoltHub MySQL instance."""
@@ -134,9 +135,15 @@ def _dolthub_earnings(date_: date) -> list[EarningsCandidate]:
     cursor = None
     try:
         conn = mysql.connector.connect(
-            host="localhost", port=3306, user="root", password="",
-            database="earnings", connection_timeout=5, buffered=True,
-            use_pure=True, autocommit=True,
+            host="localhost",
+            port=3306,
+            user="root",
+            password="",
+            database="earnings",
+            connection_timeout=5,
+            buffered=True,
+            use_pure=True,
+            autocommit=True,
         )
         cursor = conn.cursor(dictionary=True)
         cursor.execute("SET SESSION max_execution_time=5000")
@@ -163,9 +170,12 @@ def _dolthub_earnings(date_: date) -> list[EarningsCandidate]:
             continue
         when = row.get("when", "")
         timing = (
-            "Pre Market" if when in ("Before market open", "bmo")
-            else "Post Market" if when in ("After market close", "amc")
-            else "Unknown" if when is None
+            "Pre Market"
+            if when in ("Before market open", "bmo")
+            else "Post Market"
+            if when in ("After market close", "amc")
+            else "Unknown"
+            if when is None
             else "During Market"
         )
         stocks.append(EarningsCandidate(ticker=sym.strip(), timing=timing))
@@ -173,6 +183,7 @@ def _dolthub_earnings(date_: date) -> list[EarningsCandidate]:
 
 
 # ── Merge helpers ─────────────────────────────────────────────────────
+
 
 def _merge(*lists: list[EarningsCandidate]) -> list[EarningsCandidate]:
     """Deduplicate by ticker, preferring non-Unknown timing."""
@@ -184,12 +195,15 @@ def _merge(*lists: list[EarningsCandidate]) -> list[EarningsCandidate]:
                 merged[c.ticker] = c
             elif existing.timing == "Unknown" and c.timing != "Unknown":
                 merged[c.ticker] = EarningsCandidate(
-                    ticker=c.ticker, timing=c.timing, earnings_date=existing.earnings_date,
+                    ticker=c.ticker,
+                    timing=c.timing,
+                    earnings_date=existing.earnings_date,
                 )
     return list(merged.values())
 
 
 # ── Public API ────────────────────────────────────────────────────────
+
 
 def fetch_earnings(
     date_: date,
@@ -229,6 +243,7 @@ def _next_trading_day(d: date) -> date:
     """Next market session on or after d (weekends + exchange holidays)."""
     try:
         from framework.core.calendar import get_calendar
+
         return get_calendar().next_session(d)
     except Exception:
         # Calendar unavailable: fall back to weekend-only logic

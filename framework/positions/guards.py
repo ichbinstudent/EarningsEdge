@@ -44,9 +44,10 @@ def occ_underlying(symbol: str) -> str | None:
 @dataclass(frozen=True)
 class LegView:
     """Minimal leg shape the guard needs (adapted from bridge leg dicts)."""
+
     symbol: str
-    side: str                # "buy" | "sell"
-    option_type: str         # "call" | "put"
+    side: str  # "buy" | "sell"
+    option_type: str  # "call" | "put"
     strike: float
     expiry: date
 
@@ -54,7 +55,7 @@ class LegView:
 @dataclass(frozen=True)
 class AssignmentRisk:
     symbol: str
-    reason: str              # "dividend_capture" | "near_expiry_itm"
+    reason: str  # "dividend_capture" | "near_expiry_itm"
     dte: int
     dividend_date: date | None = None
 
@@ -86,14 +87,22 @@ def check_assignment_risk(
             and ex_dividend_date is not None
             and on <= ex_dividend_date <= leg.expiry
         ):
-            risks.append(AssignmentRisk(
-                symbol=leg.symbol, reason="dividend_capture",
-                dte=dte, dividend_date=ex_dividend_date,
-            ))
+            risks.append(
+                AssignmentRisk(
+                    symbol=leg.symbol,
+                    reason="dividend_capture",
+                    dte=dte,
+                    dividend_date=ex_dividend_date,
+                )
+            )
         elif dte <= dte_threshold:
-            risks.append(AssignmentRisk(
-                symbol=leg.symbol, reason="near_expiry_itm", dte=dte,
-            ))
+            risks.append(
+                AssignmentRisk(
+                    symbol=leg.symbol,
+                    reason="near_expiry_itm",
+                    dte=dte,
+                )
+            )
     return risks
 
 
@@ -103,6 +112,9 @@ def leg_view_from_dict(leg: dict) -> LegView:
     if isinstance(expiry, str):
         expiry = datetime.strptime(expiry, "%Y-%m-%d").date()
     return LegView(
-        symbol=leg["symbol"], side=leg["side"],
-        option_type=leg["option_type"], strike=float(leg["strike"]), expiry=expiry,
+        symbol=leg["symbol"],
+        side=leg["side"],
+        option_type=leg["option_type"],
+        strike=float(leg["strike"]),
+        expiry=expiry,
     )

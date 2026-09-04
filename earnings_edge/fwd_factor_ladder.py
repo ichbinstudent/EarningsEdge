@@ -21,7 +21,6 @@ armed ladders (the runner re-reads open order ids on startup).
 """
 
 
-
 import json
 import logging
 import math
@@ -49,9 +48,9 @@ MIN_HIST_EVENTS = 3
 DISTANCE_F = 0.15
 
 # ── hardening knobs ────────────────────────────────────────────────────
-MAX_QUOTE_AGE_SEC = 900        # hold step if either leg quote is older
-SPOT_DRIFT_TOLERANCE = 0.03    # disarm if spot moved >3% from candidate build
-BP_BUFFER = 1.1                # buying power must cover 110% of worst-case cost
+MAX_QUOTE_AGE_SEC = 900  # hold step if either leg quote is older
+SPOT_DRIFT_TOLERANCE = 0.03  # disarm if spot moved >3% from candidate build
+BP_BUFFER = 1.1  # buying power must cover 110% of worst-case cost
 TERMINAL_SUBMIT_STATUS = {401, 403, 404, 422}  # disarm on these broker errors
 
 
@@ -59,7 +58,9 @@ def _is_terminal_submit_error(exc: Exception) -> bool:
     """Broker said 'never going to work' (auth, permission, buying power,
     validation) vs transient network/5xx — only the former disarms."""
     from .alpaca_trading import AlpacaError
+
     return isinstance(exc, AlpacaError) and getattr(exc, "status_code", None) in TERMINAL_SUBMIT_STATUS
+
 
 DDL = """
 CREATE TABLE IF NOT EXISTS ff_ladders (
@@ -93,8 +94,8 @@ class CalendarCandidate:
     sigma_fwd: float
     hist_rms_move: float
     tau_days: int
-    d_start: float       # max debit at start_premium (25%)
-    d_cap: float         # max debit at floor_premium (20%)
+    d_start: float  # max debit at start_premium (25%)
+    d_cap: float  # max debit at floor_premium (20%)
     mid_debit: float
     skip_reason: str | None = None
     strategy_override: str | None = None
@@ -103,6 +104,7 @@ class CalendarCandidate:
 def hist_rms_move(ticker: str) -> tuple[float | None, int]:
     """RMS |actual_move_pct| over the ticker's realized events (as a fraction)."""
     from earnings_edge.db.repositories import snapshots_hist_abs_moves
+
     vals = [v / 100.0 for v in snapshots_hist_abs_moves(ticker)]
     if len(vals) < MIN_HIST_EVENTS:
         return None, len(vals)
@@ -117,11 +119,11 @@ def hist_rms_move(ticker: str) -> tuple[float | None, int]:
 # earnings calendar) and the move is computed from LSE daily bars via the
 # shared outcome_from_bars transform. Rows land in `snapshots` tagged
 # timing='Backfill' so hist_rms_move picks them up and later runs are free.
-HIST_BACKFILL_MAX_EVENTS = 8        # ~2 years of quarters
-HIST_BACKFILL_MAX_AGE_DAYS = 900    # neither LSE nor Polygon serves older bars
-                                    # (Polygon 403s beyond plan history, each 403
-                                    # costs 45s+ of retries — skip guaranteed fails)
-_hist_backfill_attempted: set = set()   # per-process: never retry within a run
+HIST_BACKFILL_MAX_EVENTS = 8  # ~2 years of quarters
+HIST_BACKFILL_MAX_AGE_DAYS = 900  # neither LSE nor Polygon serves older bars
+# (Polygon 403s beyond plan history, each 403
+# costs 45s+ of retries — skip guaranteed fails)
+_hist_backfill_attempted: set = set()  # per-process: never retry within a run
 
 
 def _lse_bars_client():
@@ -132,15 +134,20 @@ def _lse_bars_client():
     try:
         if _LSE_SINGLETON is None:
             from .collectors.lse import LSECollector
+
             _LSE_SINGLETON = LSECollector()
         return _LSE_SINGLETON
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
-        record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-        import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+        record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+        import logging
+
+        logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
         # exc-policy: keep broad, ensure visibility
-        record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-        import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+        record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+        import logging
+
+        logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
         logger.info("hist backfill: LSE unavailable (%s)", exc)
         return None
 
@@ -156,15 +163,20 @@ def _polygon_bars_client():
     try:
         if _POLYGON_SINGLETON is None:
             from .collectors.polygon import PolygonClient
+
             _POLYGON_SINGLETON = PolygonClient()
         return _POLYGON_SINGLETON
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
-        record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-        import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+        record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+        import logging
+
+        logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
         # exc-policy: keep broad, ensure visibility
-        record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-        import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+        record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+        import logging
+
+        logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
         logger.info("hist backfill: Polygon unavailable (%s)", exc)
         return None
 
@@ -188,10 +200,9 @@ def ensure_hist_moves(
         snapshots_usable_outcome_count,
     )
     from .services.outcome_service import OutcomeService
+
     today = today or datetime.now(UTC).date()
-    have = snapshots_usable_outcome_count(
-        ticker=ticker
-    )
+    have = snapshots_usable_outcome_count(ticker=ticker)
     if have >= min_events or ticker in _hist_backfill_attempted:
         return have
     _hist_backfill_attempted.add(ticker)
@@ -200,6 +211,7 @@ def ensure_hist_moves(
         import yfinance as yf
 
         from .config import session
+
         try:
             ticker_obj = yf.Ticker(ticker, session=session)
         except TypeError:
@@ -208,11 +220,15 @@ def ensure_hist_moves(
         df = ticker_obj.get_earnings_dates(limit=12)
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
-        record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-        import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+        record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+        import logging
+
+        logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
         # exc-policy: keep broad, ensure visibility
-        record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-        import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+        record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+        import logging
+
+        logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
         logger.info("hist backfill %s: earnings dates unavailable (%s)", ticker, exc)
         return have
     if df is None or len(df) == 0:
@@ -220,9 +236,7 @@ def ensure_hist_moves(
         return have
 
     cutoff = today - timedelta(days=HIST_BACKFILL_MAX_AGE_DAYS)
-    dates = sorted(
-        {d.date() for d in df.index if cutoff <= d.date() < today}, reverse=True
-    )
+    dates = sorted({d.date() for d in df.index if cutoff <= d.date() < today}, reverse=True)
     dates = dates[:HIST_BACKFILL_MAX_EVENTS]
     if not dates:
         return have
@@ -238,8 +252,13 @@ def ensure_hist_moves(
     for ed in dates:
         # Early exit optimization - stop once we have enough events
         if have + written >= min_events:
-            logger.info("hist backfill %s: early exit (have=%d, written=%d, min=%d)",
-                        ticker, have, written, min_events)
+            logger.info(
+                "hist backfill %s: early exit (have=%d, written=%d, min=%d)",
+                ticker,
+                have,
+                written,
+                min_events,
+            )
             break
 
         bars = None
@@ -253,11 +272,15 @@ def ensure_hist_moves(
                     source = "LSE"
             except Exception as exc:
                 # exc-policy: keep broad, ensure visibility
-                record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-                import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+                record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+                import logging
+
+                logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
                 # exc-policy: keep broad, ensure visibility
-                record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-                import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+                record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+                import logging
+
+                logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
                 logger.info("hist backfill %s %s: LSE bars failed (%s)", ticker, ed, exc)
 
         # Fall back to Polygon if LSE unavailable or returned empty
@@ -270,11 +293,15 @@ def ensure_hist_moves(
                     source = "Polygon"
             except Exception as exc:
                 # exc-policy: keep broad, ensure visibility
-                record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-                import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+                record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+                import logging
+
+                logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
                 # exc-policy: keep broad, ensure visibility
-                record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-                import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+                record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+                import logging
+
+                logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
                 logger.info("hist backfill %s %s: Polygon bars failed (%s)", ticker, ed, exc)
 
         if not bars:
@@ -284,11 +311,15 @@ def ensure_hist_moves(
             outcome = OutcomeService.outcome_from_bars(bars, ed)
         except Exception as exc:
             # exc-policy: keep broad, ensure visibility
-            record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-            import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+            record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+            import logging
+
+            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
             # exc-policy: keep broad, ensure visibility
-            record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-            import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+            record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+            import logging
+
+            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
             logger.info("hist backfill %s %s: outcome computation failed (%s)", ticker, ed, exc)
             continue
         if not outcome:
@@ -304,33 +335,41 @@ def ensure_hist_moves(
                 and existing["outcome_fetched_at"] not in (None, "unavailable")
             ):
                 continue  # already has a good outcome
-            writes.append({
-                "existing_id": existing["id"] if existing else None,
-                "ticker": ticker,
-                "earnings_date": ed.isoformat(),
-                "outcome": outcome,
-                "fetched_at": now_iso,
-            })
+            writes.append(
+                {
+                    "existing_id": existing["id"] if existing else None,
+                    "ticker": ticker,
+                    "earnings_date": ed.isoformat(),
+                    "outcome": outcome,
+                    "fetched_at": now_iso,
+                }
+            )
             written += 1
         except Exception as exc:
             # exc-policy: keep broad, ensure visibility
-            record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-            import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+            record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+            import logging
+
+            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
             # exc-policy: keep broad, ensure visibility
-            record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-            import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+            record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+            import logging
+
+            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
             logger.info("hist backfill %s %s: write failed (%s)", ticker, ed, exc)
     try:
-        snapshots_apply_hist_backfill_batch(
-            writes=writes
-        )
+        snapshots_apply_hist_backfill_batch(writes=writes)
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
-        record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-        import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+        record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+        import logging
+
+        logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
         # exc-policy: keep broad, ensure visibility
-        record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-        import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+        record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+        import logging
+
+        logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
         pass
     total = have + written
     if written:
@@ -338,7 +377,15 @@ def ensure_hist_moves(
     return total
 
 
-def _pick_pair_tenor(chain: dict[str, dict], spot: float, today: date, *, t1_min_days: int = 30, t1_max_days: int = 60, t2_gap_days: int = 30) -> tuple[dict | None, dict | None]:
+def _pick_pair_tenor(
+    chain: dict[str, dict],
+    spot: float,
+    today: date,
+    *,
+    t1_min_days: int = 30,
+    t1_max_days: int = 60,
+    t2_gap_days: int = 30,
+) -> tuple[dict | None, dict | None]:
     """T1: expiry in [t1_min_days, t1_max_days] (closest to 45 if several).
     T2: expiry ~t2_gap_days days after T1 (closest wins). Strike: closest
     to spot at each expiry. Calls only, as today."""
@@ -361,10 +408,7 @@ def _pick_pair_tenor(chain: dict[str, dict], spot: float, today: date, *, t1_min
 
     t1_exp = min(t1_cands, key=lambda e: abs((e - today).days - 45))
 
-    t2_cands = sorted(
-        (abs((e - t1_exp).days - t2_gap_days), e)
-        for e in by_expiry if (e - t1_exp).days > 0
-    )
+    t2_cands = sorted((abs((e - t1_exp).days - t2_gap_days), e) for e in by_expiry if (e - t1_exp).days > 0)
     if not t2_cands:
         return None, None
     t2_exp = t2_cands[0][1]
@@ -372,7 +416,9 @@ def _pick_pair_tenor(chain: dict[str, dict], spot: float, today: date, *, t1_min
     return atm(by_expiry[t1_exp]), atm(by_expiry[t2_exp])
 
 
-def _pick_pair(chain: dict[str, dict], spot: float, today: date, event_date: date | None = None) -> tuple[dict | None, dict | None]:
+def _pick_pair(
+    chain: dict[str, dict], spot: float, today: date, event_date: date | None = None
+) -> tuple[dict | None, dict | None]:
     """T1: The next option expiration on or after the event_date.
     T2: Expiry ~30 days after T1.
 
@@ -401,10 +447,7 @@ def _pick_pair(chain: dict[str, dict], spot: float, today: date, event_date: dat
     t1_exp = t1_cands[0]
 
     # T2 is ~30 days after T1 (preferring closest to 30 days)
-    t2_cands = sorted(
-        (abs((e - t1_exp).days - 30), e)
-        for e in by_expiry if (e - t1_exp).days > 0
-    )
+    t2_cands = sorted((abs((e - t1_exp).days - 30), e) for e in by_expiry if (e - t1_exp).days > 0)
     if not t2_cands:
         return None, None
     t2_exp = t2_cands[0][1]
@@ -414,11 +457,25 @@ def _pick_pair(chain: dict[str, dict], spot: float, today: date, event_date: dat
 
 def _reject(ticker: str, earnings_date: date, spot: float, reason: str) -> CalendarCandidate:
     return CalendarCandidate(
-        ticker=ticker, earnings_date=earnings_date.isoformat(), spot=spot or 0.0,
-        strike=0.0, near_symbol="", far_symbol="", near_expiry="", far_expiry="",
-        near_bid=0.0, near_ask=0.0, far_bid=0.0, far_ask=0.0,
-        sigma_fwd=0.0, hist_rms_move=0.0, tau_days=0,
-        d_start=0.0, d_cap=0.0, mid_debit=0.0, skip_reason=reason,
+        ticker=ticker,
+        earnings_date=earnings_date.isoformat(),
+        spot=spot or 0.0,
+        strike=0.0,
+        near_symbol="",
+        far_symbol="",
+        near_expiry="",
+        far_expiry="",
+        near_bid=0.0,
+        near_ask=0.0,
+        far_bid=0.0,
+        far_ask=0.0,
+        sigma_fwd=0.0,
+        hist_rms_move=0.0,
+        tau_days=0,
+        d_start=0.0,
+        d_cap=0.0,
+        mid_debit=0.0,
+        skip_reason=reason,
     )
 
 
@@ -459,11 +516,26 @@ def build_candidate(
     mid2 = (q2["bid"] + q2["ask"]) / 2.0
     iv1 = implied_volatility(mid1, spot, t1["strike"], T1, 0.045, "call")
     iv2 = implied_volatility(mid2, spot, t2["strike"], T2, 0.045, "call")
-    base = dict(ticker=ticker, earnings_date=earnings_date.isoformat(), spot=spot,
-                strike=t1["strike"], near_symbol=t1["symbol"], far_symbol=t2["symbol"],
-                near_expiry=t1["expiry"].isoformat(), far_expiry=t2["expiry"].isoformat(),
-                near_bid=q1["bid"], near_ask=q1["ask"], far_bid=q2["bid"], far_ask=q2["ask"],
-                sigma_fwd=0, hist_rms_move=rms, tau_days=0, d_start=0, d_cap=0, mid_debit=0)
+    base = dict(
+        ticker=ticker,
+        earnings_date=earnings_date.isoformat(),
+        spot=spot,
+        strike=t1["strike"],
+        near_symbol=t1["symbol"],
+        far_symbol=t2["symbol"],
+        near_expiry=t1["expiry"].isoformat(),
+        far_expiry=t2["expiry"].isoformat(),
+        near_bid=q1["bid"],
+        near_ask=q1["ask"],
+        far_bid=q2["bid"],
+        far_ask=q2["ask"],
+        sigma_fwd=0,
+        hist_rms_move=rms,
+        tau_days=0,
+        d_start=0,
+        d_cap=0,
+        mid_debit=0,
+    )
     if not (math.isfinite(iv1) and math.isfinite(iv2)):
         return CalendarCandidate(**base, skip_reason="leg IV unsolvable")
     fwd = forward_iv(iv1, T1, iv2, T2)
@@ -475,8 +547,7 @@ def build_candidate(
     d_start = target_debit(mid2, spot, t1["strike"], T1, fwd, tau, rms, spec.start_premium)
     d_cap = target_debit(mid2, spot, t1["strike"], T1, fwd, tau, rms, spec.floor_premium)
     mid = combo_debit(q1["bid"], q1["ask"], q2["bid"], q2["ask"]) or 0.0
-    base.update(sigma_fwd=fwd, tau_days=tau_days,
-                d_start=d_start or 0.0, d_cap=d_cap or 0.0, mid_debit=mid)
+    base.update(sigma_fwd=fwd, tau_days=tau_days, d_start=d_start or 0.0, d_cap=d_cap or 0.0, mid_debit=mid)
 
     if d_start is None or d_cap is None or d_cap <= 0:
         return CalendarCandidate(**base, skip_reason="target debit degenerate (<=0)")
@@ -511,9 +582,13 @@ class LadderRunner:
     - arm dedupe per ticker
     """
 
-    def __init__(self, alpaca: AlpacaTradingClient, db_path=None,
-                 spec: LadderSpec = LadderSpec(),
-                 now_fn: Callable[[], datetime] | None = None):
+    def __init__(
+        self,
+        alpaca: AlpacaTradingClient,
+        db_path=None,
+        spec: LadderSpec = LadderSpec(),
+        now_fn: Callable[[], datetime] | None = None,
+    ):
         self.alpaca = alpaca
         self.spec = spec
         # Injectable clock — production uses wall time; tests freeze it.
@@ -522,6 +597,7 @@ class LadderRunner:
         self._now_fn = now_fn or (lambda: datetime.now(ET))
         if db_path is not None:
             from earnings_edge.db.engine import configure
+
             configure(db_path)
         self.events: list[str] = []  # drained by the bot for Telegram pushes
         self._bp_warned: set[int] = set()
@@ -547,11 +623,15 @@ class LadderRunner:
             return float(bp) if bp is not None else None
         except Exception as exc:
             # exc-policy: keep broad, ensure visibility
-            record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-            import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+            record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+            import logging
+
+            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
             # exc-policy: keep broad, ensure visibility
-            record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-            import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+            record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+            import logging
+
+            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
             logger.warning("buying-power preflight failed: %s", exc)
             return None
 
@@ -576,25 +656,36 @@ class LadderRunner:
                 limits = get_registry().limits_for("ff_ladder")
             except Exception as exc:
                 # exc-policy: keep broad, ensure visibility
-                record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-                import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+                record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+                import logging
+
+                logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
                 # exc-policy: keep broad, ensure visibility
-                record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-                import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+                record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+                import logging
+
+                logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
                 limits = None
             return RiskManager().check_trade(
-                strategy="ff_ladder", ticker=cand.ticker, est_cost=est_cost,
-                equity=equity, buying_power=bp,
+                strategy="ff_ladder",
+                ticker=cand.ticker,
+                est_cost=est_cost,
+                equity=equity,
+                buying_power=bp,
                 lifecycle=LifecycleManager().state("ff_ladder"),
                 limits=limits,
             )
         except Exception as exc:
             # exc-policy: keep broad, ensure visibility
-            record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-            import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+            record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+            import logging
+
+            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
             # exc-policy: keep broad, ensure visibility
-            record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-            import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+            record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+            import logging
+
+            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
             logger.warning("ff arm risk check failed (%s) — ad-hoc gates only", exc)
             return None
 
@@ -610,11 +701,15 @@ class LadderRunner:
             order = self.alpaca.get_order(ladder.order_id)
         except Exception as exc:
             # exc-policy: keep broad, ensure visibility
-            record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-            import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+            record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+            import logging
+
+            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
             # exc-policy: keep broad, ensure visibility
-            record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-            import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+            record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+            import logging
+
+            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
             logger.info("ladder %s fill-check failed: %s", ladder.id, exc)
             return False
         status = (order.get("status") or "").lower()
@@ -646,27 +741,44 @@ class LadderRunner:
         except ImportError:
             return
         try:
-            RiskManager().record_entry("ff_ladder", cand.ticker, px * 100.0,
-                                        detail="ladder fill")
+            RiskManager().record_entry("ff_ladder", cand.ticker, px * 100.0, detail="ladder fill")
             legs = [
-                {"symbol": cand.near_symbol, "side": "sell", "ratio_qty": 1,
-                 "option_type": "call", "strike": cand.strike, "expiry": cand.near_expiry},
-                {"symbol": cand.far_symbol, "side": "buy", "ratio_qty": 1,
-                 "option_type": "call", "strike": cand.strike, "expiry": cand.far_expiry},
+                {
+                    "symbol": cand.near_symbol,
+                    "side": "sell",
+                    "ratio_qty": 1,
+                    "option_type": "call",
+                    "strike": cand.strike,
+                    "expiry": cand.near_expiry,
+                },
+                {
+                    "symbol": cand.far_symbol,
+                    "side": "buy",
+                    "ratio_qty": 1,
+                    "option_type": "call",
+                    "strike": cand.strike,
+                    "expiry": cand.far_expiry,
+                },
             ]
             record_open_positions(
-                legs, "ff_ladder", group_id=str(order.get("id") or ""),
-                order_id=order.get("id"), entry_price=px or None,
-                metadata={"earnings_date": cand.earnings_date, "side": "CALENDAR",
-                          "credit": False},
+                legs,
+                "ff_ladder",
+                group_id=str(order.get("id") or ""),
+                order_id=order.get("id"),
+                entry_price=px or None,
+                metadata={"earnings_date": cand.earnings_date, "side": "CALENDAR", "credit": False},
             )
         except Exception as exc:
             # exc-policy: keep broad, ensure visibility
-            record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-            import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+            record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+            import logging
+
+            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
             # exc-policy: keep broad, ensure visibility
-            record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-            import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+            record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+            import logging
+
+            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
             logger.warning("ff fill bookkeeping failed (non-fatal): %s", exc)
 
     # ── arm / state ──────────────────────────────────────────────────────
@@ -691,7 +803,8 @@ class LadderRunner:
         try:
             if date.fromisoformat(cand.earnings_date) < today_et:
                 self.events.append(
-                    f"⛔ FF arm refused: {cand.ticker} — earnings {cand.earnings_date} already passed")
+                    f"⛔ FF arm refused: {cand.ticker} — earnings {cand.earnings_date} already passed"
+                )
                 return None
         except ValueError:
             pass  # unparseable earnings date — let the step guard handle it
@@ -703,8 +816,8 @@ class LadderRunner:
             return None
         if bp < cost:
             self.events.append(
-                f"⛔ FF arm refused: {cand.ticker} — buying power ${bp:,.0f} "
-                f"< worst-case cost ${cost:,.0f}")
+                f"⛔ FF arm refused: {cand.ticker} — buying power ${bp:,.0f} < worst-case cost ${cost:,.0f}"
+            )
             return None
 
         # Framework risk gate: per-strategy caps (ff_ladder.toml), strategy-day
@@ -715,17 +828,31 @@ class LadderRunner:
             return None
 
         lid = ff_ladders_insert(cand.ticker, json.dumps(asdict(cand)), armed_by)
-        logger.info("ladder %d armed for %s (start %.2f → cap %.2f, mid %.2f)",
-                    lid, cand.ticker, cand.d_start, cand.d_cap, cand.mid_debit)
+        logger.info(
+            "ladder %d armed for %s (start %.2f → cap %.2f, mid %.2f)",
+            lid,
+            cand.ticker,
+            cand.d_start,
+            cand.d_cap,
+            cand.mid_debit,
+        )
         return lid
 
     def _load_armed(self) -> list[ArmedLadder]:
         from earnings_edge.db.repositories import ff_ladders_load_armed
 
         rows = ff_ladders_load_armed()
-        return [ArmedLadder(id=r["id"], candidate=CalendarCandidate(**json.loads(r["candidate_json"])),
-                            order_id=r["order_id"], rung=r["rung"] or 0, status=r["status"],
-                            created_at=r["created_at"]) for r in rows]
+        return [
+            ArmedLadder(
+                id=r["id"],
+                candidate=CalendarCandidate(**json.loads(r["candidate_json"])),
+                order_id=r["order_id"],
+                rung=r["rung"] or 0,
+                status=r["status"],
+                created_at=r["created_at"],
+            )
+            for r in rows
+        ]
 
     def _update(self, ladder: ArmedLadder) -> None:
         from earnings_edge.db.repositories import ff_ladders_update_state
@@ -740,7 +867,11 @@ class LadderRunner:
             {"symbol": cand.near_symbol, "ratio_qty": 1, "side": "sell"},
         ]
         return self.alpaca.submit_multi_leg_order(
-            legs, order_type="limit", time_in_force="day", limit_price=limit, qty=1,
+            legs,
+            order_type="limit",
+            time_in_force="day",
+            limit_price=limit,
+            qty=1,
         )
 
     def _cancel_quietly(self, ladder: ArmedLadder) -> None:
@@ -750,11 +881,15 @@ class LadderRunner:
             self.alpaca.cancel_order(ladder.order_id)
         except Exception as exc:
             # exc-policy: keep broad, ensure visibility
-            record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-            import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+            record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+            import logging
+
+            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
             # exc-policy: keep broad, ensure visibility
-            record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-            import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+            record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+            import logging
+
+            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
             logger.warning("cancel %s failed: %s", ladder.order_id, exc)
         ladder.order_id = None
 
@@ -781,19 +916,23 @@ class LadderRunner:
                 self._step_one(ladder, ladder.candidate, now, today_et, bp)
             except Exception as exc:
                 # exc-policy: keep broad, ensure visibility
-                record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-                import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+                record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+                import logging
+
+                logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
                 # exc-policy: keep broad, ensure visibility
-                record_event('silent_failure', f'fwd_factor_ladder: {exc}')
-                import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
+                record_event("silent_failure", f"fwd_factor_ladder: {exc}")
+                import logging
+
+                logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
                 if _is_terminal_submit_error(exc):
                     self._cancel_quietly(ladder)
                     ladder.status = "disarmed"
                     self.events.append(
-                        f"🚫 FF ladder disarmed: {ladder.candidate.ticker} — broker rejected: {exc}")
+                        f"🚫 FF ladder disarmed: {ladder.candidate.ticker} — broker rejected: {exc}"
+                    )
                 else:
-                    logger.error("ladder %d (%s) step failed: %s",
-                                 ladder.id, ladder.candidate.ticker, exc)
+                    logger.error("ladder %d (%s) step failed: %s", ladder.id, ladder.candidate.ticker, exc)
             finally:
                 self._update(ladder)
 
@@ -816,8 +955,9 @@ class LadderRunner:
                 pass  # unparseable timestamp → can't verify, allow
         return True
 
-    def _step_one(self, ladder: ArmedLadder, cand: CalendarCandidate,
-                  now: datetime, today_et, bp: float | None) -> None:
+    def _step_one(
+        self, ladder: ArmedLadder, cand: CalendarCandidate, now: datetime, today_et, bp: float | None
+    ) -> None:
         # 0. event already happened — the ladder is dead regardless of orders
         try:
             earnings_passed = date.fromisoformat(cand.earnings_date) < today_et
@@ -829,7 +969,8 @@ class LadderRunner:
             self._cancel_quietly(ladder)
             ladder.status = "expired"
             self.events.append(
-                f"⌛ FF ladder expired: {cand.ticker} — earnings {cand.earnings_date} passed unfilled")
+                f"⌛ FF ladder expired: {cand.ticker} — earnings {cand.earnings_date} passed unfilled"
+            )
             return
 
         # 1. fill check on the resting order
@@ -840,7 +981,8 @@ class LadderRunner:
                 self._record_fill(cand, order)
                 self.events.append(
                     f"✅ FF ladder filled: {cand.ticker} calendar @ "
-                    f"{order.get('filled_avg_price')} ({cand.near_symbol} / {cand.far_symbol})")
+                    f"{order.get('filled_avg_price')} ({cand.near_symbol} / {cand.far_symbol})"
+                )
                 return
             if order.get("status") in ("canceled", "expired", "rejected"):
                 ladder.order_id = None  # fall through to re-place
@@ -865,7 +1007,8 @@ class LadderRunner:
             ladder.status = "disarmed"
             self.events.append(
                 f"🚫 FF ladder disarmed: {cand.ticker} — spot {spot:.2f} drifted "
-                f"{abs(spot - cand.spot) / cand.spot:.1%} from {cand.spot:.2f}, strike no longer ATM")
+                f"{abs(spot - cand.spot) / cand.spot:.1%} from {cand.spot:.2f}, strike no longer ATM"
+            )
             return
 
         near_bid, near_ask = float(q1["bp"]), float(q1["ap"])
@@ -877,10 +1020,26 @@ class LadderRunner:
         today = now.date()
         T1 = (date.fromisoformat(cand.near_expiry) - today).days / 365.0
         tau = max(cand.tau_days, 1) / 365.0
-        d_start = target_debit(far_mid, cand.spot, cand.strike, T1, cand.sigma_fwd,
-                               tau, cand.hist_rms_move, self.spec.start_premium)
-        d_cap = target_debit(far_mid, cand.spot, cand.strike, T1, cand.sigma_fwd,
-                             tau, cand.hist_rms_move, self.spec.floor_premium)
+        d_start = target_debit(
+            far_mid,
+            cand.spot,
+            cand.strike,
+            T1,
+            cand.sigma_fwd,
+            tau,
+            cand.hist_rms_move,
+            self.spec.start_premium,
+        )
+        d_cap = target_debit(
+            far_mid,
+            cand.spot,
+            cand.strike,
+            T1,
+            cand.sigma_fwd,
+            tau,
+            cand.hist_rms_move,
+            self.spec.floor_premium,
+        )
 
         # 4. runaway check → cancel + disarm
         if d_cap is None or d_cap <= 0 or not within_fill_range(mid, d_cap, DISTANCE_F):
@@ -890,7 +1049,8 @@ class LadderRunner:
             ladder.status = "disarmed"
             self.events.append(
                 f"🚫 FF ladder disarmed: {cand.ticker} — mid {mid:.2f} ran beyond "
-                f"cap {d_cap if d_cap else float('nan'):.2f} (+{DISTANCE_F:.0%})")
+                f"cap {d_cap if d_cap else float('nan'):.2f} (+{DISTANCE_F:.0%})"
+            )
             return
 
         # 5. buying-power gate before (re)placing
@@ -900,7 +1060,8 @@ class LadderRunner:
                 self._bp_warned.add(ladder.id)
                 self.events.append(
                     f"⚠️ FF ladder {cand.ticker}: insufficient buying power "
-                    f"({'unknown' if bp is None else f'${bp:,.0f}'} < ${cost:,.0f}) — holding, not placing")
+                    f"({'unknown' if bp is None else f'${bp:,.0f}'} < ${cost:,.0f}) — holding, not placing"
+                )
             return
 
         # 6. reprice to the current rung
@@ -921,11 +1082,13 @@ class LadderRunner:
             self._record_fill(cand, new_order)
             self.events.append(
                 f"✅ FF ladder filled: {cand.ticker} calendar @ "
-                f"{new_order.get('filled_avg_price')} ({cand.near_symbol} / {cand.far_symbol})")
+                f"{new_order.get('filled_avg_price')} ({cand.near_symbol} / {cand.far_symbol})"
+            )
             return
         self.events.append(
             f"🪜 FF ladder {cand.ticker}: limit → {limit:.2f} "
-            f"(rung {ladder.rung}, mid {mid:.2f}, cap {d_cap:.2f})")
+            f"(rung {ladder.rung}, mid {mid:.2f}, cap {d_cap:.2f})"
+        )
 
     def drain_events(self) -> list[str]:
         out, self.events = self.events, []

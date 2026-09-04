@@ -69,11 +69,13 @@ class FakeAlpaca:
     def get_option_snapshots_bulk(self, *symbols):
         return {
             s: {"latestQuote": {"bp": self.chain[s]["bid"], "ap": self.chain[s]["ask"]}}
-            for s in symbols if s in self.chain
+            for s in symbols
+            if s in self.chain
         }
 
-    def submit_multi_leg_order(self, legs, order_type="market", time_in_force="day",
-                               limit_price=None, client_order_id=None, qty=1):
+    def submit_multi_leg_order(
+        self, legs, order_type="market", time_in_force="day", limit_price=None, client_order_id=None, qty=1
+    ):
         if self.submit_error is not None:
             err, self.submit_error = self.submit_error, None
             raise err
@@ -82,8 +84,12 @@ class FakeAlpaca:
         status = "filled" if self._fill_next else "accepted"
         self._fill_next = False
         self.orders[oid] = {
-            "id": oid, "status": status, "limit_price": str(limit_price),
-            "filled_avg_price": str(limit_price), "legs": legs, "qty": str(qty),
+            "id": oid,
+            "status": status,
+            "limit_price": str(limit_price),
+            "filled_avg_price": str(limit_price),
+            "legs": legs,
+            "qty": str(qty),
         }
         return self.orders[oid]
 
@@ -99,6 +105,7 @@ class FakeAlpaca:
 @pytest.fixture
 def conn(tmp_path):
     from earnings_edge.db import engine as db_engine
+
     p = tmp_path / "ff.db"
     db_engine.configure(p)
     c = sqlite3.connect(str(p), timeout=30)
@@ -117,6 +124,7 @@ def conn(tmp_path):
 
 # ── selection + candidate build ----------------------------------------------
 
+
 def test_pick_pair_selects_first_expiry_on_or_after_event():
     # event = today; first listed expiry is 10 DTE. T2 closest to T1+30.
     chain = dict(FakeAlpaca().chain)  # has 45 DTE + 73 DTE at ATM
@@ -132,6 +140,7 @@ def test_pick_pair_selects_first_expiry_on_or_after_event():
 
 def test_pick_pair_tenor_selects_within_window():
     from earnings_edge.fwd_factor_ladder import _pick_pair_tenor
+
     chain = dict(FakeAlpaca().chain)  # has 45 DTE + 73 DTE at ATM
     for d in (10, 32, 58, 61, 95):
         sym = occ_symbol("TEST", TODAY + timedelta(days=d), SPOT)
@@ -146,7 +155,6 @@ def test_pick_pair_tenor_selects_within_window():
     # Empty window -> None
     t1_none, t2_none = _pick_pair_tenor(chain, SPOT, TODAY, t1_min_days=100, t1_max_days=200)
     assert t1_none is None
-
 
 
 def test_hist_rms_move(conn):
@@ -175,6 +183,7 @@ def test_build_candidate_rejects_low_price(conn):
 
 def test_build_candidate_rejects_thin_history(tmp_path):
     from earnings_edge.db import engine as db_engine
+
     db_engine.configure(tmp_path / "thin.db")
     c = sqlite3.connect(str(tmp_path / "thin.db"))
     c.execute(
@@ -188,6 +197,7 @@ def test_build_candidate_rejects_thin_history(tmp_path):
 
 
 # ── runner mechanics -----------------------------------------------------------
+
 
 def _runner(conn):
     al = FakeAlpaca()
@@ -216,11 +226,10 @@ def test_reprice_concedes_one_tick(conn):
     runner.step(datetime(2026, 7, 27, 14, 0, tzinfo=ET))
     first_id = next(iter(al.orders))
     runner.step(datetime(2026, 7, 27, 14, 15, tzinfo=ET))
-    assert first_id in al.cancelled            # old order replaced
+    assert first_id in al.cancelled  # old order replaced
     assert len(al.orders) == 2
     new_order = al.orders[[k for k in al.orders if k != first_id][0]]
-    assert float(new_order["limit_price"]) == pytest.approx(
-        min(cand.d_start + 0.01, cand.d_cap), abs=0.05)
+    assert float(new_order["limit_price"]) == pytest.approx(min(cand.d_start + 0.01, cand.d_cap), abs=0.05)
 
 
 def test_fill_marks_ladder_filled(conn):
@@ -255,24 +264,26 @@ def test_no_order_outside_window(conn):
 
 # ── hardening: data issues, funds, kill switch, staleness --------------------
 
+
 def test_invalid_quotes_hold_silently(conn):
     runner, al, cand = _runner(conn)
     lid = runner.arm(cand)
-    al.chain[NEAR_SYM]["bid"] = 0.0           # crossed/degenerate quote
+    al.chain[NEAR_SYM]["bid"] = 0.0  # crossed/degenerate quote
     runner.step(datetime(2026, 7, 27, 14, 0, tzinfo=ET))
-    assert len(al.orders) == 0                # no order placed on bad data
+    assert len(al.orders) == 0  # no order placed on bad data
     status = conn.execute("SELECT status FROM ff_ladders WHERE id=?", (lid,)).fetchone()[0]
-    assert status == "armed"                  # held, not killed
-    assert runner.drain_events() == []        # silent — no Telegram spam
+    assert status == "armed"  # held, not killed
+    assert runner.drain_events() == []  # silent — no Telegram spam
 
 
 def test_stale_quote_timestamp_holds(conn):
     runner, al, cand = _runner(conn)
     runner.arm(cand)
-    old = "2026-07-27T12:00:00Z"              # 2h before the 14:00 ET step
+    old = "2026-07-27T12:00:00Z"  # 2h before the 14:00 ET step
     al.get_option_snapshots_bulk = lambda *s: {
         sym: {"latestQuote": {"bp": al.chain[sym]["bid"], "ap": al.chain[sym]["ask"], "t": old}}
-        for sym in s if sym in al.chain
+        for sym in s
+        if sym in al.chain
     }
     runner.step(datetime(2026, 7, 27, 14, 0, tzinfo=ET))
     assert len(al.orders) == 0
@@ -280,6 +291,7 @@ def test_stale_quote_timestamp_holds(conn):
 
 def test_terminal_submit_error_disarms(conn):
     from earnings_edge.alpaca_trading import AlpacaError
+
     runner, al, cand = _runner(conn)
     lid = runner.arm(cand)
     al.submit_error = AlpacaError(403, "insufficient buying power")
@@ -291,18 +303,19 @@ def test_terminal_submit_error_disarms(conn):
 
 def test_transient_submit_error_keeps_armed(conn):
     import requests
+
     runner, al, cand = _runner(conn)
     lid = runner.arm(cand)
     al.submit_error = requests.ConnectionError("network down")
     runner.step(datetime(2026, 7, 27, 14, 0, tzinfo=ET))
     status = conn.execute("SELECT status FROM ff_ladders WHERE id=?", (lid,)).fetchone()[0]
-    assert status == "armed"                  # retried next step, not killed
+    assert status == "armed"  # retried next step, not killed
 
 
 def test_low_buying_power_blocks_placement(conn):
     runner, al, cand = _runner(conn)
     lid = runner.arm(cand)
-    al.buying_power = 10.0                    # way below worst-case cost
+    al.buying_power = 10.0  # way below worst-case cost
     runner.step(datetime(2026, 7, 27, 14, 0, tzinfo=ET))
     assert len(al.orders) == 0
     events = runner.drain_events()
@@ -333,6 +346,7 @@ def test_kill_switch_disarms_all(conn):
     runner, al, cand = _runner(conn)
     lid = runner.arm(cand)
     from framework.risk.killswitch import KillSwitch
+
     KillSwitch().trip("test halt", by="test")
     runner.step(datetime(2026, 7, 27, 14, 0, tzinfo=ET))
     status = conn.execute("SELECT status FROM ff_ladders WHERE id=?", (lid,)).fetchone()[0]
@@ -343,7 +357,7 @@ def test_kill_switch_disarms_all(conn):
 def test_spot_drift_disarms(conn):
     runner, al, cand = _runner(conn)
     lid = runner.arm(cand)
-    al.get_stock_latest_trade = lambda s: SPOT * 1.05   # +5% — strike no longer ATM
+    al.get_stock_latest_trade = lambda s: SPOT * 1.05  # +5% — strike no longer ATM
     runner.step(datetime(2026, 7, 27, 14, 0, tzinfo=ET))
     status = conn.execute("SELECT status FROM ff_ladders WHERE id=?", (lid,)).fetchone()[0]
     assert status == "disarmed"
@@ -369,7 +383,7 @@ def test_stale_ladder_from_yesterday_expires(conn):
     runner.step(datetime(2026, 7, 27, 14, 0, tzinfo=ET))
     status = conn.execute("SELECT status FROM ff_ladders ORDER BY id DESC LIMIT 1").fetchone()[0]
     assert status == "expired"
-    assert len(al.orders) == 0                # never traded a stale candidate
+    assert len(al.orders) == 0  # never traded a stale candidate
     assert any("expired" in e for e in runner.drain_events())
 
 
@@ -380,12 +394,14 @@ def test_expired_ladder_books_fill_if_order_filled(conn):
     stale_cand = build_candidate(al, "TEST", frozen_past, today=TODAY)
     past = CalendarCandidate(**{**asdict(stale_cand), "skip_reason": None})
     al.orders["order-fill"] = {
-        "id": "order-fill", "status": "filled", "filled_qty": "1",
-        "filled_avg_price": "1.25", "legs": [],
+        "id": "order-fill",
+        "status": "filled",
+        "filled_qty": "1",
+        "filled_avg_price": "1.25",
+        "legs": [],
     }
     conn.execute(
-        "INSERT INTO ff_ladders (ticker, candidate_json, status, order_id) "
-        "VALUES (?, ?, 'armed', ?)",
+        "INSERT INTO ff_ladders (ticker, candidate_json, status, order_id) VALUES (?, ?, 'armed', ?)",
         ("TEST", json.dumps(asdict(past)), "order-fill"),
     )
     conn.commit()
@@ -400,6 +416,7 @@ def test_conn_factory_fresh_connections(conn, tmp_path):
     import threading
 
     from earnings_edge.db import engine as db_engine
+
     db = tmp_path / "t.db"
     db_engine.configure(db)
     shared = sqlite3.connect(str(db))
@@ -417,7 +434,8 @@ def test_conn_factory_fresh_connections(conn, tmp_path):
     lid = runner.arm(cand)
     assert lid is not None
     t = threading.Thread(target=lambda: runner.step(datetime(2026, 7, 27, 14, 0, tzinfo=ET)))
-    t.start(); t.join(timeout=30)
+    t.start()
+    t.join(timeout=30)
     assert not t.is_alive()
     rows = sqlite3.connect(str(db)).execute("SELECT status FROM ff_ladders").fetchall()
     assert rows[0][0] == "armed"

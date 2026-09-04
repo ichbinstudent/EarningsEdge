@@ -1,4 +1,5 @@
 """Tests for repository functions added during the ORM migration."""
+
 import json
 from datetime import date, timedelta
 
@@ -69,50 +70,58 @@ def fresh_engine(tmp_path):
 
 
 def test_record_snapshot_outcome_failure_bumps_then_marks_unavailable():
-    sid = insert_snapshot({
-        "ticker": "AAPL",
-        "earnings_date": "2026-01-01",
-        "scan_date": "2026-01-01",
-    })
+    sid = insert_snapshot(
+        {
+            "ticker": "AAPL",
+            "earnings_date": "2026-01-01",
+            "scan_date": "2026-01-01",
+        }
+    )
     record_snapshot_outcome_failure(sid, 2)
     with db_engine.session_scope() as s:
-        row = s.execute(
-            text(
-                "SELECT outcome_fetched_at, outcome_attempt_count "
-                "FROM snapshots WHERE id = :id"
-            ),
-            {"id": sid},
-        ).mappings().one()
+        row = (
+            s.execute(
+                text("SELECT outcome_fetched_at, outcome_attempt_count FROM snapshots WHERE id = :id"),
+                {"id": sid},
+            )
+            .mappings()
+            .one()
+        )
         assert row["outcome_fetched_at"] is None
         assert row["outcome_attempt_count"] == 1
 
     record_snapshot_outcome_failure(sid, 2)
     with db_engine.session_scope() as s:
-        row = s.execute(
-            text(
-                "SELECT outcome_fetched_at, outcome_attempt_count "
-                "FROM snapshots WHERE id = :id"
-            ),
-            {"id": sid},
-        ).mappings().one()
+        row = (
+            s.execute(
+                text("SELECT outcome_fetched_at, outcome_attempt_count FROM snapshots WHERE id = :id"),
+                {"id": sid},
+            )
+            .mappings()
+            .one()
+        )
         assert row["outcome_fetched_at"] == "unavailable"
         assert row["outcome_attempt_count"] == 2
 
 
 def test_snapshots_optionable_universe_prefers_upcoming():
     today = date.today()
-    insert_snapshot({
-        "ticker": "AAA",
-        "earnings_date": (today + timedelta(days=3)).isoformat(),
-        "scan_date": today.isoformat(),
-        "has_options": 1,
-    })
-    insert_snapshot({
-        "ticker": "ZZZ",
-        "earnings_date": (today - timedelta(days=30)).isoformat(),
-        "scan_date": today.isoformat(),
-        "has_options": 1,
-    })
+    insert_snapshot(
+        {
+            "ticker": "AAA",
+            "earnings_date": (today + timedelta(days=3)).isoformat(),
+            "scan_date": today.isoformat(),
+            "has_options": 1,
+        }
+    )
+    insert_snapshot(
+        {
+            "ticker": "ZZZ",
+            "earnings_date": (today - timedelta(days=30)).isoformat(),
+            "scan_date": today.isoformat(),
+            "has_options": 1,
+        }
+    )
     tickers = snapshots_optionable_universe(10)
     assert tickers[0] == "AAA"
     assert "ZZZ" in tickers
@@ -137,15 +146,18 @@ def test_pending_trades_insert_get_and_dedupe():
     assert row["status"] == "pending"
     assert row["ticker"] == "AAPL"
     assert row["model_score"] == pytest.approx(0.5)
-    assert pending_trades_insert(
-        created_at="2026-08-23T12:01:00+00:00",
-        strategy="calendar_call_ml",
-        ticker="AAPL",
-        side="CALENDAR",
-        trade_json="{}",
-        card_text="dup",
-        model_score=0.9,
-    ) is None
+    assert (
+        pending_trades_insert(
+            created_at="2026-08-23T12:01:00+00:00",
+            strategy="calendar_call_ml",
+            ticker="AAPL",
+            side="CALENDAR",
+            trade_json="{}",
+            card_text="dup",
+            model_score=0.9,
+        )
+        is None
+    )
     pending_trades_mark_decided(pid, "rejected", decided_by=1)
     assert _insert_pending() is not None
 
@@ -160,15 +172,56 @@ def test_pending_trades_list_pending_score_desc():
 
 def test_snapshots_arb_universe(tmp_db_path):
     from earnings_edge.db.repositories import insert_snapshot, snapshots_arb_universe
+
     # Not optionable
-    insert_snapshot({"ticker": "NO_OPTS", "has_options": 0, "avg_volume_30d": 1000, "earnings_date": "2027-01-01", "scan_date": "2026-01-01"})
+    insert_snapshot(
+        {
+            "ticker": "NO_OPTS",
+            "has_options": 0,
+            "avg_volume_30d": 1000,
+            "earnings_date": "2027-01-01",
+            "scan_date": "2026-01-01",
+        }
+    )
     # Optionable, earnings past
-    insert_snapshot({"ticker": "PAST", "has_options": 1, "avg_volume_30d": 2000, "earnings_date": "1999-01-01", "scan_date": "2026-01-01"})
+    insert_snapshot(
+        {
+            "ticker": "PAST",
+            "has_options": 1,
+            "avg_volume_30d": 2000,
+            "earnings_date": "1999-01-01",
+            "scan_date": "2026-01-01",
+        }
+    )
     # Optionable, valid earnings (future), multiple rows (take max vol)
-    insert_snapshot({"ticker": "AAPL", "has_options": 1, "avg_volume_30d": 500, "earnings_date": "2030-01-01", "scan_date": "2026-01-01"})
-    insert_snapshot({"ticker": "AAPL", "has_options": 1, "avg_volume_30d": 1500, "earnings_date": "2030-01-01", "scan_date": "2026-01-02"})
+    insert_snapshot(
+        {
+            "ticker": "AAPL",
+            "has_options": 1,
+            "avg_volume_30d": 500,
+            "earnings_date": "2030-01-01",
+            "scan_date": "2026-01-01",
+        }
+    )
+    insert_snapshot(
+        {
+            "ticker": "AAPL",
+            "has_options": 1,
+            "avg_volume_30d": 1500,
+            "earnings_date": "2030-01-01",
+            "scan_date": "2026-01-02",
+        }
+    )
     # Another valid optionable
-    insert_snapshot({"ticker": "MSFT", "has_options": 1, "avg_volume_30d": 1000, "earnings_date": "2030-01-01", "scan_date": "2026-01-01"})
+    insert_snapshot(
+        {
+            "ticker": "MSFT",
+            "has_options": 1,
+            "avg_volume_30d": 1000,
+            "earnings_date": "2030-01-01",
+            "scan_date": "2026-01-01",
+        }
+    )
 
     universe = snapshots_arb_universe(max_tickers=10, today="2026-01-01")
     assert universe == ["AAPL", "MSFT"]  # AAPL has max vol 1500, MSFT 1000
@@ -180,7 +233,8 @@ def test_pending_trades_update_card_and_mark_decided():
     pid = _insert_pending()
     pending_trades_update_card(pid, "new card")
     pending_trades_mark_decided(
-        pid, "executed",
+        pid,
+        "executed",
         order_json='{"order_id": "x"}',
         note="ok",
         decided_by=42,
@@ -205,12 +259,15 @@ def test_proposal_funnel_insert():
     )
     assert rid > 0
     with db_engine.session_scope() as s:
-        row = s.execute(
-            text(
-                "SELECT strategies, counts, proposals_total "
-                "FROM proposal_funnel ORDER BY id DESC LIMIT 1"
+        row = (
+            s.execute(
+                text(
+                    "SELECT strategies, counts, proposals_total FROM proposal_funnel ORDER BY id DESC LIMIT 1"
+                )
             )
-        ).mappings().one()
+            .mappings()
+            .one()
+        )
         assert json.loads(row["counts"])["calendar_call_ml"]["proposals_created"] == 1
         assert row["proposals_total"] == 1
 
@@ -225,9 +282,15 @@ def test_exit_proposals_crud_and_dedupe():
         card_text="exit?",
     )
     assert pid is not None
-    assert exit_proposals_insert(
-        group_id="g1", strategy="calendar_call_ml", ticker="AAPL", rule="time",
-    ) is None
+    assert (
+        exit_proposals_insert(
+            group_id="g1",
+            strategy="calendar_call_ml",
+            ticker="AAPL",
+            rule="time",
+        )
+        is None
+    )
     row = exit_proposals_get(pid)
     assert row["status"] == "pending"
     assert row["group_id"] == "g1"
@@ -246,10 +309,22 @@ def test_exit_proposals_crud_and_dedupe():
 def test_managed_positions_open_list_close():
     n = managed_positions_open(
         [
-            {"symbol": "AAPL260731C00190000", "side": "sell", "ratio_qty": 1,
-             "option_type": "call", "strike": 190.0, "expiry": date(2026, 7, 31)},
-            {"symbol": "AAPL260828C00190000", "side": "buy", "ratio_qty": 1,
-             "option_type": "call", "strike": 190.0, "expiry": date(2026, 8, 28)},
+            {
+                "symbol": "AAPL260731C00190000",
+                "side": "sell",
+                "ratio_qty": 1,
+                "option_type": "call",
+                "strike": 190.0,
+                "expiry": date(2026, 7, 31),
+            },
+            {
+                "symbol": "AAPL260828C00190000",
+                "side": "buy",
+                "ratio_qty": 1,
+                "option_type": "call",
+                "strike": 190.0,
+                "expiry": date(2026, 8, 28),
+            },
         ],
         "calendar_call_ml",
         "ord-1",
@@ -276,29 +351,37 @@ def test_managed_positions_open_list_close():
 def test_snapshots_max_scan_date_and_scan_runs_latest_success():
     assert snapshots_max_scan_date() is None
     assert scan_runs_latest_success() is None
-    insert_snapshot({
-        "ticker": "AAPL",
-        "earnings_date": "2026-08-20",
-        "scan_date": "2026-08-19",
-    })
-    insert_snapshot({
-        "ticker": "MSFT",
-        "earnings_date": "2026-08-21",
-        "scan_date": "2026-08-21",
-    })
+    insert_snapshot(
+        {
+            "ticker": "AAPL",
+            "earnings_date": "2026-08-20",
+            "scan_date": "2026-08-19",
+        }
+    )
+    insert_snapshot(
+        {
+            "ticker": "MSFT",
+            "earnings_date": "2026-08-21",
+            "scan_date": "2026-08-21",
+        }
+    )
     assert snapshots_max_scan_date() == "2026-08-21"
-    insert_scan_run({
-        "scan_timestamp": "2026-08-20T10:00:00",
-        "scanner_name": "cal",
-        "trigger_type": "cron",
-        "success": 0,
-    })
-    insert_scan_run({
-        "scan_timestamp": "2026-08-21T10:00:00",
-        "scanner_name": "cal",
-        "trigger_type": "cron",
-        "success": 1,
-    })
+    insert_scan_run(
+        {
+            "scan_timestamp": "2026-08-20T10:00:00",
+            "scanner_name": "cal",
+            "trigger_type": "cron",
+            "success": 0,
+        }
+    )
+    insert_scan_run(
+        {
+            "scan_timestamp": "2026-08-21T10:00:00",
+            "scanner_name": "cal",
+            "trigger_type": "cron",
+            "success": 1,
+        }
+    )
     assert scan_runs_latest_success() == "2026-08-21T10:00:00"
 
 
@@ -307,7 +390,10 @@ def test_risk_state_get_and_set_halted():
     assert row["halted"] == 0
     assert row["reason"] is None
     risk_state_set_halted(
-        True, reason="daily loss", tripped_at="2026-08-23T12:00:00+00:00", tripped_by="rm",
+        True,
+        reason="daily loss",
+        tripped_at="2026-08-23T12:00:00+00:00",
+        tripped_by="rm",
     )
     row = risk_state_get()
     assert row["halted"] == 1
@@ -333,11 +419,15 @@ def test_risk_events_insert_and_list():
 def test_equity_snapshots_insert_latest_day_start():
     equity_snapshots_insert(
         ts="2026-08-23T13:00:00+00:00",
-        equity=100_000, buying_power=80_000, portfolio_value=100_000,
+        equity=100_000,
+        buying_power=80_000,
+        portfolio_value=100_000,
     )
     equity_snapshots_insert(
         ts="2026-08-23T14:00:00+00:00",
-        equity=101_000, buying_power=81_000, portfolio_value=101_000,
+        equity=101_000,
+        buying_power=81_000,
+        portfolio_value=101_000,
     )
     latest = equity_snapshots_latest()
     assert latest["equity"] == 101_000
@@ -383,30 +473,53 @@ def test_job_runs_start_finish_list():
 
 def test_data_catalog_upsert_query_latest():
     data_catalog_upsert(
-        "options_chain", symbol="AAPL", as_of_date="2026-07-20",
-        source="alpaca", available_at="2026-07-20T20:00:00+00:00",
+        "options_chain",
+        symbol="AAPL",
+        as_of_date="2026-07-20",
+        source="alpaca",
+        available_at="2026-07-20T20:00:00+00:00",
     )
     data_catalog_upsert(
-        "options_chain", symbol="AAPL", as_of_date="2026-07-21",
-        source="alpaca", available_at="2026-07-21T20:00:00+00:00",
+        "options_chain",
+        symbol="AAPL",
+        as_of_date="2026-07-21",
+        source="alpaca",
+        available_at="2026-07-21T20:00:00+00:00",
     )
     data_catalog_upsert(
-        "chain_snapshot", symbol="AAPL", as_of_date="2026-07-20",
-        source="lse", available_at="2026-07-20T21:00:00+00:00", pit_safe=False,
+        "chain_snapshot",
+        symbol="AAPL",
+        as_of_date="2026-07-20",
+        source="lse",
+        available_at="2026-07-20T21:00:00+00:00",
+        pit_safe=False,
     )
     assert data_catalog_query(
-        "options_chain", "2026-07-21T13:00:00+00:00", symbol="AAPL",
+        "options_chain",
+        "2026-07-21T13:00:00+00:00",
+        symbol="AAPL",
     ) == ["2026-07-20"]
     assert data_catalog_query(
-        "options_chain", "2026-07-22T13:00:00+00:00", symbol="AAPL",
+        "options_chain",
+        "2026-07-22T13:00:00+00:00",
+        symbol="AAPL",
     ) == ["2026-07-20", "2026-07-21"]
     latest = data_catalog_latest("options_chain", "AAPL")
     assert latest["as_of_date"] == "2026-07-21"
+    assert (
+        data_catalog_query(
+            "chain_snapshot",
+            "2026-07-21T00:00:00+00:00",
+            symbol="AAPL",
+            pit_only=True,
+        )
+        == []
+    )
     assert data_catalog_query(
-        "chain_snapshot", "2026-07-21T00:00:00+00:00", symbol="AAPL", pit_only=True,
-    ) == []
-    assert data_catalog_query(
-        "chain_snapshot", "2026-07-21T00:00:00+00:00", symbol="AAPL", pit_only=False,
+        "chain_snapshot",
+        "2026-07-21T00:00:00+00:00",
+        symbol="AAPL",
+        pit_only=False,
     ) == ["2026-07-20"]
 
 
@@ -433,8 +546,12 @@ def test_trade_events_adopted_alpaca_and_table_exists():
     adopted_positions_insert("XYZ")  # ignore dup
     assert adopted_positions_symbols() == {"XYZ"}
     alpaca_positions_insert(
-        ts="2026-08-23T12:00:00+00:00", symbol="XYZ", qty=1, side="long",
-        strategy="unmanaged", managed=0,
+        ts="2026-08-23T12:00:00+00:00",
+        symbol="XYZ",
+        qty=1,
+        side="long",
+        strategy="unmanaged",
+        managed=0,
     )
     pos = alpaca_positions_list()
     assert len(pos) == 1 and pos[0]["symbol"] == "XYZ"

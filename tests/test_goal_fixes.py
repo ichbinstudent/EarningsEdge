@@ -3,6 +3,7 @@
 Each test drives a shipped function (bridge submit, quote sanity, equity
 snapshot, reconcile, remaining-leg plan, AMC bars). No mocked unit-under-test.
 """
+
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
@@ -30,14 +31,28 @@ from framework.risk.equity import snapshot_equity
 def test_qty_11_keeps_base_ratio_and_order_qty():
     client = MagicMock()
     client.submit_multi_leg_order.return_value = {
-        "id": "oid", "status": "accepted", "legs": [],
+        "id": "oid",
+        "status": "accepted",
+        "legs": [],
     }
     bridge = StrategyBridge(client=client)
     legs = [
-        {"symbol": "AAPL260731C00190000", "side": "sell", "ratio_qty": 1,
-         "strike": 190.0, "expiry": date(2026, 7, 31), "option_type": "call"},
-        {"symbol": "AAPL260828C00190000", "side": "buy", "ratio_qty": 1,
-         "strike": 190.0, "expiry": date(2026, 8, 28), "option_type": "call"},
+        {
+            "symbol": "AAPL260731C00190000",
+            "side": "sell",
+            "ratio_qty": 1,
+            "strike": 190.0,
+            "expiry": date(2026, 7, 31),
+            "option_type": "call",
+        },
+        {
+            "symbol": "AAPL260828C00190000",
+            "side": "buy",
+            "ratio_qty": 1,
+            "strike": 190.0,
+            "expiry": date(2026, 8, 28),
+            "option_type": "call",
+        },
     ]
     bridge._submit_legs(legs, None, "cid", qty=11)
     call = client.submit_multi_leg_order.call_args
@@ -49,34 +64,56 @@ def test_qty_11_keeps_base_ratio_and_order_qty():
 def test_resolve_131_to_130_raises_and_does_not_submit():
     client = MagicMock()
     from earnings_edge.alpaca_trading import AlpacaError
+
     client.submit_multi_leg_order.side_effect = [
         AlpacaError(422, "unknown contract"),
     ]
     # Catalog returns a 130 strike for a 131 request.
     client.get_option_contracts.return_value = {
-        "option_contracts": [{
-            "symbol": occ_symbol("TPR", date(2026, 9, 11), 130.0, "call"),
-            "type": "call",
-            "strike_price": 130.0,
-        }],
+        "option_contracts": [
+            {
+                "symbol": occ_symbol("TPR", date(2026, 9, 11), 130.0, "call"),
+                "type": "call",
+                "strike_price": 130.0,
+            }
+        ],
     }
     bridge = StrategyBridge(client=client)
     from earnings_edge.trading_types import Trade
+
     trade = Trade(
-        ticker="TPR", earnings_date=date(2026, 8, 13),
-        scan_date=date(2026, 8, 13), strategy="debit_size_exploit",
-        side="CALENDAR", entry_price=3.17,
-        features={"near_strike": 131, "far_strike": 131, "atm_strike": 131,
-                  "near_expiry": "2026-08-14", "far_expiry": "2026-09-11"},
+        ticker="TPR",
+        earnings_date=date(2026, 8, 13),
+        scan_date=date(2026, 8, 13),
+        strategy="debit_size_exploit",
+        side="CALENDAR",
+        entry_price=3.17,
+        features={
+            "near_strike": 131,
+            "far_strike": 131,
+            "atm_strike": 131,
+            "near_expiry": "2026-08-14",
+            "far_expiry": "2026-09-11",
+        },
         ml_decision="DEBIT_GATE",
     )
     legs = [
-        {"symbol": occ_symbol("TPR", date(2026, 8, 14), 131.0, "call"),
-         "side": "sell", "ratio_qty": 1, "strike": 131.0,
-         "expiry": date(2026, 8, 14), "option_type": "call"},
-        {"symbol": occ_symbol("TPR", date(2026, 9, 11), 131.0, "call"),
-         "side": "buy", "ratio_qty": 1, "strike": 131.0,
-         "expiry": date(2026, 9, 11), "option_type": "call"},
+        {
+            "symbol": occ_symbol("TPR", date(2026, 8, 14), 131.0, "call"),
+            "side": "sell",
+            "ratio_qty": 1,
+            "strike": 131.0,
+            "expiry": date(2026, 8, 14),
+            "option_type": "call",
+        },
+        {
+            "symbol": occ_symbol("TPR", date(2026, 9, 11), 131.0, "call"),
+            "side": "buy",
+            "ratio_qty": 1,
+            "strike": 131.0,
+            "expiry": date(2026, 9, 11),
+            "option_type": "call",
+        },
     ]
     with pytest.raises(StrikeChangedError):
         bridge._submit_with_resolution(trade, legs, None, "cid", qty=1)
@@ -103,13 +140,21 @@ def test_equity_snapshot_and_reconcile_insert(tmp_path):
     db_engine.configure(tmp_path / "jobs.db")
     client = MagicMock()
     client.get_account.return_value = {
-        "equity": 100_000, "buying_power": 80_000, "portfolio_value": 100_000,
+        "equity": 100_000,
+        "buying_power": 80_000,
+        "portfolio_value": 100_000,
     }
-    client.get_positions.return_value = [{
-        "symbol": "AAPL260828C00200000", "qty": "1", "side": "long",
-        "avg_entry_price": "2.5", "current_price": "2.0",
-        "market_value": "200", "unrealized_pl": "-50",
-    }]
+    client.get_positions.return_value = [
+        {
+            "symbol": "AAPL260828C00200000",
+            "qty": "1",
+            "side": "long",
+            "avg_entry_price": "2.5",
+            "current_price": "2.0",
+            "market_value": "200",
+            "unrealized_pl": "-50",
+        }
+    ]
 
     def work():
         snapshot_equity(client)

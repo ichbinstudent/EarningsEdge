@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """CLI entrypoint for generating top plays (picks) from earnings_ml.db."""
+
 import argparse
 import sys
 from datetime import datetime
@@ -10,14 +11,16 @@ from earnings_edge.picks import generate_picks
 
 DEFAULT_DB = Path(__file__).parent / "data" / "earnings_ml.db"
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate options picks from DB")
     parser.add_argument("--db", default=str(DEFAULT_DB), help="Path to earnings_ml.db")
     parser.add_argument("--date", help="As-of date (YYYY-MM-DD), default latest snapshot")
     parser.add_argument("--limit", type=int, default=20, help="Max rows per strategy (default 20)")
     parser.add_argument("--output", help="Optional CSV output prefix")
-    parser.add_argument("--persist", action="store_true",
-                        help="Persist picks into the picks table (opens the DB read-write)")
+    parser.add_argument(
+        "--persist", action="store_true", help="Persist picks into the picks table (opens the DB read-write)"
+    )
     args = parser.parse_args()
 
     db_path = Path(args.db)
@@ -40,6 +43,7 @@ def main() -> int:
 
     if args.persist:
         from earnings_edge.picks import persist_picks
+
         n = persist_picks(picks, as_of)
         print(f"persisted {n} picks for {as_of}")
 
@@ -63,6 +67,7 @@ def main() -> int:
             print(f"-> Saved full {name} list to {out_path}")
 
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -58,9 +58,12 @@ def _alpaca_account_checks(client, *, live: bool) -> bool:
     )
     try:
         clock = client.get_clock()
-        check("alpaca clock", True,
-              f"is_open={clock.get('is_open')} next_open={str(clock.get('next_open'))[:16]}",
-              required=False)
+        check(
+            "alpaca clock",
+            True,
+            f"is_open={clock.get('is_open')} next_open={str(clock.get('next_open'))[:16]}",
+            required=False,
+        )
     except Exception as exc:
         check("alpaca clock", False, str(exc), required=False)
     return ok
@@ -68,8 +71,9 @@ def _alpaca_account_checks(client, *, live: bool) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Pre-flight checks before starting the bot")
-    parser.add_argument("--i-mean-live", action="store_true",
-                        help="Confirm you intend to talk to the Alpaca LIVE API")
+    parser.add_argument(
+        "--i-mean-live", action="store_true", help="Confirm you intend to talk to the Alpaca LIVE API"
+    )
     args = parser.parse_args(argv if argv is not None else [])
     RESULTS.clear()
     all_ok = True
@@ -79,12 +83,14 @@ def main(argv: list[str] | None = None) -> int:
     live_wanted = alpaca_live_enabled()
     if live_wanted and not args.i_mean_live:
         all_ok &= check(
-            "alpaca live confirmation", False,
+            "alpaca live confirmation",
+            False,
             "ALPACA_LIVE=1 requires scripts/preflight.py --i-mean-live",
         )
     if args.i_mean_live and not live_wanted:
         all_ok &= check(
-            "alpaca live confirmation", False,
+            "alpaca live confirmation",
+            False,
             "--i-mean-live set but ALPACA_LIVE is not 1",
         )
 
@@ -107,6 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     # 2. Alpaca reachable + account
     try:
         from earnings_edge.alpaca_trading import create_client
+
         if args.i_mean_live and live_wanted:
             client = create_client()  # follows ALPACA_LIVE
             all_ok &= _alpaca_account_checks(client, live=True)
@@ -119,6 +126,7 @@ def main(argv: list[str] | None = None) -> int:
     # 3. LSE provider reachable
     try:
         from earnings_edge.market_data_provider import LSEProvider
+
         ok = LSEProvider().healthy()
         all_ok &= check("lse provider health", ok)
     except Exception as exc:
@@ -127,6 +135,7 @@ def main(argv: list[str] | None = None) -> int:
     # 4. framework DB writable
     try:
         from earnings_edge.db import risk_state_get
+
         risk_state_get()
         check("framework db writable", True)
     except Exception as exc:
@@ -135,22 +144,35 @@ def main(argv: list[str] | None = None) -> int:
     # 5. strategy configs
     try:
         from framework.core.config import load_strategy_configs
+
         configs = load_strategy_configs()
-        expected = {"calendar_call_ml", "short_straddle",
-                    "vol_risk_premium", "earnings_quality", "ff_ladder",
-                    "forward_factor_arb"}
+        expected = {
+            "calendar_call_ml",
+            "short_straddle",
+            "vol_risk_premium",
+            "earnings_quality",
+            "ff_ladder",
+            "forward_factor_arb",
+        }
         missing = expected - set(configs)
-        all_ok &= check("strategy configs", not missing,
-                        f"{len(configs)} loaded" + (f", MISSING: {sorted(missing)}" if missing else ""))
+        all_ok &= check(
+            "strategy configs",
+            not missing,
+            f"{len(configs)} loaded" + (f", MISSING: {sorted(missing)}" if missing else ""),
+        )
     except Exception as exc:
         all_ok &= check("strategy configs", False, str(exc))
 
     # 6. kill switch status (informational)
     try:
         from framework.risk.killswitch import KillSwitch
+
         status = KillSwitch().status()
-        check("kill switch", not status.get("halted"),
-              f"HALTED: {status.get('reason')}" if status.get("halted") else "armed")
+        check(
+            "kill switch",
+            not status.get("halted"),
+            f"HALTED: {status.get('reason')}" if status.get("halted") else "armed",
+        )
         all_ok &= not status.get("halted")
     except Exception as exc:
         all_ok &= check("kill switch", False, str(exc))
@@ -158,16 +180,18 @@ def main(argv: list[str] | None = None) -> int:
     # 7. trading calendar loads
     try:
         from framework.core.calendar import get_calendar
+
         cal = get_calendar()
         from datetime import date
-        check("trading calendar", True,
-              f"today session: {cal.is_session(date.today())}")
+
+        check("trading calendar", True, f"today session: {cal.is_session(date.today())}")
     except Exception as exc:
         all_ok &= check("trading calendar", False, str(exc))
 
     # 8. Telegram reachable
     try:
         import requests
+
         token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
         resp = requests.get(f"https://api.telegram.org/bot{token}/getMe", timeout=10)
         all_ok &= check("telegram getMe", resp.status_code == 200)

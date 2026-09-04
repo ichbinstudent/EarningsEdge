@@ -1,4 +1,5 @@
 """Process-level ops: single-instance lock and log redaction."""
+
 from __future__ import annotations
 
 import atexit

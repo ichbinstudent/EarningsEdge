@@ -54,6 +54,7 @@ class LSECollector(BaseCollector):
             if not self.api_key:
                 raise ValueError("LSE_API_KEY not set")
             from lse import LSE  # lazy import: optional dependency
+
             self._client = LSE(api_key=self.api_key)
         return self._client
 
@@ -73,11 +74,16 @@ class LSECollector(BaseCollector):
         failure: swallow it to [] so it neither burns retries nor trips the
         circuit breaker for the tickers behind it in a batch run.
         """
+
         def _fetch():
             try:
                 return self.client.candles(
-                    ticker, "1d", start=start.isoformat(), end=end.isoformat(),
-                    limit=limit, order="asc",
+                    ticker,
+                    "1d",
+                    start=start.isoformat(),
+                    end=end.isoformat(),
+                    limit=limit,
+                    order="asc",
                 )
             except Exception as exc:
                 msg = str(exc)
@@ -88,7 +94,10 @@ class LSECollector(BaseCollector):
         rows = self._call(_fetch) or []
         return [
             {
-                "o": r["open"], "h": r["high"], "l": r["low"], "c": r["close"],
+                "o": r["open"],
+                "h": r["high"],
+                "l": r["low"],
+                "c": r["close"],
                 "v": r.get("volume") or 0,
                 "t": int(datetime.fromisoformat(r["timestamp"].replace("Z", "+00:00")).timestamp() * 1000),
             }
@@ -120,29 +129,37 @@ class LSECollector(BaseCollector):
                 continue
             if contract_type and r.get("contract_type") != contract_type:
                 continue
-            out.append({
-                "ticker": r.get("ticker", ""),
-                "strike_price": r.get("strike"),
-                "expiration_date": expiry,
-                "contract_type": r.get("contract_type"),
-            })
+            out.append(
+                {
+                    "ticker": r.get("ticker", ""),
+                    "strike_price": r.get("strike"),
+                    "expiration_date": expiry,
+                    "contract_type": r.get("contract_type"),
+                }
+            )
         return out
 
     def option_close(self, contract_ticker: str, as_of: date, lookback_days: int = 4) -> float | None:
         """Most recent 1m-bar close on/before ``as_of`` (looks back a few days)."""
-        rows = self._call(lambda: self.client.option_candles(
-            contract_ticker,
-            start=(as_of - timedelta(days=lookback_days)).isoformat(),
-            end=(as_of + timedelta(days=1)).isoformat(),
-            order="asc", limit=5000,
-        )) or []
+        rows = (
+            self._call(
+                lambda: self.client.option_candles(
+                    contract_ticker,
+                    start=(as_of - timedelta(days=lookback_days)).isoformat(),
+                    end=(as_of + timedelta(days=1)).isoformat(),
+                    order="asc",
+                    limit=5000,
+                )
+            )
+            or []
+        )
         cutoff = as_of + timedelta(days=1)
         closes = [
-            float(r["close"]) for r in rows
+            float(r["close"])
+            for r in rows
             if r.get("close") is not None
-            and datetime.fromisoformat(
-                (r.get("minute") or r.get("timestamp")).replace("Z", "+00:00")
-            ).date() < cutoff
+            and datetime.fromisoformat((r.get("minute") or r.get("timestamp")).replace("Z", "+00:00")).date()
+            < cutoff
         ]
         return closes[-1] if closes else None
 
@@ -154,7 +171,8 @@ class LSECollector(BaseCollector):
             return {}
         resp = requests.get(
             f"{LSE_API_BASE}/vault/usage",
-            headers={"x-api-key": self.api_key}, timeout=15,
+            headers={"x-api-key": self.api_key},
+            timeout=15,
         )
         resp.raise_for_status()
         return resp.json()

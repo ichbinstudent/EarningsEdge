@@ -79,8 +79,7 @@ class PolygonClient(BaseCollector):
             logger.warning("Polygon GET %s failed: %s", path, exc)
             return None
 
-    def get_daily_bars(self, ticker: str, from_date: str, to_date: str,
-                       limit: int = 20) -> list[dict]:
+    def get_daily_bars(self, ticker: str, from_date: str, to_date: str, limit: int = 20) -> list[dict]:
         """Fetch daily OHLCV bars (up to *limit*, oldest first)."""
         data = self.get(
             f"/v2/aggs/ticker/{ticker}/range/1/day/{from_date}/{to_date}",

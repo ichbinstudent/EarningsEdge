@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 
 try:  # Chrome TLS-impersonation client — defeats Investing.com's 403 bot wall
     from curl_cffi import requests as cffi_requests
+
     _HAS_CFFI = True
 except ImportError:  # pragma: no cover
     cffi_requests = None
@@ -89,7 +90,10 @@ class EarningsCalendarCollector(BaseCollector):
             # Plain requests gets 403 from Investing.com's bot wall; Chrome
             # TLS impersonation passes. UA rotation no longer needed here.
             resp = cffi_requests.post(
-                url, headers=headers, data=payload, timeout=15,
+                url,
+                headers=headers,
+                data=payload,
+                timeout=15,
                 impersonate="chrome",
             )
         else:
@@ -109,13 +113,19 @@ class EarningsCalendarCollector(BaseCollector):
                 span = row.find("span", class_="genToolTip")
                 tooltip = span.get("data-tooltip", "") if span and span.has_attr("data-tooltip") else ""
                 timing = (
-                    "Pre Market" if "Before" in tooltip
-                    else "Post Market" if "After" in tooltip
+                    "Pre Market"
+                    if "Before" in tooltip
+                    else "Post Market"
+                    if "After" in tooltip
                     else "During Market"
                 )
-                stocks.append(EarningsCandidate(
-                    ticker=ticker, timing=timing, source="investing",
-                ))
+                stocks.append(
+                    EarningsCandidate(
+                        ticker=ticker,
+                        timing=timing,
+                        source="investing",
+                    )
+                )
             except Exception as exc:
                 logger.debug("Investing.com row parse error: %s", exc)
 
@@ -144,14 +154,14 @@ class EarningsCalendarCollector(BaseCollector):
             if not symbol:
                 continue
             hour = e.get("hour", "").lower()
-            timing = (
-                "Pre Market" if hour == "bmo"
-                else "Post Market" if hour == "amc"
-                else "During Market"
+            timing = "Pre Market" if hour == "bmo" else "Post Market" if hour == "amc" else "During Market"
+            stocks.append(
+                EarningsCandidate(
+                    ticker=symbol,
+                    timing=timing,
+                    source="finnhub",
+                )
             )
-            stocks.append(EarningsCandidate(
-                ticker=symbol, timing=timing, source="finnhub",
-            ))
         return stocks
 
     @staticmethod

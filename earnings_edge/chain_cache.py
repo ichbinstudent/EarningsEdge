@@ -4,6 +4,7 @@ Pulls live chain snapshots (data.alpaca.markets) for a wide earnings
 universe and persists one row per contract per hour into ``options_chain``.
 Shared by ``scripts/collect_options_snapshot.py`` and the bot scheduler.
 """
+
 from __future__ import annotations
 
 import logging
@@ -30,8 +31,9 @@ def default_underlyings(max_tickers: int = DEFAULT_MAX_TICKERS) -> list[str]:
     return snapshots_optionable_universe(max_tickers)
 
 
-def row_for_contract(run_id: str, underlying: str, contract_ticker: str,
-                     snap: dict, *, now: datetime | None = None) -> dict:
+def row_for_contract(
+    run_id: str, underlying: str, contract_ticker: str, snap: dict, *, now: datetime | None = None
+) -> dict:
     from earnings_edge.fwd_factor import occ_parse
 
     now = now or datetime.now(UTC)
@@ -80,8 +82,9 @@ def row_for_contract(run_id: str, underlying: str, contract_ticker: str,
     }
 
 
-def collect(client, underlyings, *, run_id: str | None = None,
-            dry_run: bool = False, sleep_s: float = 0.22) -> dict:
+def collect(
+    client, underlyings, *, run_id: str | None = None, dry_run: bool = False, sleep_s: float = 0.22
+) -> dict:
     """Pull chain for each underlying. Returns stats dict."""
     run_id = run_id or datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     now = datetime.now(UTC)
@@ -97,10 +100,7 @@ def collect(client, underlyings, *, run_id: str | None = None,
         if not contracts:
             empty += 1
             continue
-        rows = [
-            row_for_contract(run_id, und, ct, s, now=now)
-            for ct, s in contracts.items()
-        ]
+        rows = [row_for_contract(run_id, und, ct, s, now=now) for ct, s in contracts.items()]
         if dry_run:
             inserted += len(rows)
             continue

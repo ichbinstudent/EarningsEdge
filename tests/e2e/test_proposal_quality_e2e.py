@@ -35,13 +35,24 @@ def fixture_db(tmp_path):
     conn.close()
 
     cand = {
-        "ticker": "MSFT", "earnings_date": "2026-07-29", "spot": 397.32,
-        "strike": 395.0, "near_symbol": "MSFT260828C00395000",
-        "far_symbol": "MSFT260918C00395000", "near_expiry": "2026-08-28",
-        "far_expiry": "2026-09-18", "near_bid": 20.97, "near_ask": 22.49,
-        "far_bid": 24.81, "far_ask": 26.21, "sigma_fwd": 0.3136,
-        "hist_rms_move": 0.00515, "tau_days": 2, "d_start": 9.54,
-        "d_cap": 9.54, "mid_debit": 3.78,
+        "ticker": "MSFT",
+        "earnings_date": "2026-07-29",
+        "spot": 397.32,
+        "strike": 395.0,
+        "near_symbol": "MSFT260828C00395000",
+        "far_symbol": "MSFT260918C00395000",
+        "near_expiry": "2026-08-28",
+        "far_expiry": "2026-09-18",
+        "near_bid": 20.97,
+        "near_ask": 22.49,
+        "far_bid": 24.81,
+        "far_ask": 26.21,
+        "sigma_fwd": 0.3136,
+        "hist_rms_move": 0.00515,
+        "tau_days": 2,
+        "d_start": 9.54,
+        "d_cap": 9.54,
+        "mid_debit": 3.78,
     }
     conn = sqlite3.connect(str(path))
     conn.execute(
@@ -73,11 +84,19 @@ def test_script_end_to_end_report_shape(fixture_db, tmp_path, capsys):
     report = pq.main(["--db", str(fixture_db), "--json", str(out)])
 
     # report dict shape
-    for key in ("generated_at", "db_path", "summary", "by_source",
-                "by_strategy", "trades", "notes"):
+    for key in ("generated_at", "db_path", "summary", "by_source", "by_strategy", "trades", "notes"):
         assert key in report, key
-    for key in ("approved", "executed", "with_outcome", "scorable", "hits",
-                "hit_rate", "binomial_p", "total_pnl", "significant"):
+    for key in (
+        "approved",
+        "executed",
+        "with_outcome",
+        "scorable",
+        "hits",
+        "hit_rate",
+        "binomial_p",
+        "total_pnl",
+        "significant",
+    ):
         assert key in report["summary"], key
 
     assert report["summary"]["approved"] == 1

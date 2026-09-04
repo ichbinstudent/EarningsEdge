@@ -15,14 +15,13 @@ def test_picks_report_no_db(capsys):
             captured = capsys.readouterr()
             assert "database not found" in captured.out
 
+
 def test_picks_report_with_date(capsys, tmp_path):
     db_path = tmp_path / "test.db"
     db_path.touch()
 
     with patch("picks_report.generate_picks") as mock_gen:
-        mock_gen.return_value = {
-            "earnings": pd.DataFrame({"ticker": ["AAPL"]})
-        }
+        mock_gen.return_value = {"earnings": pd.DataFrame({"ticker": ["AAPL"]})}
         with patch("sys.argv", ["picks_report.py", "--db", str(db_path), "--date", "2026-08-19"]):
             ret = picks_report.main()
             assert ret == 0
@@ -30,8 +29,10 @@ def test_picks_report_with_date(capsys, tmp_path):
             assert "OQUANTS PICKS AS OF 2026-08-19" in captured.out
             assert "AAPL" in captured.out
 
+
 def test_picks_report_auto_date(capsys, tmp_path):
     from earnings_edge.db import configure
+
     db_path = tmp_path / "test.db"
     configure(db_path)
     con = sqlite3.connect(db_path)
@@ -43,9 +44,7 @@ def test_picks_report_auto_date(capsys, tmp_path):
     con.close()
 
     with patch("picks_report.generate_picks") as mock_gen:
-        mock_gen.return_value = {
-            "momentum_skew": pd.DataFrame()
-        }
+        mock_gen.return_value = {"momentum_skew": pd.DataFrame()}
         with patch("sys.argv", ["picks_report.py", "--db", str(db_path)]):
             ret = picks_report.main()
             assert ret == 0

@@ -48,26 +48,49 @@ from .fwd_factor import forward_iv
 # ── Output schemas (column order mirrors the oquants tables) ────────────────
 
 EARNINGS_COLUMNS = [
-    "ticker", "announcement_date", "announcement_time", "is_confirmed",
-    "implied_move", "option_volume", "short_straddle_return",
-    "short_straddle_win_rate", "avg_realized_move", "avg_implied_move",
-    "implied_vs_avg_realized", "term_structure_slope", "historical_events_count",
+    "ticker",
+    "announcement_date",
+    "announcement_time",
+    "is_confirmed",
+    "implied_move",
+    "option_volume",
+    "short_straddle_return",
+    "short_straddle_win_rate",
+    "avg_realized_move",
+    "avg_implied_move",
+    "implied_vs_avg_realized",
+    "term_structure_slope",
+    "historical_events_count",
 ]
 
 MOMENTUM_SKEW_COLUMNS = [
-    "ticker", "next_earnings_date", "direction", "option_volume",
-    "cs_momentum", "ts_momentum", "relative_momentum",
-    "skew_value", "skew_zscore", "skew_mean",
+    "ticker",
+    "next_earnings_date",
+    "direction",
+    "option_volume",
+    "cs_momentum",
+    "ts_momentum",
+    "relative_momentum",
+    "skew_value",
+    "skew_zscore",
+    "skew_mean",
 ]
 
 FORWARD_FACTOR_COLUMNS = [
-    "ticker", "next_earnings_date", "forward_factor", "option_volume",
+    "ticker",
+    "next_earnings_date",
+    "forward_factor",
+    "option_volume",
 ]
 
 VRP_STRUCTURES = ["iron_condor", "short_straddle", "short_strangle", "iron_butterfly"]
 
 VRP_COLUMNS = [
-    "ticker", "iv_pctl_1y", "iv_rv", "option_volume", "next_earnings_date",
+    "ticker",
+    "iv_pctl_1y",
+    "iv_rv",
+    "option_volume",
+    "next_earnings_date",
 ] + [f"{s}_{stat}" for s in VRP_STRUCTURES for stat in ("mean_return", "win_rate")]
 
 # DB timing strings -> oquants BMO/AMC enum
@@ -75,6 +98,7 @@ _TIMING_MAP = {"Pre Market": "BMO", "Post Market": "AMC"}
 
 
 # ── helpers -------------------------------------------------------------------
+
 
 def _with_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     """Return df with every column in *columns* present (missing -> NaN)."""
@@ -95,6 +119,7 @@ def _as_date(series: pd.Series) -> pd.Series:
 
 
 # ── /plays/earnings — short earnings vol --------------------------------------
+
 
 def earnings_picks(
     df: pd.DataFrame,
@@ -123,8 +148,7 @@ def earnings_picks(
     ann_date = _as_date(df["announcement_date"])
     ann_time = df["announcement_time"].astype("string").str.upper()
     tomorrow = as_of + timedelta(days=1)
-    in_window = ((ann_date == as_of) & (ann_time == "AMC")) | \
-                ((ann_date == tomorrow) & (ann_time == "BMO"))
+    in_window = ((ann_date == as_of) & (ann_time == "AMC")) | ((ann_date == tomorrow) & (ann_time == "BMO"))
 
     vol = pd.to_numeric(df["option_volume"], errors="coerce")
     liquid = vol.isna() | (vol >= min_option_volume)
@@ -146,6 +170,7 @@ def earnings_picks(
 
 
 # ── /plays/momentum-skew -------------------------------------------------------
+
 
 def _cs_momentum_decile(ts_momentum: pd.Series) -> pd.Series:
     """Cross-sectional momentum decile (1-10) across the input universe.
@@ -198,8 +223,9 @@ def momentum_skew_picks(
     vol = pd.to_numeric(df["option_volume"], errors="coerce")
     liquid = vol.isna() | (vol >= min_option_volume)
 
-    side_ok = ((direction == "call") & (cs >= call_decile_min)) | \
-              ((direction == "put") & (cs <= put_decile_max))
+    side_ok = ((direction == "call") & (cs >= call_decile_min)) | (
+        (direction == "put") & (cs <= put_decile_max)
+    )
 
     out = df.loc[steep & liquid & side_ok, cols].copy()
     out["_sort"] = pd.to_numeric(out["skew_zscore"], errors="coerce")
@@ -208,6 +234,7 @@ def momentum_skew_picks(
 
 
 # ── /plays/forward-factors -----------------------------------------------------
+
 
 def _num(value) -> float:
     """Scalar -> float, NaN on None/NaN/non-numeric."""
@@ -269,6 +296,7 @@ def forward_factor_picks(
 
 # ── /plays/vrp-stock -----------------------------------------------------------
 
+
 def vrp_picks(
     df: pd.DataFrame,
     max_iv_pctl: float = 80.0,
@@ -308,6 +336,7 @@ def vrp_picks(
 
 # ── orchestrator: earnings_ml.db -> all pick lists -----------------------------
 
+
 def _latest_per_ticker(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty or "ticker" not in df.columns:
         return df
@@ -339,9 +368,11 @@ def generate_picks(as_of: date) -> dict[str, pd.DataFrame]:
     ds_latest = _latest_per_ticker(ds.rename(columns={"signal_date": "scan_date"}))
     vol20 = pd.Series(dtype=float)
     if not ds.empty and "option_volume" in ds.columns:
-        vol20 = (ds.sort_values("signal_date")
-                 .groupby("ticker")["option_volume"]
-                 .apply(lambda s: s.dropna().tail(20).mean()))
+        vol20 = (
+            ds.sort_values("signal_date")
+            .groupby("ticker")["option_volume"]
+            .apply(lambda s: s.dropna().tail(20).mean())
+        )
 
     def ds_col(name: str) -> pd.Series:
         """latest daily_signals column as a ticker-indexed series (may be empty)."""
@@ -352,16 +383,18 @@ def generate_picks(as_of: date) -> dict[str, pd.DataFrame]:
     # ── earnings (short vol) ──
     earnings_in = pd.DataFrame()
     if not latest.empty:
-        earnings_in = pd.DataFrame({
-            "ticker": latest["ticker"],
-            "announcement_date": latest.get("earnings_date"),
-            "announcement_time": latest.get("timing", pd.Series(dtype="object")).map(_TIMING_MAP),
-            "is_confirmed": latest.get("timing", pd.Series(dtype="object")).notna(),
-            "implied_move": latest.get("expected_move_pct"),
-            "option_volume": latest["ticker"].map(vol20),
-            "term_structure_slope": latest.get("term_slope"),
-            "iv_rv": latest.get("iv30_rv30"),
-        })
+        earnings_in = pd.DataFrame(
+            {
+                "ticker": latest["ticker"],
+                "announcement_date": latest.get("earnings_date"),
+                "announcement_time": latest.get("timing", pd.Series(dtype="object")).map(_TIMING_MAP),
+                "is_confirmed": latest.get("timing", pd.Series(dtype="object")).notna(),
+                "implied_move": latest.get("expected_move_pct"),
+                "option_volume": latest["ticker"].map(vol20),
+                "term_structure_slope": latest.get("term_slope"),
+                "iv_rv": latest.get("iv30_rv30"),
+            }
+        )
         # historical move stats from the snapshots table's own outcome history
         if "actual_move_pct" in snaps.columns:
             hist = snaps[snaps["actual_move_pct"].notna()]
@@ -372,10 +405,9 @@ def generate_picks(as_of: date) -> dict[str, pd.DataFrame]:
                     historical_events_count=("actual_move_pct", "size"),
                 )
                 earnings_in = earnings_in.merge(stats, on="ticker", how="left")
-        earnings_in["implied_vs_avg_realized"] = (
-            pd.to_numeric(earnings_in["implied_move"], errors="coerce")
-            - pd.to_numeric(earnings_in.get("avg_realized_move"), errors="coerce")
-        )
+        earnings_in["implied_vs_avg_realized"] = pd.to_numeric(
+            earnings_in["implied_move"], errors="coerce"
+        ) - pd.to_numeric(earnings_in.get("avg_realized_move"), errors="coerce")
 
     # ── forward factors ──
     ff_legacy = ff_snapshots_as_of_df(cutoff)
@@ -384,28 +416,32 @@ def generate_picks(as_of: date) -> dict[str, pd.DataFrame]:
     ff_latest = _latest_per_ticker(ff)
     ff_in = pd.DataFrame()
     if not ff_latest.empty:
-        ff_in = pd.DataFrame({
-            "ticker": ff_latest["ticker"],
-            "next_earnings_date": ff_latest.get("earnings_date"),
-            "front_iv": ff_latest.get("t1_iv"),
-            "back_iv": ff_latest.get("t2_iv"),
-            "t1_dte": ff_latest.get("t1_dte"),
-            "t2_dte": ff_latest.get("t2_dte"),
-            "forward_iv": ff_latest.get("sigma_fwd"),
-            "option_volume": ff_latest["ticker"].map(vol20),
-        })
+        ff_in = pd.DataFrame(
+            {
+                "ticker": ff_latest["ticker"],
+                "next_earnings_date": ff_latest.get("earnings_date"),
+                "front_iv": ff_latest.get("t1_iv"),
+                "back_iv": ff_latest.get("t2_iv"),
+                "t1_dte": ff_latest.get("t1_dte"),
+                "t2_dte": ff_latest.get("t2_dte"),
+                "forward_iv": ff_latest.get("sigma_fwd"),
+                "option_volume": ff_latest["ticker"].map(vol20),
+            }
+        )
 
     # ── vrp ──
     vrp_in = pd.DataFrame()
     if not latest.empty:
-        vrp_in = pd.DataFrame({
-            "ticker": latest["ticker"],
-            "iv_pctl_1y": latest["ticker"].map(ds_col("iv_pctl_1y")),
-            "iv_rv": latest.get("iv30_rv30"),
-            "option_volume": latest["ticker"].map(vol20),
-            "next_earnings_date": latest.get("earnings_date"),
-            "term_structure_slope": latest.get("term_slope"),
-        })
+        vrp_in = pd.DataFrame(
+            {
+                "ticker": latest["ticker"],
+                "iv_pctl_1y": latest["ticker"].map(ds_col("iv_pctl_1y")),
+                "iv_rv": latest.get("iv30_rv30"),
+                "option_volume": latest["ticker"].map(vol20),
+                "next_earnings_date": latest.get("earnings_date"),
+                "term_structure_slope": latest.get("term_slope"),
+            }
+        )
 
     # ── momentum-skew ──
     # Fed by daily_signals (collect_daily_signals.py). skew_zscore/iv_pctl need
@@ -413,19 +449,23 @@ def generate_picks(as_of: date) -> dict[str, pd.DataFrame]:
     # excludes the row) until the collector has run long enough.
     momentum_in = pd.DataFrame(columns=MOMENTUM_SKEW_COLUMNS)
     if not ds_latest.empty:
-        earn_dates = (latest.set_index("ticker")["earnings_date"]
-                      if not latest.empty and "earnings_date" in latest.columns
-                      else pd.Series(dtype=object))
-        momentum_in = pd.DataFrame({
-            "ticker": ds_latest["ticker"],
-            "next_earnings_date": ds_latest["ticker"].map(earn_dates),
-            "option_volume": ds_latest["ticker"].map(vol20),
-            "ts_momentum": ds_latest.get("ts_momentum"),
-            "relative_momentum": ds_latest.get("relative_momentum"),
-            "skew_value": ds_latest.get("skew_25d"),
-            "skew_zscore": ds_latest.get("skew_zscore"),
-            "skew_mean": ds_latest.get("skew_mean"),
-        })
+        earn_dates = (
+            latest.set_index("ticker")["earnings_date"]
+            if not latest.empty and "earnings_date" in latest.columns
+            else pd.Series(dtype=object)
+        )
+        momentum_in = pd.DataFrame(
+            {
+                "ticker": ds_latest["ticker"],
+                "next_earnings_date": ds_latest["ticker"].map(earn_dates),
+                "option_volume": ds_latest["ticker"].map(vol20),
+                "ts_momentum": ds_latest.get("ts_momentum"),
+                "relative_momentum": ds_latest.get("relative_momentum"),
+                "skew_value": ds_latest.get("skew_25d"),
+                "skew_zscore": ds_latest.get("skew_zscore"),
+                "skew_mean": ds_latest.get("skew_mean"),
+            }
+        )
 
     return {
         "earnings": earnings_picks(earnings_in, as_of=as_of),

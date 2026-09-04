@@ -38,9 +38,9 @@ class ReconcileReport:
     run_at: str = ""
     broker_count: int = 0
     matched: int = 0
-    orphans: list[str] = field(default_factory=list)       # at broker, unknown locally
+    orphans: list[str] = field(default_factory=list)  # at broker, unknown locally
     closed_externally: list[str] = field(default_factory=list)  # local open, gone at broker
-    assignments: list[str] = field(default_factory=list)   # stock under a short-call ticker
+    assignments: list[str] = field(default_factory=list)  # stock under a short-call ticker
     errors: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
@@ -69,7 +69,9 @@ class Reconciler:
                 except Exception as cancel_exc:
                     # exc-policy: keep broad, ensure visibility of orphaned limit orders
                     record_event("silent_failure", f"reconcile cancel_hanging_orders: {cancel_exc}")
-                    logger.error("reconcile: failed to cancel hanging order %s: %s", oid, cancel_exc, exc_info=True)
+                    logger.error(
+                        "reconcile: failed to cancel hanging order %s: %s", oid, cancel_exc, exc_info=True
+                    )
         except Exception as exc:
             # exc-policy: keep broad, ensure visibility of background job errors
             record_event("silent_failure", f"reconcile cancel_hanging_orders outer: {exc}")
@@ -112,13 +114,16 @@ class Reconciler:
             local = local_by_symbol.get(sym)
             strategy = local["strategy"] if local else "unmanaged"
             alpaca_positions_insert(
-                ts=ts, symbol=sym,
-                qty=_f(pos.get("qty")), side=pos.get("side"),
+                ts=ts,
+                symbol=sym,
+                qty=_f(pos.get("qty")),
+                side=pos.get("side"),
                 avg_entry_price=_f(pos.get("avg_entry_price")),
                 current_price=_f(pos.get("current_price")),
                 market_value=_f(pos.get("market_value")),
                 unrealized_pl=_f(pos.get("unrealized_pl")),
-                strategy=strategy, managed=1 if local else 0,
+                strategy=strategy,
+                managed=1 if local else 0,
             )
 
         # 2. Matched positions.
@@ -132,12 +137,18 @@ class Reconciler:
         for sym in still_orphans:
             report.orphans.append(sym)
             pos = broker_by_symbol[sym]
-            self._event("orphan_found", sym, "unmanaged",
-                        qty=_f(pos.get("qty")), price=_f(pos.get("current_price")),
-                        detail="position at broker with no local record")
+            self._event(
+                "orphan_found",
+                sym,
+                "unmanaged",
+                qty=_f(pos.get("qty")),
+                price=_f(pos.get("current_price")),
+                detail="position at broker with no local record",
+            )
             logger.warning("reconcile: orphan position %s (qty=%s)", sym, pos.get("qty"))
         if report.orphans:
             from framework.alerts import DEDUPER
+
             shown = ", ".join(report.orphans[:8])
             extra = f" (+{len(report.orphans) - 8} more)" if len(report.orphans) > 8 else ""
             DEDUPER.emit(
@@ -150,18 +161,24 @@ class Reconciler:
             row = local_by_symbol[sym]
             report.closed_externally.append(sym)
             managed_positions_close_by_id(row["id"], closed_at=ts)
-            self._event("close_detected", sym, row["strategy"],
-                        qty=row["qty"], detail="position no longer at broker; marked closed")
+            self._event(
+                "close_detected",
+                sym,
+                row["strategy"],
+                qty=row["qty"],
+                detail="position no longer at broker; marked closed",
+            )
             logger.info("reconcile: %s closed externally (strategy=%s)", sym, row["strategy"])
         if report.closed_externally:
             from framework.alerts import DEDUPER
+
             shown = ", ".join(report.closed_externally[:8])
-            extra = (f" (+{len(report.closed_externally) - 8} more)"
-                     if len(report.closed_externally) > 8 else "")
+            extra = (
+                f" (+{len(report.closed_externally) - 8} more)" if len(report.closed_externally) > 8 else ""
+            )
             DEDUPER.emit(
                 "missing",
-                f"⚠️ {len(report.closed_externally)} local position(s) missing at broker: "
-                f"{shown}{extra}",
+                f"⚠️ {len(report.closed_externally)} local position(s) missing at broker: {shown}{extra}",
             )
 
         # 5. Assignment: stock (no OCC parse) at broker under a ticker that
@@ -169,15 +186,15 @@ class Reconciler:
         assigned = classify_assignments(broker_positions, local_open)
         for sym in assigned:
             report.assignments.append(sym)
-            self._event("assignment_detected", sym, "unmanaged",
-                        detail="stock position under a short-call ticker")
+            self._event(
+                "assignment_detected", sym, "unmanaged", detail="stock position under a short-call ticker"
+            )
             logger.warning("reconcile: assignment %s", sym)
 
         logger.info("reconcile: %s", report.summary())
         return report
 
-    def _adopt_ff_ladder_orphans(self, orphans: list[str],
-                                 broker_by_symbol: dict) -> list[str]:
+    def _adopt_ff_ladder_orphans(self, orphans: list[str], broker_by_symbol: dict) -> list[str]:
         """Bind broker legs that match a recent ff_ladders row into managed_positions.
 
         Expired/disarmed ladders that filled after we stopped polling used to
@@ -188,6 +205,7 @@ class Reconciler:
         if not table_exists("ff_ladders"):
             return list(orphans)
         import json as _json
+
         try:
             rows = ff_ladders_recent(80)
         except Exception as exc:
@@ -197,6 +215,7 @@ class Reconciler:
             return list(orphans)
         remaining = set(orphans)
         from .managed import record_open_positions
+
         for row in rows:
             try:
                 cand = _json.loads(row["candidate_json"] or "{}")
@@ -212,24 +231,31 @@ class Reconciler:
                 if not sym or sym not in remaining:
                     continue
                 pos = broker_by_symbol.get(sym) or {}
-                legs.append({
-                    "symbol": sym, "side": side,
-                    "ratio_qty": abs(_f(pos.get("qty")) or 1),
-                    "option_type": "call",
-                    "strike": cand.get("strike"),
-                    "expiry": cand.get("near_expiry") if sym == near else cand.get("far_expiry"),
-                })
+                legs.append(
+                    {
+                        "symbol": sym,
+                        "side": side,
+                        "ratio_qty": abs(_f(pos.get("qty")) or 1),
+                        "option_type": "call",
+                        "strike": cand.get("strike"),
+                        "expiry": cand.get("near_expiry") if sym == near else cand.get("far_expiry"),
+                    }
+                )
             if not legs:
                 continue
             try:
                 record_open_positions(
-                    legs, "ff_ladder",
+                    legs,
+                    "ff_ladder",
                     group_id=str(row["order_id"] or row["id"]),
                     order_id=row["order_id"],
                     entry_price=_f((broker_by_symbol.get(hit[0]) or {}).get("avg_entry_price")),
-                    metadata={"side": "CALENDAR", "credit": False,
-                              "earnings_date": cand.get("earnings_date"),
-                              "adopted_from": "ff_ladders"},
+                    metadata={
+                        "side": "CALENDAR",
+                        "credit": False,
+                        "earnings_date": cand.get("earnings_date"),
+                        "adopted_from": "ff_ladders",
+                    },
                 )
             except Exception as exc:
                 # exc-policy: keep broad, record failure
@@ -238,18 +264,28 @@ class Reconciler:
                 continue
             for sym in hit:
                 remaining.discard(sym)
-                self._event("orphan_adopted", sym, "ff_ladder",
-                            detail=f"auto-adopted from ff_ladders id={row['id']}")
-                logger.info("reconcile: adopted ladder orphan %s (ff_ladders %s)",
-                            sym, row["id"])
+                self._event(
+                    "orphan_adopted", sym, "ff_ladder", detail=f"auto-adopted from ff_ladders id={row['id']}"
+                )
+                logger.info("reconcile: adopted ladder orphan %s (ff_ladders %s)", sym, row["id"])
         return list(remaining)
 
-    def _event(self, event_type: str, symbol: str, strategy: str | None,
-               qty: float | None = None, price: float | None = None,
-               detail: str = "") -> None:
+    def _event(
+        self,
+        event_type: str,
+        symbol: str,
+        strategy: str | None,
+        qty: float | None = None,
+        price: float | None = None,
+        detail: str = "",
+    ) -> None:
         trade_events_insert(
-            event_type, symbol=symbol, strategy=strategy,
-            qty=qty, price=price, detail=detail,
+            event_type,
+            symbol=symbol,
+            strategy=strategy,
+            qty=qty,
+            price=price,
+            detail=detail,
         )
 
 
@@ -263,7 +299,9 @@ def classify_assignments(broker_positions: list, local_open: list) -> list[str]:
     for row in local_open:
         meta = {}
         try:
-            meta = _json.loads(row["metadata"] or "{}") if isinstance(row, dict) or hasattr(row, "keys") else {}
+            meta = (
+                _json.loads(row["metadata"] or "{}") if isinstance(row, dict) or hasattr(row, "keys") else {}
+            )
             if not isinstance(meta, dict):
                 meta = {}
         except (TypeError, ValueError):

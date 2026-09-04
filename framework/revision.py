@@ -1,4 +1,5 @@
 """Code SHA + process start time for /status."""
+
 from __future__ import annotations
 
 import subprocess
@@ -14,7 +15,9 @@ def code_sha(cwd: Path | None = None) -> str:
         r = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
             cwd=str(cwd or _REPO),
-            capture_output=True, text=True, timeout=2,
+            capture_output=True,
+            text=True,
+            timeout=2,
         )
         sha = (r.stdout or "").strip()
         return sha or "unknown"

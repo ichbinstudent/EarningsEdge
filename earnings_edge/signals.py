@@ -82,8 +82,15 @@ def enrich_chain_with_bs(
         price = row.get("midpoint")
         if price is None or pd.isna(price):
             price = row.get("close")
-        if (ref is None or expiry is None or strike is None or pd.isna(strike)
-                or price is None or pd.isna(price) or ctype not in ("call", "put")):
+        if (
+            ref is None
+            or expiry is None
+            or strike is None
+            or pd.isna(strike)
+            or price is None
+            or pd.isna(price)
+            or ctype not in ("call", "put")
+        ):
             continue
         T = max((expiry - ref).days, 0) / 365.0
         if T <= 0 or price <= 0:
@@ -98,7 +105,8 @@ def enrich_chain_with_bs(
     return out
 
 
-def compute_chain_signals(    chain: pd.DataFrame,
+def compute_chain_signals(
+    chain: pd.DataFrame,
     *,
     as_of: date | str,
     min_dte: int = DEFAULT_MIN_DTE,
@@ -146,8 +154,9 @@ def compute_chain_signals(    chain: pd.DataFrame,
     return out
 
 
-def compute_iv_percentile(history: Sequence[float], current: float,
-                          min_obs: int = MIN_HISTORY) -> float | None:
+def compute_iv_percentile(
+    history: Sequence[float], current: float, min_obs: int = MIN_HISTORY
+) -> float | None:
     """Percentile (0-100) of *current* within *history*; None if thin."""
     hist = [float(h) for h in history if h is not None and np.isfinite(h)]
     if len(hist) < min_obs or current is None or not np.isfinite(current):
@@ -157,8 +166,9 @@ def compute_iv_percentile(history: Sequence[float], current: float,
     return float(100.0 * (below + 0.5 * ties) / len(hist))
 
 
-def compute_zscore(history: Sequence[float], current: float,
-                   min_obs: int = MIN_HISTORY) -> tuple[float | None, float | None]:
+def compute_zscore(
+    history: Sequence[float], current: float, min_obs: int = MIN_HISTORY
+) -> tuple[float | None, float | None]:
     """(z-score, mean) of *current* vs *history*; (None, None) if thin."""
     hist = [float(h) for h in history if h is not None and np.isfinite(h)]
     if len(hist) < min_obs or current is None or not np.isfinite(current):
@@ -178,8 +188,7 @@ def compute_ts_momentum(bars: Sequence[dict]) -> float | None:
     Momentum = close[-1 - skip] / close[0] - 1 over the lookback window;
     None when there aren't at least MOM_MIN_BARS bars.
     """
-    closes = [float(b["c"]) for b in bars
-              if b.get("c") is not None and float(b.get("c")) > 0]
+    closes = [float(b["c"]) for b in bars if b.get("c") is not None and float(b.get("c")) > 0]
     if len(closes) < MOM_MIN_BARS:
         return None
     window = closes[-MOM_LOOKBACK_BARS:]
@@ -187,8 +196,7 @@ def compute_ts_momentum(bars: Sequence[dict]) -> float | None:
     return float(end / window[0] - 1.0)
 
 
-def relative_momentum(ts_momentum: float | None,
-                      benchmark_momentum: float | None) -> float | None:
+def relative_momentum(ts_momentum: float | None, benchmark_momentum: float | None) -> float | None:
     """(1 + ticker) / (1 + benchmark); > 1 means outperforming."""
     if ts_momentum is None or benchmark_momentum in (None, -1.0):
         return None
@@ -258,6 +266,7 @@ def contract_market(
         T = max((date.fromisoformat(expiry_iso) - ref).days, 0) / 365.0
         if T > 0:
             from .option_math import black_scholes_delta, implied_volatility
+
             solved = implied_volatility(float(price), spot, float(strike), T, r, kind)
             if solved is not None and not (isinstance(solved, float) and np.isnan(solved)):
                 iv = float(solved)

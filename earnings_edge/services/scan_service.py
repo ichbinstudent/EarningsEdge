@@ -97,12 +97,7 @@ class ScanService:
         ``success=0``).
         """
         started = time.monotonic()
-        scan_timestamp = (
-            datetime.now(UTC)
-            .replace(microsecond=0)
-            .isoformat()
-            .replace("+00:00", "Z")
-        )
+        scan_timestamp = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         stats: dict[str, Any] = {
             "candidate_count": 0,
             "tier1_count": 0,
@@ -120,9 +115,7 @@ class ScanService:
             stats["duration_secs"] = round(time.monotonic() - started, 3)
             if stats["candidate_count"] == 0:
                 error = "No candidates (calendar/fetch empty or failed)"
-                scan_run_id = self._log_scan_run(
-                    scan_timestamp, trigger, stats, success=False, error=error
-                )
+                scan_run_id = self._log_scan_run(scan_timestamp, trigger, stats, success=False, error=error)
                 return {
                     "success": False,
                     "error": error,
@@ -133,9 +126,7 @@ class ScanService:
             embed = self._build_embed(fields)
             stats["take_count"] = len(take_summary)
             stats["duration_secs"] = round(time.monotonic() - started, 3)
-            scan_run_id = self._log_scan_run(
-                scan_timestamp, trigger, stats, success=True
-            )
+            scan_run_id = self._log_scan_run(scan_timestamp, trigger, stats, success=True)
             return {
                 "success": True,
                 "embed": embed,
@@ -145,9 +136,7 @@ class ScanService:
         except Exception as exc:
             logger.exception("Earnings scan failed")
             stats["duration_secs"] = round(time.monotonic() - started, 3)
-            scan_run_id = self._log_scan_run(
-                scan_timestamp, trigger, stats, success=False, error=str(exc)
-            )
+            scan_run_id = self._log_scan_run(scan_timestamp, trigger, stats, success=False, error=str(exc))
             return {
                 "success": False,
                 "error": str(exc),
@@ -170,9 +159,7 @@ class ScanService:
         """
         fields: list[dict[str, Any]] = []
         take_summary: list[str] = []
-        scored_reports: list[
-            tuple[TickerReport, str | None, float | None]
-        ] = []
+        scored_reports: list[tuple[TickerReport, str | None, float | None]] = []
 
         selected_tickers = set(result.tier1 + result.tier2)
         near_miss_tickers = {nm.ticker for nm in result.near_misses}
@@ -198,9 +185,7 @@ class ScanService:
                 )
             else:
                 # Other non-selected reports: score + persist as not_displayed.
-                self._bot_scanner._score_report(
-                    report, scan_timestamp=scan_timestamp, selected_by_bot=False
-                )
+                self._bot_scanner._score_report(report, scan_timestamp=scan_timestamp, selected_by_bot=False)
 
         # Selected candidates, ordered by model score then actual→fair ratio.
         for report, model_line, _model_score in sorted(
@@ -236,9 +221,7 @@ class ScanService:
             if model_line:
                 lines.append(model_line)
                 if "→ TAKE" in model_line:
-                    take_summary.append(
-                        f"• {report.ticker} ({tier_label}) — {model_line}"
-                    )
+                    take_summary.append(f"• {report.ticker} ({tier_label}) — {model_line}")
             fields.append(
                 {
                     "name": f"{report.ticker} ({tier_label})",
@@ -282,9 +265,7 @@ class ScanService:
             )
 
         if not fields:
-            fields.append(
-                {"name": "No recommendations", "value": "None found today", "inline": False}
-            )
+            fields.append({"name": "No recommendations", "value": "None found today", "inline": False})
 
         return fields, take_summary
 

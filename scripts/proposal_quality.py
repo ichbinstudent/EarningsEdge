@@ -33,6 +33,7 @@ Usage:
 Stdlib-only by default so the script is hermetic and unit-testable; the
 Polygon client is imported lazily inside the fetch path.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -59,6 +60,7 @@ MIN_SIGNIFICANT_N = 20  # below this, report descriptive stats only
 # Minimal Black-Scholes (bisection IV solver)
 # ---------------------------------------------------------------------------
 
+
 def _norm_cdf(x: float) -> float:
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
 
@@ -73,8 +75,7 @@ def bs_call_price(S: float, K: float, T: float, r: float, sigma: float) -> float
     return S * _norm_cdf(d1) - K * math.exp(-r * T) * _norm_cdf(d2)
 
 
-def solve_call_iv(price: float, S: float, K: float, T: float,
-                  r: float = RISK_FREE_RATE) -> float | None:
+def solve_call_iv(price: float, S: float, K: float, T: float, r: float = RISK_FREE_RATE) -> float | None:
     """Bisection IV solve; None when the price is outside no-arb bounds."""
     if T <= 0 or S <= 0 or K <= 0 or price <= 0:
         return None
@@ -100,6 +101,7 @@ def solve_call_iv(price: float, S: float, K: float, T: float,
 # Data access
 # ---------------------------------------------------------------------------
 
+
 def connect_ro(db_path: Path) -> Session:
     configure(db_path)
     return get_session()
@@ -118,23 +120,27 @@ def load_ff_proposals(conn: Session) -> list[dict[str, Any]]:
     if not _table_exists(conn, "ff_ladders"):
         return []
     out = []
-    for row in conn.execute(text(
-        "SELECT id, ticker, candidate_json, order_id, status, armed_by, created_at "
-        "FROM ff_ladders WHERE armed_by IS NOT NULL ORDER BY id"
-    )).mappings():
+    for row in conn.execute(
+        text(
+            "SELECT id, ticker, candidate_json, order_id, status, armed_by, created_at "
+            "FROM ff_ladders WHERE armed_by IS NOT NULL ORDER BY id"
+        )
+    ).mappings():
         cand = json.loads(row["candidate_json"])
-        out.append({
-            "source": "ff_ladder",
-            "proposal_id": row["id"],
-            "ticker": row["ticker"],
-            "earnings_date": cand.get("earnings_date"),
-            "strategy": "ff_ladder",
-            "status": row["status"],
-            "executed": row["status"] == "filled",
-            "order_id": row["order_id"],
-            "created_at": row["created_at"],
-            "candidate": cand,
-        })
+        out.append(
+            {
+                "source": "ff_ladder",
+                "proposal_id": row["id"],
+                "ticker": row["ticker"],
+                "earnings_date": cand.get("earnings_date"),
+                "strategy": "ff_ladder",
+                "status": row["status"],
+                "executed": row["status"] == "filled",
+                "order_id": row["order_id"],
+                "created_at": row["created_at"],
+                "candidate": cand,
+            }
+        )
     return out
 
 
@@ -143,24 +149,29 @@ def load_pending_proposals(conn: Session) -> list[dict[str, Any]]:
     if not _table_exists(conn, "pending_trades"):
         return []
     out = []
-    for row in conn.execute(text(
-        "SELECT id, strategy, ticker, side, trade_json, status, order_json, created_at "
-        "FROM pending_trades WHERE status IN ('executed','error') ORDER BY id"
-    )).mappings():
+    for row in conn.execute(
+        text(
+            "SELECT id, strategy, ticker, side, trade_json, status, order_json, created_at "
+            "FROM pending_trades WHERE status IN ('executed','error') ORDER BY id"
+        )
+    ).mappings():
         trade = json.loads(row["trade_json"])
-        out.append({
-            "source": "pending_trades",
-            "proposal_id": row["id"],
-            "ticker": row["ticker"],
-            "earnings_date": trade.get("earnings_date"),
-            "strategy": row["strategy"],
-            "status": row["status"],
-            "executed": row["status"] == "executed",
-            "order_id": (json.loads(row["order_json"]) or {}).get("order_id")
-            if row["order_json"] else None,
-            "created_at": row["created_at"],
-            "candidate": trade,
-        })
+        out.append(
+            {
+                "source": "pending_trades",
+                "proposal_id": row["id"],
+                "ticker": row["ticker"],
+                "earnings_date": trade.get("earnings_date"),
+                "strategy": row["strategy"],
+                "status": row["status"],
+                "executed": row["status"] == "executed",
+                "order_id": (json.loads(row["order_json"]) or {}).get("order_id")
+                if row["order_json"]
+                else None,
+                "created_at": row["created_at"],
+                "candidate": trade,
+            }
+        )
     return out
 
 
@@ -174,9 +185,9 @@ def load_fills(conn: Session) -> dict[str, dict[str, Any]]:
     if not _table_exists(conn, "managed_positions"):
         return {}
     fills: dict[str, dict[str, Any]] = {}
-    for row in conn.execute(text(
-        "SELECT group_id, entry_price, exit_price, qty, status FROM managed_positions"
-    )).mappings():
+    for row in conn.execute(
+        text("SELECT group_id, entry_price, exit_price, qty, status FROM managed_positions")
+    ).mappings():
         gid = row["group_id"]
         if not gid:
             continue
@@ -191,8 +202,7 @@ def load_fills(conn: Session) -> dict[str, dict[str, Any]]:
     return fills
 
 
-def load_outcome(conn: Session, ticker: str,
-                 earnings_date: str) -> dict[str, Any]:
+def load_outcome(conn: Session, ticker: str, earnings_date: str) -> dict[str, Any]:
     """Best available outcome for (ticker, earnings_date) from snapshots.
 
     Multiple rows can exist per event (different scan_date / data_source);
@@ -201,20 +211,29 @@ def load_outcome(conn: Session, ticker: str,
     """
     if not _table_exists(conn, "snapshots"):
         return {}
-    rows = conn.execute(
-        text(
-            "SELECT scan_date, timing, expected_move_pct, actual_move_pct, "
-            "actual_move_direction, pre_earnings_close, post_earnings_close "
-            "FROM snapshots WHERE ticker=:ticker AND earnings_date=:earnings_date "
-            "ORDER BY scan_date ASC"
-        ),
-        {"ticker": ticker, "earnings_date": earnings_date},
-    ).mappings().fetchall()
+    rows = (
+        conn.execute(
+            text(
+                "SELECT scan_date, timing, expected_move_pct, actual_move_pct, "
+                "actual_move_direction, pre_earnings_close, post_earnings_close "
+                "FROM snapshots WHERE ticker=:ticker AND earnings_date=:earnings_date "
+                "ORDER BY scan_date ASC"
+            ),
+            {"ticker": ticker, "earnings_date": earnings_date},
+        )
+        .mappings()
+        .fetchall()
+    )
     out: dict[str, Any] = {}
     for r in rows:
-        for col in ("timing", "expected_move_pct", "actual_move_pct",
-                    "actual_move_direction", "pre_earnings_close",
-                    "post_earnings_close"):
+        for col in (
+            "timing",
+            "expected_move_pct",
+            "actual_move_pct",
+            "actual_move_direction",
+            "pre_earnings_close",
+            "post_earnings_close",
+        ):
             if r[col] is not None:
                 out[col] = r[col]
     return out
@@ -224,8 +243,8 @@ def load_outcome(conn: Session, ticker: str,
 # Metrics
 # ---------------------------------------------------------------------------
 
-def implied_event_move_pct(candidate: dict[str, Any],
-                           proposal_date: date) -> float | None:
+
+def implied_event_move_pct(candidate: dict[str, Any], proposal_date: date) -> float | None:
     """Implied earnings-event move (%) from stored candidate quotes.
 
     event_var = iv_near^2 * T1 - sigma_fwd^2 * (T1 - tau), solved from the
@@ -249,7 +268,7 @@ def implied_event_move_pct(candidate: dict[str, Any],
     iv_near = solve_call_iv((near_bid + near_ask) / 2.0, spot, strike, T1)
     if iv_near is None:
         return None
-    event_var = iv_near ** 2 * T1 - sigma_fwd ** 2 * (T1 - tau)
+    event_var = iv_near**2 * T1 - sigma_fwd**2 * (T1 - tau)
     if event_var <= 0:
         return None
     return math.sqrt(event_var) * 100.0
@@ -259,7 +278,7 @@ def _binomial_p_two_sided(k: int, n: int, p: float = 0.5) -> float:
     """Two-sided binomial test P(|X - np| >= |k - np|) under H0: hit rate = p."""
     if n <= 0:
         return 1.0
-    probs = [math.comb(n, i) * p ** i * (1 - p) ** (n - i) for i in range(n + 1)]
+    probs = [math.comb(n, i) * p**i * (1 - p) ** (n - i) for i in range(n + 1)]
     observed = probs[k]
     return min(1.0, sum(pr for pr in probs if pr <= observed + 1e-12))
 
@@ -276,13 +295,13 @@ def _binomial_p_two_sided(k: int, n: int, p: float = 0.5) -> float:
 # -2.62/-7.10%. Hit rates on the stored convention are therefore flattering
 # for AMC names; compute the event-window move explicitly.
 
+
 def is_post_market(timing: str | None) -> bool:
     """True when the announcement is after the close on earnings_date."""
     return bool(timing) and "post" in timing.lower()
 
 
-def compute_event_move(bars: list[dict[str, Any]], ed: date,
-                       timing: str | None) -> float | None:
+def compute_event_move(bars: list[dict[str, Any]], ed: date, timing: str | None) -> float | None:
     """Close-to-close realized move (%) across the announcement.
 
     bars: Polygon-style agg dicts (``t`` ms epoch, ``c`` close), ascending.
@@ -328,8 +347,9 @@ def aggregate(trades: list[dict[str, Any]]) -> dict[str, Any]:
     ev_hits = sum(1 for t in ev_scorable if t["hit_event"])
     ev_n = len(ev_scorable)
     pnl_trades = [t for t in executed if t.get("pnl") is not None]
-    ratios = [abs(t["actual_move_pct"]) / t["expected_move_pct"]
-              for t in scorable if t.get("expected_move_pct")]
+    ratios = [
+        abs(t["actual_move_pct"]) / t["expected_move_pct"] for t in scorable if t.get("expected_move_pct")
+    ]
     return {
         "approved": approved,
         "executed": len(executed),
@@ -353,8 +373,10 @@ def aggregate(trades: list[dict[str, Any]]) -> dict[str, Any]:
 # Optional Polygon exit pricing (network — opt-in only)
 # ---------------------------------------------------------------------------
 
-def _fetch_exit_credit(pg: Any, near_symbol: str, far_symbol: str,
-                       ed: date, timing: str | None) -> tuple[float | None, str | None]:
+
+def _fetch_exit_credit(
+    pg: Any, near_symbol: str, far_symbol: str, ed: date, timing: str | None
+) -> tuple[float | None, str | None]:
     """Combo credit at the first close reflecting the announcement.
 
     AMC names are priced from the first session AFTER earnings_date; BMO from
@@ -386,19 +408,30 @@ def _fetch_exit_credit(pg: Any, near_symbol: str, far_symbol: str,
 # Report
 # ---------------------------------------------------------------------------
 
-def build_report(db_path: Path, *, fetch_exit_prices: bool = False,
-                 rate_sleep: float = 13.0) -> dict[str, Any]:
+
+def build_report(
+    db_path: Path, *, fetch_exit_prices: bool = False, rate_sleep: float = 13.0
+) -> dict[str, Any]:
     conn = connect_ro(db_path)
     try:
         proposals = load_ff_proposals(conn) + load_pending_proposals(conn)
         fills = load_fills(conn)
         trades: list[dict[str, Any]] = []
         for p in proposals:
-            t = {k: p[k] for k in ("source", "proposal_id", "ticker", "earnings_date",
-                                   "strategy", "status", "executed")}
+            t = {
+                k: p[k]
+                for k in (
+                    "source",
+                    "proposal_id",
+                    "ticker",
+                    "earnings_date",
+                    "strategy",
+                    "status",
+                    "executed",
+                )
+            }
             cand = p["candidate"]
-            outcome = load_outcome(conn, p["ticker"], p["earnings_date"]) \
-                if p["earnings_date"] else {}
+            outcome = load_outcome(conn, p["ticker"], p["earnings_date"]) if p["earnings_date"] else {}
             t["expected_move_pct"] = outcome.get("expected_move_pct")
             t["actual_move_pct"] = outcome.get("actual_move_pct")
             t["actual_move_direction"] = outcome.get("actual_move_direction")
@@ -410,17 +443,18 @@ def build_report(db_path: Path, *, fetch_exit_prices: bool = False,
             proposal_date = None
             if p["created_at"]:
                 try:
-                    proposal_date = datetime.fromisoformat(
-                        str(p["created_at"]).replace("Z", "+00:00")).date()
+                    proposal_date = datetime.fromisoformat(str(p["created_at"]).replace("Z", "+00:00")).date()
                 except ValueError:
                     proposal_date = None
             t["implied_event_move_pct"] = (
                 implied_event_move_pct(cand, proposal_date)
-                if (p["source"] == "ff_ladder" and proposal_date) else None
+                if (p["source"] == "ff_ladder" and proposal_date)
+                else None
             )
             t["hist_rms_move_pct"] = (
                 round(float(cand["hist_rms_move"]) * 100.0, 4)
-                if cand.get("hist_rms_move") is not None else None
+                if cand.get("hist_rms_move") is not None
+                else None
             )
 
             # win convention: realized move smaller than expected/implied
@@ -438,8 +472,7 @@ def build_report(db_path: Path, *, fetch_exit_prices: bool = False,
             if t["entry_debit"] is None and p["executed"]:
                 t["entry_debit"] = cand.get("entry_price")  # pending_trades est.
             t["qty"] = fill.get("qty") or 1.0
-            t["position_status"] = "closed" if fill.get("closed") else (
-                "open" if fill else None)
+            t["position_status"] = "closed" if fill.get("closed") else ("open" if fill else None)
             t["pnl"] = None
             t["exit_date"] = None
             t["_near_symbol"] = cand.get("near_symbol")
@@ -481,8 +514,7 @@ def build_report(db_path: Path, *, fetch_exit_prices: bool = False,
         conn.close()
 
 
-def _apply_market_data(trades: list[dict[str, Any]], rate_sleep: float,
-                       notes: list[str]) -> None:
+def _apply_market_data(trades: list[dict[str, Any]], rate_sleep: float, notes: list[str]) -> None:
     """Fetch (a) timing-aware realized event moves for ALL approved trades and
     (b) exit leg prices for executed trades, via Polygon (network, paced)."""
     from dotenv import load_dotenv
@@ -504,8 +536,7 @@ def _apply_market_data(trades: list[dict[str, Any]], rate_sleep: float,
         ed = date.fromisoformat(t["earnings_date"])
         timing = t.get("timing")
         # (a) timing-aware realized event move (stock aggs — fast endpoint)
-        bars = pg.daily_bars(t["ticker"], ed - timedelta(days=7),
-                             ed + timedelta(days=6), limit=20)
+        bars = pg.daily_bars(t["ticker"], ed - timedelta(days=7), ed + timedelta(days=6), limit=20)
         move = compute_event_move(bars, ed, timing)
         if move is not None:
             t["event_move_pct"] = round(move, 4)
@@ -549,22 +580,15 @@ def format_text(report: dict[str, Any]) -> str:
             f"({s['event_hit_rate']:.0%})  binomial p={s['event_binomial_p']:.3f} vs 50%"
         )
     if s["mean_actual_over_expected"] is not None:
-        lines.append(
-            f"  mean |actual|/expected move: {s['mean_actual_over_expected']:.2f}"
-        )
+        lines.append(f"  mean |actual|/expected move: {s['mean_actual_over_expected']:.2f}")
     if s["total_pnl"] is not None:
-        lines.append(
-            f"  P&L over {s['pnl_trades']} executed trades: ${s['total_pnl']:+,.2f}"
-        )
+        lines.append(f"  P&L over {s['pnl_trades']} executed trades: ${s['total_pnl']:+,.2f}")
     else:
         lines.append("  P&L: unavailable (run with --fetch-exit-prices)")
     for src, agg in report["by_source"].items():
         hr = f"{agg['hits']}/{agg['scorable']}" if agg["scorable"] else "n/a"
-        pnl = (f"${agg['total_pnl']:+,.2f}" if agg["total_pnl"] is not None else "n/a")
-        lines.append(
-            f"  [{src}] approved={agg['approved']} executed={agg['executed']} "
-            f"hits={hr} pnl={pnl}"
-        )
+        pnl = f"${agg['total_pnl']:+,.2f}" if agg["total_pnl"] is not None else "n/a"
+        lines.append(f"  [{src}] approved={agg['approved']} executed={agg['executed']} hits={hr} pnl={pnl}")
     for note in report["notes"]:
         lines.append(f"  NOTE: {note}")
     return "\n".join(lines)
@@ -576,14 +600,16 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     )
     ap.add_argument("--db", type=Path, default=DEFAULT_DB)
     ap.add_argument("--json", type=Path, default=None, help="write full report JSON")
-    ap.add_argument("--fetch-exit-prices", action="store_true",
-                    help="fetch leg exit prices from Polygon (network, rate-limited)")
+    ap.add_argument(
+        "--fetch-exit-prices",
+        action="store_true",
+        help="fetch leg exit prices from Polygon (network, rate-limited)",
+    )
     ap.add_argument("--rate-sleep", type=float, default=13.0)
     args = ap.parse_args(argv)
 
     configure(args.db)
-    report = build_report(args.db, fetch_exit_prices=args.fetch_exit_prices,
-                          rate_sleep=args.rate_sleep)
+    report = build_report(args.db, fetch_exit_prices=args.fetch_exit_prices, rate_sleep=args.rate_sleep)
     print(format_text(report))
     if args.json:
         args.json.parent.mkdir(parents=True, exist_ok=True)

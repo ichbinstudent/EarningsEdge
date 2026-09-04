@@ -31,17 +31,21 @@ from framework.risk.manager import RiskLimits, RiskManager
 
 # ── Registry -----------------------------------------------------------------
 
+
 def _cfg(name, **over):
-    base = dict(name=name, enabled=True, execution_mode="approval",
-                lifecycle="paper", sizer={}, limits={}, exits=[])
+    base = dict(
+        name=name, enabled=True, execution_mode="approval", lifecycle="paper", sizer={}, limits={}, exits=[]
+    )
     base.update(over)
     return StrategyConfig(**base)
 
 
 def test_registry_limits_override_and_fallback():
-    reg = StrategyRegistry(configs={
-        "tight": _cfg("tight", limits={"max_pct_per_trade": 0.02}),
-    })
+    reg = StrategyRegistry(
+        configs={
+            "tight": _cfg("tight", limits={"max_pct_per_trade": 0.02}),
+        }
+    )
     assert reg.limits_for("tight").max_pct_per_trade == 0.02
     # unconfigured strategy → base defaults
     assert reg.limits_for("unknown").max_pct_per_trade == RiskLimits().max_pct_per_trade
@@ -50,18 +54,23 @@ def test_registry_limits_override_and_fallback():
 
 
 def test_registry_enabled_filter():
-    reg = StrategyRegistry(configs={
-        "on": _cfg("on"), "off": _cfg("off", enabled=False),
-    })
+    reg = StrategyRegistry(
+        configs={
+            "on": _cfg("on"),
+            "off": _cfg("off", enabled=False),
+        }
+    )
     assert reg.enabled_strategies(["on", "off", "unconfigured"]) == ["on", "unconfigured"]
 
 
 def test_registry_sync_lifecycle_preserves_operator_changes(tmp_path):
     configure(tmp_path / "fw.db")
-    reg = StrategyRegistry(configs={
-        "s1": _cfg("s1", lifecycle="paper"),
-        "s2": _cfg("s2", lifecycle="probation"),
-    })
+    reg = StrategyRegistry(
+        configs={
+            "s1": _cfg("s1", lifecycle="paper"),
+            "s2": _cfg("s2", lifecycle="probation"),
+        }
+    )
     assert reg.sync_lifecycle() == 2
     with db_engine.session_scope() as s:
         s.execute(text("UPDATE strategy_state SET lifecycle = 'live' WHERE name = 's1'"))
@@ -73,15 +82,23 @@ def test_registry_sync_lifecycle_preserves_operator_changes(tmp_path):
 
 # ── Bridge risk-gate wiring ----------------------------------------------------
 
+
 def _calendar_trade(entry_price=1.85):
     return Trade(
-        ticker="AAPL", earnings_date=date(2026, 7, 29), scan_date=date(2026, 7, 28),
-        strategy="calendar_call_ml", side="CALENDAR", entry_price=entry_price,
+        ticker="AAPL",
+        earnings_date=date(2026, 7, 29),
+        scan_date=date(2026, 7, 28),
+        strategy="calendar_call_ml",
+        side="CALENDAR",
+        entry_price=entry_price,
         features={
-            "near_strike": 190.0, "far_strike": 190.0,
-            "near_expiry": date(2026, 7, 31), "far_expiry": date(2026, 8, 28),
+            "near_strike": 190.0,
+            "far_strike": 190.0,
+            "near_expiry": date(2026, 7, 31),
+            "far_expiry": date(2026, 8, 28),
         },
-        model_score=0.7, ml_decision="TAKE",
+        model_score=0.7,
+        ml_decision="TAKE",
     )
 
 
@@ -99,8 +116,10 @@ def _risk_bridge(tmp_path, client, limits=None, resolver_limits=None):
     configure(tmp_path / "fw.db")
     resolver = (lambda name: resolver_limits) if resolver_limits else None
     return StrategyBridge(
-        client=client, config=BridgeConfig(),
-        risk_manager=RiskManager(limits=limits), limits_resolver=resolver,
+        client=client,
+        config=BridgeConfig(),
+        risk_manager=RiskManager(limits=limits),
+        limits_resolver=resolver,
     )
 
 
@@ -129,13 +148,17 @@ def test_bridge_est_cost_falls_back_to_midpoint(tmp_path):
     client = _risk_client()
     # midpoint quote: (1.2 + 1.3) / 2 = 1.25 per leg; calendar nets 0 here,
     # so use a DIRECTIONAL_CALL for a positive net debit
-    client.get_option_snapshot.return_value = {
-        "latestQuote": {"bp": 1.2, "ap": 1.3}}
+    client.get_option_snapshot.return_value = {"latestQuote": {"bp": 1.2, "ap": 1.3}}
     trade = Trade(
-        ticker="AAPL", earnings_date=date(2026, 7, 29), scan_date=date(2026, 7, 28),
-        strategy="calendar_call_ml", side="DIRECTIONAL_CALL", entry_price=0.0,
+        ticker="AAPL",
+        earnings_date=date(2026, 7, 29),
+        scan_date=date(2026, 7, 28),
+        strategy="calendar_call_ml",
+        side="DIRECTIONAL_CALL",
+        entry_price=0.0,
         features={"strike": 190.0, "expiry": date(2026, 8, 21)},
-        model_score=0.7, ml_decision="TAKE",
+        model_score=0.7,
+        ml_decision="TAKE",
     )
     # tight per-trade cap: est_cost = 1.25 * 100 = 125 > 0.1% of 50k BP = 50
     tight = RiskLimits(max_pct_per_trade=0.001)
@@ -149,8 +172,7 @@ def test_bridge_limits_resolver_overrides(tmp_path):
     client = _risk_client()
     trade = _calendar_trade(entry_price=1.85)  # est_cost = 185
     # global limits would pass (185 < 10% of 50k); resolver tightens to 0.1%
-    bridge = _risk_bridge(tmp_path, client,
-                          resolver_limits=RiskLimits(max_pct_per_trade=0.001))
+    bridge = _risk_bridge(tmp_path, client, resolver_limits=RiskLimits(max_pct_per_trade=0.001))
     assert bridge.execute_trade(trade) is None
     assert bridge.skip_reasons["risk_veto"] == 1
 
@@ -159,8 +181,7 @@ def test_bridge_halted_killswitch_vetoes(tmp_path):
     configure(tmp_path / "fw.db")
     KillSwitch().trip("test halt", by="test")
     client = _risk_client()
-    bridge = StrategyBridge(client=client, config=BridgeConfig(),
-                            risk_manager=RiskManager())
+    bridge = StrategyBridge(client=client, config=BridgeConfig(), risk_manager=RiskManager())
     assert bridge.execute_trade(_calendar_trade()) is None
     assert bridge.skip_reasons["risk_veto"] == 1
 
@@ -184,7 +205,8 @@ def fw_conn(tmp_path):
             "INSERT INTO snapshots (ticker, earnings_date, scan_date, timing, "
             "actual_move_pct, outcome_fetched_at) "
             "VALUES ('TEST', ?, '2026-01-14', 'Post Market', ?, '2026-01-16')",
-            (f"2026-0{i + 1}-15", mv))
+            (f"2026-0{i + 1}-15", mv),
+        )
     conn.commit()
     yield conn
     conn.close()
@@ -228,13 +250,16 @@ def test_ladder_fill_records_positions_and_risk_entry(fw_conn):
     sides = sorted(p["symbol"] for p in positions)
     assert sides == sorted([cand.near_symbol, cand.far_symbol])
     with db_engine.get_session() as s:
-        entry = s.execute(
-            text("SELECT * FROM risk_events WHERE event_type = 'entry' AND strategy = 'ff_ladder'")
-        ).mappings().first()
+        entry = (
+            s.execute(text("SELECT * FROM risk_events WHERE event_type = 'entry' AND strategy = 'ff_ladder'"))
+            .mappings()
+            .first()
+        )
     assert entry is not None and "cost=" in entry["detail"]
 
 
 # ── Proposal config gating -------------------------------------------------------
+
 
 @pytest.fixture
 def store(tmp_path):
@@ -243,13 +268,20 @@ def store(tmp_path):
 
 def _trade(ticker="AAPL", score=0.61, decision="TAKE"):
     return Trade(
-        ticker=ticker, earnings_date=date(2026, 7, 29), scan_date=date(2026, 7, 28),
-        strategy="calendar_call_ml", side="CALENDAR", entry_price=1.85,
+        ticker=ticker,
+        earnings_date=date(2026, 7, 29),
+        scan_date=date(2026, 7, 28),
+        strategy="calendar_call_ml",
+        side="CALENDAR",
+        entry_price=1.85,
         features={
-            "near_strike": 190.0, "far_strike": 190.0,
-            "near_expiry": date(2026, 7, 31), "far_expiry": date(2026, 8, 28),
+            "near_strike": 190.0,
+            "far_strike": 190.0,
+            "near_expiry": date(2026, 7, 31),
+            "far_expiry": date(2026, 8, 28),
         },
-        model_score=score, ml_decision=decision,
+        model_score=score,
+        ml_decision=decision,
     )
 
 
@@ -263,8 +295,7 @@ def test_build_proposals_respects_disabled_config(store):
     reg = StrategyRegistry(configs={"calendar_call_ml": _cfg("calendar_call_ml", enabled=False)})
     source = MagicMock(return_value=[_trade()])
     with patch("framework.core.registry.get_registry", lambda: reg):
-        rows = build_proposals(store, strategies=["calendar_call_ml"],
-                               trade_source=source)
+        rows = build_proposals(store, strategies=["calendar_call_ml"], trade_source=source)
     assert rows == []
     source.assert_not_called()  # disabled before the signal source is consulted
 
@@ -275,6 +306,7 @@ def test_proposal_card_tagged_when_halted(store, tmp_path):
     reg = StrategyRegistry(configs={})
     client = MagicMock()
     client.position_symbols.return_value = set()
+
     # preflight_combo requires a live Alpaca book per leg (near sell, far buy).
     def _bulk(*symbols):
         out = {}
@@ -282,12 +314,13 @@ def test_proposal_card_tagged_when_halted(store, tmp_path):
             mid = 5.04 if i == 0 else 5.54
             out[s] = {"latestQuote": {"bp": round(mid - 0.04, 2), "ap": round(mid + 0.04, 2)}}
         return out
+
     client.get_option_snapshots_bulk.side_effect = _bulk
     bridge = StrategyBridge(client=client, config=BridgeConfig())
     with patch("framework.core.registry.get_registry", lambda: reg):
-        rows = build_proposals(store, strategies=["calendar_call_ml"],
-                               bridge=bridge,
-                               trade_source=lambda name: [_trade()])
+        rows = build_proposals(
+            store, strategies=["calendar_call_ml"], bridge=bridge, trade_source=lambda name: [_trade()]
+        )
     assert len(rows) == 1
     assert "KILL SWITCH HALTED" in rows[0]["card_text"]
 
@@ -298,12 +331,27 @@ def test_execute_proposal_records_managed_positions(store):
     client.position_symbols.return_value = set()
     client.get_option_snapshot.return_value = {}
     client.submit_multi_leg_order.return_value = {
-        "id": "ord-1", "status": "filled", "filled_qty": 1, "filled_avg_price": 1.85,
+        "id": "ord-1",
+        "status": "filled",
+        "filled_qty": 1,
+        "filled_avg_price": 1.85,
         "legs": [
-            {"symbol": "AAPL260731C00190000", "side": "sell", "ratio_qty": 1,
-             "option_type": "call", "strike": 190.0, "expiry": date(2026, 7, 31)},
-            {"symbol": "AAPL260828C00190000", "side": "buy", "ratio_qty": 1,
-             "option_type": "call", "strike": 190.0, "expiry": date(2026, 8, 28)},
+            {
+                "symbol": "AAPL260731C00190000",
+                "side": "sell",
+                "ratio_qty": 1,
+                "option_type": "call",
+                "strike": 190.0,
+                "expiry": date(2026, 7, 31),
+            },
+            {
+                "symbol": "AAPL260828C00190000",
+                "side": "buy",
+                "ratio_qty": 1,
+                "option_type": "call",
+                "strike": 190.0,
+                "expiry": date(2026, 8, 28),
+            },
         ],
     }
     bridge = StrategyBridge(client=client, config=BridgeConfig())
@@ -319,6 +367,7 @@ def test_execute_proposal_records_managed_positions(store):
 
 # ── Credit risk basis (Part B) -------------------------------------------------
 
+
 def test_structure_cost_debit_unchanged(tmp_path):
     client = _risk_client()
     bridge = _risk_bridge(tmp_path, client)
@@ -329,23 +378,35 @@ def test_structure_cost_debit_unchanged(tmp_path):
 
 def _condor_trade(credit=1.50):
     return Trade(
-        ticker="AAPL", earnings_date=date(2026, 7, 29), scan_date=date(2026, 7, 28),
-        strategy="short_straddle", side="IRON_CONDOR", entry_price=credit,
+        ticker="AAPL",
+        earnings_date=date(2026, 7, 29),
+        scan_date=date(2026, 7, 28),
+        strategy="short_straddle",
+        side="IRON_CONDOR",
+        entry_price=credit,
         features={
-            "short_put": 180.0, "long_put": 170.0,
-            "short_call": 200.0, "long_call": 210.0,
+            "short_put": 180.0,
+            "long_put": 170.0,
+            "short_call": 200.0,
+            "long_call": 210.0,
             "expiry": date(2026, 8, 21),
         },
-        model_score=0.6, ml_decision="TAKE",
+        model_score=0.6,
+        ml_decision="TAKE",
     )
 
 
 def _straddle_trade(credit=4.0):
     return Trade(
-        ticker="AAPL", earnings_date=date(2026, 7, 29), scan_date=date(2026, 7, 28),
-        strategy="short_straddle", side="SHORT_STRADDLE", entry_price=credit,
+        ticker="AAPL",
+        earnings_date=date(2026, 7, 29),
+        scan_date=date(2026, 7, 28),
+        strategy="short_straddle",
+        side="SHORT_STRADDLE",
+        entry_price=credit,
         features={"atm_strike": 190.0, "expiry": date(2026, 8, 21)},
-        model_score=0.6, ml_decision="TAKE",
+        model_score=0.6,
+        ml_decision="TAKE",
     )
 
 

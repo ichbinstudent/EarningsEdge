@@ -20,9 +20,12 @@ logger = logging.getLogger("framework.core.registry")
 
 
 class StrategyRegistry:
-    def __init__(self, configs: dict[str, StrategyConfig] | None = None,
-                 config_dir: Path | None = None,
-                 base_limits: RiskLimits | None = None):
+    def __init__(
+        self,
+        configs: dict[str, StrategyConfig] | None = None,
+        config_dir: Path | None = None,
+        base_limits: RiskLimits | None = None,
+    ):
         self.configs = configs if configs is not None else load_strategy_configs(config_dir)
         self.base_limits = base_limits or RiskLimits()
 
@@ -68,11 +71,15 @@ class StrategyRegistry:
         from datetime import datetime
 
         from earnings_edge.db import strategy_state_insert_ignore
+
         now = datetime.now(UTC).isoformat()
         seeded = 0
         for name, cfg in self.configs.items():
             seeded += strategy_state_insert_ignore(
-                name, cfg.lifecycle, updated_at=now, updated_by="config",
+                name,
+                cfg.lifecycle,
+                updated_at=now,
+                updated_by="config",
             )
         if seeded:
             logger.info("lifecycle seeded from configs for %d strategies", seeded)

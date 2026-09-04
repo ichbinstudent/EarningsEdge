@@ -16,6 +16,7 @@ from earnings_edge.backtest.realism import (
 
 # ── ibkr_commission ----------------------------------------------------------
 
+
 def test_commission_tier_boundaries():
     # worst-case IBKR tiers: <$0.05 -> $0.25, $0.05-$0.10 -> $0.50, >=$0.10 -> $0.65
     assert ibkr_commission(0.049) == pytest.approx(0.25)
@@ -32,6 +33,7 @@ def test_commission_scales_with_contracts():
 
 
 # ── realistic_fill -----------------------------------------------------------
+
 
 def test_fill_buy_above_mid_sell_below_mid():
     buy = realistic_fill(mid=1.00, bid=0.90, ask=1.10, side="buy")
@@ -50,32 +52,45 @@ def test_fill_default_participation_is_half_spread_fraction():
 
 def test_fill_never_worse_than_far_touch():
     # extreme parameters still clamp to the ask (buy) / bid (sell)
-    buy = realistic_fill(mid=1.00, bid=0.50, ask=1.50, volume=1, open_interest=1,
-                         is_otm=True, side="buy", spread_participation=2.0)
-    sell = realistic_fill(mid=1.00, bid=0.50, ask=1.50, volume=1, open_interest=1,
-                          is_otm=True, side="sell", spread_participation=2.0)
+    buy = realistic_fill(
+        mid=1.00,
+        bid=0.50,
+        ask=1.50,
+        volume=1,
+        open_interest=1,
+        is_otm=True,
+        side="buy",
+        spread_participation=2.0,
+    )
+    sell = realistic_fill(
+        mid=1.00,
+        bid=0.50,
+        ask=1.50,
+        volume=1,
+        open_interest=1,
+        is_otm=True,
+        side="sell",
+        spread_participation=2.0,
+    )
     assert buy == pytest.approx(1.50)
     assert sell == pytest.approx(0.50)
 
 
 def test_fill_empty_book_may_cross_the_touch():
     # volume == 0 AND open_interest == 0 -> empty book, model walks past the touch
-    fill = realistic_fill(mid=1.00, bid=0.90, ask=1.10, volume=0, open_interest=0,
-                          is_otm=True, side="buy")
+    fill = realistic_fill(mid=1.00, bid=0.90, ask=1.10, volume=0, open_interest=0, is_otm=True, side="buy")
     assert fill > 1.10
 
 
 def test_fill_lower_volume_worse_fill():
-    liquid = realistic_fill(mid=1.00, bid=0.90, ask=1.10, volume=100_000,
-                            open_interest=100_000, side="buy")
-    thin = realistic_fill(mid=1.00, bid=0.90, ask=1.10, volume=10,
-                          open_interest=10, side="buy")
+    liquid = realistic_fill(mid=1.00, bid=0.90, ask=1.10, volume=100_000, open_interest=100_000, side="buy")
+    thin = realistic_fill(mid=1.00, bid=0.90, ask=1.10, volume=10, open_interest=10, side="buy")
     assert thin > liquid
     # same for sells: thinner book -> lower fill
-    liquid_s = realistic_fill(mid=1.00, bid=0.90, ask=1.10, volume=100_000,
-                              open_interest=100_000, side="sell")
-    thin_s = realistic_fill(mid=1.00, bid=0.90, ask=1.10, volume=10,
-                            open_interest=10, side="sell")
+    liquid_s = realistic_fill(
+        mid=1.00, bid=0.90, ask=1.10, volume=100_000, open_interest=100_000, side="sell"
+    )
+    thin_s = realistic_fill(mid=1.00, bid=0.90, ask=1.10, volume=10, open_interest=10, side="sell")
     assert thin_s < liquid_s
 
 
@@ -102,9 +117,9 @@ def test_fill_rejects_crossed_book():
 
 # ── regt_margin --------------------------------------------------------------
 
+
 def test_regt_long_option_paid_in_full():
-    legs = [OptionLeg(action="buy", kind="call", strike=100.0,
-                      underlying_price=100.0, premium=3.00)]
+    legs = [OptionLeg(action="buy", kind="call", strike=100.0, underlying_price=100.0, premium=3.00)]
     assert regt_margin(legs) == pytest.approx(300.0)
 
 
@@ -119,23 +134,20 @@ def test_regt_long_straddle_sums_premiums():
 def test_regt_short_put_hand_computed():
     # base = strike = 95; OTM amount = 100 - 95 = 5
     # max(0.20*95 - 5, 0.10*95) * 100 + 2.00*100 = max(14, 9.5)*100 + 200 = 1600
-    legs = [OptionLeg(action="sell", kind="put", strike=95.0,
-                      underlying_price=100.0, premium=2.00)]
+    legs = [OptionLeg(action="sell", kind="put", strike=95.0, underlying_price=100.0, premium=2.00)]
     assert regt_margin(legs) == pytest.approx(1600.0)
 
 
 def test_regt_short_call_hand_computed():
     # base = underlying = 100; OTM amount = 105 - 100 = 5
     # max(0.20*100 - 5, 0.10*100) * 100 + 2.00*100 = max(15, 10)*100 + 200 = 1700
-    legs = [OptionLeg(action="sell", kind="call", strike=105.0,
-                      underlying_price=100.0, premium=2.00)]
+    legs = [OptionLeg(action="sell", kind="call", strike=105.0, underlying_price=100.0, premium=2.00)]
     assert regt_margin(legs) == pytest.approx(1700.0)
 
 
 def test_regt_short_call_itm_uses_20pct_floor():
     # ITM call: OTM amount = 0 -> max(0.20*100, 0.10*100)*100 + 12*100 = 3200
-    legs = [OptionLeg(action="sell", kind="call", strike=90.0,
-                      underlying_price=100.0, premium=12.00)]
+    legs = [OptionLeg(action="sell", kind="call", strike=90.0, underlying_price=100.0, premium=12.00)]
     assert regt_margin(legs) == pytest.approx(3200.0)
 
 
@@ -169,6 +181,7 @@ def test_regt_short_strangle_sums_naked_margins():
 
 
 # ── capacity_cap -------------------------------------------------------------
+
 
 def test_capacity_cap_basic():
     assert capacity_cap(volume=10_000, open_interest=5_000, participation=0.10) == 500

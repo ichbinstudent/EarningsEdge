@@ -12,6 +12,7 @@ and returns a list of Trade objects with fill prices and PnL.
 The strategies are intentionally kept thin — they don't touch the DB or network.
 All data is passed in via DataBundle so they can be unit-tested without real data.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -53,13 +54,18 @@ def list_strategies() -> list[str]:
 # Strategy 1: Calendar-call (existing baseline, with ML filter)
 # ---------------------------------------------------------------------------
 
+
 class CalendarCallStrategy:
     """Calendar-call trade with existing ML filter (ridge regression, target=return_on_debit)."""
+
     name = "calendar_call_ml"
 
-    def __init__(self, model_path: str = "data/models/calendar_call_filter_ridge_allfeatures.joblib",
-                 threshold: float = 0.0,
-                 min_rows: int = 30):
+    def __init__(
+        self,
+        model_path: str = "data/models/calendar_call_filter_ridge_allfeatures.joblib",
+        threshold: float = 0.0,
+        min_rows: int = 30,
+    ):
         self.model_path = model_path
         self.threshold = threshold
         self.min_rows = min_rows
@@ -107,7 +113,11 @@ class CalendarCallStrategy:
             if model is not None:
                 try:
                     result = score_calendar_trade(
-                        artifact={"features": model["features"], "pipeline": model["pipeline"], "score_kind": model.get("score_kind", "regression")},
+                        artifact={
+                            "features": model["features"],
+                            "pipeline": model["pipeline"],
+                            "score_kind": model.get("score_kind", "regression"),
+                        },
                         row=enriched,
                         threshold=self.threshold,
                     )
@@ -120,20 +130,24 @@ class CalendarCallStrategy:
             rod = float(row.get("return_on_debit") or 0.0)
             decision = "TAKE" if score is not None and score >= self.threshold else "SKIP"
 
-            trades.append(Trade(
-                ticker=row["ticker"],
-                earnings_date=pd.to_datetime(row["earnings_date"]).date(),
-                scan_date=pd.to_datetime(row["scan_date"]).date() if pd.notna(row.get("scan_date")) else pd.to_datetime(row["earnings_date"]).date(),
-                strategy=self.name,
-                side="CALENDAR",
-                entry_price=row.get("net_debit", 0.0),
-                pnl=pnl,
-                pnl_pct=rod,
-                features={"net_debit": row.get("net_debit"), "price": row.get("price")},
-                model_score=score,
-                ml_decision=decision,
-                notes=model_reason,
-            ))
+            trades.append(
+                Trade(
+                    ticker=row["ticker"],
+                    earnings_date=pd.to_datetime(row["earnings_date"]).date(),
+                    scan_date=pd.to_datetime(row["scan_date"]).date()
+                    if pd.notna(row.get("scan_date"))
+                    else pd.to_datetime(row["earnings_date"]).date(),
+                    strategy=self.name,
+                    side="CALENDAR",
+                    entry_price=row.get("net_debit", 0.0),
+                    pnl=pnl,
+                    pnl_pct=rod,
+                    features={"net_debit": row.get("net_debit"), "price": row.get("price")},
+                    model_score=score,
+                    ml_decision=decision,
+                    notes=model_reason,
+                )
+            )
 
         return StrategyResult(self.name, trades, self._summarize(trades))
 
@@ -148,6 +162,7 @@ class CalendarCallStrategy:
 
     def _load_model(self):
         import joblib
+
         path = Path(self.model_path)
         if not path.exists():
             return None
@@ -170,8 +185,10 @@ class CalendarCallStrategy:
 # Strategy 2: Calendar-call (high-conviction ML)
 # ---------------------------------------------------------------------------
 
+
 class CalendarCallHighConviction(CalendarCallStrategy):
     """Calendar-call with strict risk envelope: ML score >= 0.55 AND net_debit <= $2.00."""
+
     name = "calendar_call_high_conviction"
 
     def run(self, data: DataBundle) -> StrategyResult:
@@ -191,8 +208,10 @@ class CalendarCallHighConviction(CalendarCallStrategy):
 # Strategy 3: Calendar-call (per-quarter, no ML)
 # ---------------------------------------------------------------------------
 
+
 class CalendarCallNoML(CalendarCallStrategy):
     """Calendar-call without ML — pure data-quality gates, equal weight."""
+
     name = "calendar_call_no_ml"
 
     def run(self, data: DataBundle) -> StrategyResult:
@@ -209,12 +228,15 @@ class CalendarCallNoML(CalendarCallStrategy):
 # Strategy 4: Stock drift (PEAD) — buy before earnings, sell after
 # ---------------------------------------------------------------------------
 
+
 class StockDriftStrategy:
     """Drift strategy: long stock 7 days pre-earnings, sell 1 day post. PnL = (post - pre) / pre * 100."""
+
     name = "stock_drift_pead"
 
-    def __init__(self, pre_days: int = 7, post_days: int = 1,
-                 min_price: float = 5.0, min_volume: float = 500_000):
+    def __init__(
+        self, pre_days: int = 7, post_days: int = 1, min_price: float = 5.0, min_volume: float = 500_000
+    ):
         self.pre_days = pre_days
         self.post_days = post_days
         self.min_price = min_price
@@ -239,27 +261,29 @@ class StockDriftStrategy:
                 continue
             ret_pct = (post_close - pre_close) / pre_close * 100
 
-            trades.append(Trade(
-                ticker=row["ticker"],
-                earnings_date=pd.to_datetime(row["earnings_date"]).date(),
-                scan_date=pd.to_datetime(row["scan_date"]).date()
-                if "scan_date" in row
-                else pd.to_datetime(row["earnings_date"]).date(),
-                strategy=self.name,
-                side="LONG",
-                entry_price=pre_close,
-                exit_price=post_close,
-                pnl=ret_pct,
-                pnl_pct=ret_pct,
-                features={
-                    "pre_earnings_close": pre_close,
-                    "post_earnings_close": post_close,
-                    "expected_move_pct": row.get("expected_move_pct"),
-                    "actual_move_pct": row.get("actual_move_pct"),
-                    "timing": row.get("timing", ""),
-                },
-                ml_decision="TAKE",
-            ))
+            trades.append(
+                Trade(
+                    ticker=row["ticker"],
+                    earnings_date=pd.to_datetime(row["earnings_date"]).date(),
+                    scan_date=pd.to_datetime(row["scan_date"]).date()
+                    if "scan_date" in row
+                    else pd.to_datetime(row["earnings_date"]).date(),
+                    strategy=self.name,
+                    side="LONG",
+                    entry_price=pre_close,
+                    exit_price=post_close,
+                    pnl=ret_pct,
+                    pnl_pct=ret_pct,
+                    features={
+                        "pre_earnings_close": pre_close,
+                        "post_earnings_close": post_close,
+                        "expected_move_pct": row.get("expected_move_pct"),
+                        "actual_move_pct": row.get("actual_move_pct"),
+                        "timing": row.get("timing", ""),
+                    },
+                    ml_decision="TAKE",
+                )
+            )
 
         return StrategyResult(self.name, trades, self._summarize(trades))
 
@@ -276,8 +300,10 @@ class StockDriftStrategy:
 # Strategy 5: IV/RV mean-reversion (calendar-call proxy)
 # ---------------------------------------------------------------------------
 
+
 class IVRVMeanReversion(CalendarCallStrategy):
     """Only take calendar-calls where IV/RV > 1.15 (overpriced vol)."""
+
     name = "iv_rv_mean_reversion"
 
     def __init__(self, iv_rv_min: float = 1.15, min_rows: int = 30):
@@ -289,10 +315,7 @@ class IVRVMeanReversion(CalendarCallStrategy):
         filtered = []
         for t in base.trades:
             snap = data.snapshots
-            match = snap[
-                (snap["ticker"] == t.ticker)
-                & (snap["earnings_date"] == str(t.earnings_date))
-            ]
+            match = snap[(snap["ticker"] == t.ticker) & (snap["earnings_date"] == str(t.earnings_date))]
             ratio = float(match["iv30_rv30"].iloc[0]) if not match.empty else None
             if ratio is not None and ratio >= self.iv_rv_min:
                 t.features["iv30_rv30"] = ratio
@@ -307,8 +330,10 @@ class IVRVMeanReversion(CalendarCallStrategy):
 # Strategy 6: Term-structure steepener
 # ---------------------------------------------------------------------------
 
+
 class TermStructureSteepener(CalendarCallStrategy):
     """Calendar-calls only where term_slope < -0.03 (downward-sloping IV curve)."""
+
     name = "term_structure_steepener"
 
     def __init__(self, term_slope_max: float = -0.03, min_rows: int = 30):
@@ -320,10 +345,7 @@ class TermStructureSteepener(CalendarCallStrategy):
         filtered = []
         for t in base.trades:
             snap = data.snapshots
-            match = snap[
-                (snap["ticker"] == t.ticker)
-                & (snap["earnings_date"] == str(t.earnings_date))
-            ]
+            match = snap[(snap["ticker"] == t.ticker) & (snap["earnings_date"] == str(t.earnings_date))]
             slope = float(match["term_slope"].iloc[0]) if not match.empty else None
             if slope is not None and slope <= self.term_slope_max:
                 t.features["term_slope"] = slope
@@ -338,22 +360,28 @@ class TermStructureSteepener(CalendarCallStrategy):
 # Strategy 8: Short straddle / iron fly (data-gathering strategy)
 # ---------------------------------------------------------------------------
 
+
 class ShortStraddleStrategy:
     """Placeholder: needs historical straddle pricing (bid/ask at multiple strikes)."""
 
     name = "short_straddle"
 
     def run(self, data: DataBundle) -> StrategyResult:
-        return StrategyResult(self.name, [], {
-            "total": 0,
-            "note": "Requires multi-strike options chain data. Set up scheduler for daily collection.",
-            "data_needed": "Near-ATM straddle bid/ask prices for liquid equities, collected at market close",
-        })
+        return StrategyResult(
+            self.name,
+            [],
+            {
+                "total": 0,
+                "note": "Requires multi-strike options chain data. Set up scheduler for daily collection.",
+                "data_needed": "Near-ATM straddle bid/ask prices for liquid equities, collected at market close",
+            },
+        )
 
 
 # ---------------------------------------------------------------------------
 # Strategy 9: Earnings-quality (beat/miss surprise)
 # ---------------------------------------------------------------------------
+
 
 class EarningsQualityStrategy:
     """Long/short based on actual move vs expected move (surprise)."""
@@ -374,21 +402,23 @@ class EarningsQualityStrategy:
             actual = row["actual_move_pct"]
             if abs(actual) > self.threshold_pct:
                 direction = "UP" if actual > 0 else "DOWN"
-                trades.append(Trade(
-                    ticker=row["ticker"],
-                    earnings_date=pd.to_datetime(row["earnings_date"]).date(),
-                    scan_date=pd.to_datetime(row["scan_date"]).date()
-                    if "scan_date" in row
-                    else pd.to_datetime(row["earnings_date"]).date(),
-                    strategy=self.name,
-                    side="LONG_STOCK" if direction == "UP" else "SHORT_STOCK",
-                    entry_price=row.get("pre_earnings_close", 0.0),
-                    exit_price=row.get("post_earnings_close", 0.0),
-                    pnl=actual,
-                    pnl_pct=actual,
-                    features={"direction": direction, "actual_move_pct": actual},
-                    ml_decision="TAKE",
-                ))
+                trades.append(
+                    Trade(
+                        ticker=row["ticker"],
+                        earnings_date=pd.to_datetime(row["earnings_date"]).date(),
+                        scan_date=pd.to_datetime(row["scan_date"]).date()
+                        if "scan_date" in row
+                        else pd.to_datetime(row["earnings_date"]).date(),
+                        strategy=self.name,
+                        side="LONG_STOCK" if direction == "UP" else "SHORT_STOCK",
+                        entry_price=row.get("pre_earnings_close", 0.0),
+                        exit_price=row.get("post_earnings_close", 0.0),
+                        pnl=actual,
+                        pnl_pct=actual,
+                        features={"direction": direction, "actual_move_pct": actual},
+                        ml_decision="TAKE",
+                    )
+                )
 
         return StrategyResult(self.name, trades, self._summarize(trades))
 
@@ -406,6 +436,7 @@ class EarningsQualityStrategy:
 # ---------------------------------------------------------------------------
 # Strategy 10: Debit-size exploit
 # ---------------------------------------------------------------------------
+
 
 class DebitSizeExploit(CalendarCallStrategy):
     """Calendar-calls only where debit_pct_price <= 0.03 (cheap relative to stock price)."""
@@ -434,6 +465,7 @@ class DebitSizeExploit(CalendarCallStrategy):
 # ---------------------------------------------------------------------------
 # Register all strategies
 # ---------------------------------------------------------------------------
+
 
 def _register_all() -> None:
     """Register the built-in strategy set (call once at import time)."""

@@ -18,6 +18,7 @@ from earnings_edge.rich_msg import (
 @pytest.fixture
 def mock_bot(tmp_path):
     from earnings_edge.db import configure
+
     configure(tmp_path / "fw.db")
     bot = TradingBot("dummy_token")
     bot.application = MagicMock()
@@ -28,6 +29,7 @@ def mock_bot(tmp_path):
 
 
 # --- Tests for send_rich_html and edit_rich_html ---
+
 
 @patch("httpx.AsyncClient")
 def test_send_rich_html_success(mock_httpx):
@@ -111,6 +113,7 @@ def test_edit_rich_html_failure(mock_httpx):
 
 # --- Tests for rich views ---
 
+
 def test_orders_rich_view(seeded_db):
     html = orders_rich_view()
     assert "<h3>ORDERS</h3>" in html
@@ -132,6 +135,7 @@ def test_orders_rich_view_empty(seeded_db):
     from sqlalchemy import text
 
     from earnings_edge.db.engine import get_engine
+
     with get_engine().begin() as conn:
         conn.execute(text("DELETE FROM trade_events"))
     html = orders_rich_view()
@@ -154,6 +158,7 @@ def test_jobs_rich_view_empty(seeded_db):
     from sqlalchemy import text
 
     from earnings_edge.db.engine import get_engine
+
     with get_engine().begin() as conn:
         conn.execute(text("DELETE FROM job_runs"))
     html = jobs_rich_view()
@@ -203,6 +208,7 @@ def test_equity_rich_view_no_day_start(mock_pnl, mock_start, mock_latest, seeded
 
 # --- Tests for Handler fallbacks ---
 
+
 @patch("earnings_edge.rich_msg.send_rich_html")
 @patch("earnings_edge.rich_msg.orders_rich_view")
 def test_cmd_orders_fallback(mock_view, mock_send, mock_bot):
@@ -215,6 +221,7 @@ def test_cmd_orders_fallback(mock_view, mock_send, mock_bot):
     ctx = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
 
     import earnings_edge.handlers
+
     asyncio.run(earnings_edge.handlers.cmd_orders(mock_bot, update, ctx))
 
     mock_bot._send_panel.assert_called_once()

@@ -1,4 +1,5 @@
 """Process readiness: lock + equity freshness + scan age + broker clock."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta

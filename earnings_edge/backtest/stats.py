@@ -25,6 +25,7 @@ from scipy.stats import spearmanr
 
 # ── Per-trade statistics ─────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class TradeStats:
     """Summary statistics over a sequence of per-trade returns (fractions).
@@ -75,6 +76,7 @@ def trade_stats(returns: Sequence[float]) -> TradeStats:
 
 
 # ── Portfolio metrics ────────────────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class PortfolioMetrics:
@@ -152,6 +154,7 @@ def portfolio_metrics(
 
 # ── Train/test split ─────────────────────────────────────────────────
 
+
 def train_test_report(
     returns_or_trades: Sequence[float],
     split: float = 0.7,
@@ -170,6 +173,7 @@ def train_test_report(
 
 
 # ── Cross-sectional signal test ──────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class CrossSectionalResult:
@@ -201,9 +205,7 @@ def cross_sectional_test(
     rank correlation with its p-value. A monotone signal shows monotonically
     increasing bucket means and a significant positive rho.
     """
-    df = pd.concat(
-        [signal.rename("signal"), forward_returns.rename("fwd")], axis=1
-    ).dropna()
+    df = pd.concat([signal.rename("signal"), forward_returns.rename("fwd")], axis=1).dropna()
     if df.shape[0] < 3:
         raise ValueError("need at least 3 paired observations")
     rho, p_value = spearmanr(df["signal"], df["fwd"])

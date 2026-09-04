@@ -17,6 +17,7 @@ Usage:
     ./.venv/bin/python backtest_report.py
     ./.venv/bin/python backtest_report.py --db path/to/earnings_ml.db --initial-capital 50000
 """
+
 from __future__ import annotations
 
 import argparse
@@ -50,10 +51,7 @@ def load_trades(db_path: Path) -> pd.DataFrame:
     configure(db_path)
     engine = get_engine()
     with engine.connect() as con:
-        tables = {
-            row[0]
-            for row in con.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
-        }
+        tables = {row[0] for row in con.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))}
         if "calendar_call_trades" not in tables:
             return pd.DataFrame()
     return pd.read_sql(
@@ -98,8 +96,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Realism-adjusted backtest report")
     parser.add_argument("--db", default=str(DEFAULT_DB), help="Path to earnings_ml.db")
     parser.add_argument("--split", type=float, default=0.7, help="Chronological train fraction")
-    parser.add_argument("--initial-capital", type=float, default=100_000.0,
-                        help="Starting equity for the portfolio metrics")
+    parser.add_argument(
+        "--initial-capital", type=float, default=100_000.0, help="Starting equity for the portfolio metrics"
+    )
     args = parser.parse_args()
 
     db_path = Path(args.db)
@@ -113,8 +112,10 @@ def main() -> int:
         return 0
 
     returns = df["return_on_debit"].dropna()
-    print(f"\n=== Calendar Call Backtest Report ({len(df)} trades, "
-          f"{df['scan_date'].min()} .. {df['scan_date'].max()}) ===")
+    print(
+        f"\n=== Calendar Call Backtest Report ({len(df)} trades, "
+        f"{df['scan_date'].min()} .. {df['scan_date'].max()}) ==="
+    )
 
     print("\nGross returns on debit:")
     print_stats("overall", trade_stats(returns))
@@ -133,15 +134,20 @@ def main() -> int:
     equity = [args.initial_capital] + list(args.initial_capital + by_date.cumsum())
     pm = portfolio_metrics(equity, periods_per_year=252)
     print(f"\nPortfolio (initial capital ${args.initial_capital:,.0f}, daily equity from summed PnL):")
-    print(f"  final=${pm.final_value:,.0f} total_return={pm.total_return:+.2%} "
-          f"cagr={pm.cagr:+.2%} sharpe={pm.sharpe:.2f} max_dd={pm.max_drawdown:.2%} "
-          f"active_days={pm.total_trades}")
+    print(
+        f"  final=${pm.final_value:,.0f} total_return={pm.total_return:+.2%} "
+        f"cagr={pm.cagr:+.2%} sharpe={pm.sharpe:.2f} max_dd={pm.max_drawdown:.2%} "
+        f"active_days={pm.total_trades}"
+    )
 
     if "model_score" in df and df["model_score"].notna().sum() >= 3:
         from earnings_edge.backtest.stats import cross_sectional_test
+
         cs = cross_sectional_test(df["model_score"], df["return_on_debit"], n_buckets=5)
-        print(f"\nCross-sectional (model_score vs return_on_debit, n={cs.n}): "
-              f"spearman={cs.spearman_rho:+.3f} p={cs.p_value:.4f}")
+        print(
+            f"\nCross-sectional (model_score vs return_on_debit, n={cs.n}): "
+            f"spearman={cs.spearman_rho:+.3f} p={cs.p_value:.4f}"
+        )
     return 0
 
 

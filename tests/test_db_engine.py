@@ -1,4 +1,5 @@
 """Tests for the centralized engine/session handler."""
+
 import pytest
 import sqlalchemy
 

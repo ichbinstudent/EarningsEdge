@@ -1,4 +1,5 @@
 """Tests for Alpaca options client and multi-strike positional strategies."""
+
 from __future__ import annotations
 
 import pandas as pd
@@ -22,31 +23,37 @@ from earnings_edge.trading_types import DataBundle
 # BS helpers
 # ---------------------------------------------------------------------------
 
+
 def test_bs_price_call():
     # ITM call should be worth at least intrinsic
     p = bs_price(100, 90, 0.1, 0.045, 0.4, "call")
     assert p > 10  # intrinsic = 10
     assert p < 100
 
+
 def test_bs_price_put():
     p = bs_price(100, 110, 0.1, 0.045, 0.4, "put")
     assert p > 10  # intrinsic = 10
     assert p < 100
+
 
 def test_delta_atm_call():
     # ATM call delta ≈ 0.5
     d = delta(100, 100, 0.1, 0.045, 0.4, "call")
     assert 0.45 <= d <= 0.55
 
+
 def test_delta_atm_put():
     d = delta(100, 100, 0.1, 0.045, 0.4, "put")
     assert -0.55 <= d <= -0.45
+
 
 def test_strike_for_delta_call():
     # For a 15-delta call, strike should be above spot
     k = strike_for_delta(100, 0.1, 0.045, 0.4, 0.15)
     assert k > 95
     assert k < 130  # reasonable range
+
 
 def test_strike_for_delta_put():
     k = strike_for_delta(100, 0.1, 0.045, 0.4, -0.15)
@@ -57,6 +64,7 @@ def test_strike_for_delta_put():
 # ---------------------------------------------------------------------------
 # Client basics
 # ---------------------------------------------------------------------------
+
 
 def test_alpaca_client_builds_headers():
     c = AlpacaOptionsClient("key123", "secret456")
@@ -70,11 +78,17 @@ def test_bar_ask_with_chain_empty():
     b, a, m = pull_bid_ask(df, "AAPL250117C00150000")
     assert b is None and a is None and m is None
 
+
 def test_pull_bid_ask_found():
-    df = pd.DataFrame([{
-        "contract_ticker": "AAPL250117C00150000",
-        "bid": 4.0, "ask": 5.0,
-    }])
+    df = pd.DataFrame(
+        [
+            {
+                "contract_ticker": "AAPL250117C00150000",
+                "bid": 4.0,
+                "ask": 5.0,
+            }
+        ]
+    )
     b, a, m = pull_bid_ask(df, "AAPL250117C00150000")
     assert b == 4.0 and a == 5.0 and m == 4.5
 
@@ -82,6 +96,7 @@ def test_pull_bid_ask_found():
 # ---------------------------------------------------------------------------
 # AlpacaMultiStrike helper
 # ---------------------------------------------------------------------------
+
 
 def test_nearest_strike():
     assert nearest_strike(102.3, 5) == 100.0
@@ -93,9 +108,18 @@ def test_nearest_strike():
 # DataBundle + strategies (with BS fallback since no real chain data in test)
 # ---------------------------------------------------------------------------
 
-def _make_snapshot(ticker="AAPL", earnings_date="2025-01-10", scan_date="2025-01-09",
-                   price=100.0, iv30_rv30=1.5, expected_move_pct=8.0,
-                   actual_move_pct=4.0, has_options=1, nearest_expiry="2025-01-17") -> dict:
+
+def _make_snapshot(
+    ticker="AAPL",
+    earnings_date="2025-01-10",
+    scan_date="2025-01-09",
+    price=100.0,
+    iv30_rv30=1.5,
+    expected_move_pct=8.0,
+    actual_move_pct=4.0,
+    has_options=1,
+    nearest_expiry="2025-01-17",
+) -> dict:
     return {
         "ticker": ticker,
         "earnings_date": earnings_date,
@@ -135,6 +159,7 @@ def _make_bundle(snapshots=None, options_chain=None):
 def test_iron_condor_registry():
     assert "iron_condor_real" in MULTI_STRIKE_STRATEGIES
 
+
 def test_iron_condor_no_chain_falls_back_to_bs():
     """With empty options_chain, should still run using BS fallback."""
     bundle = _make_bundle()
@@ -142,10 +167,12 @@ def test_iron_condor_no_chain_falls_back_to_bs():
     # Should produce trades (using BS fallback)
     assert len(result.trades) >= 0  # may be empty if filters don't pass
 
+
 def test_iron_condor_filter_blocks_low_iv_rv():
     bundle = _make_bundle(pd.DataFrame([_make_snapshot(iv30_rv30=1.0, expected_move_pct=4.0)]))
     result = IronCondorReal(iv_rv_min=1.2, min_expected_move=6.0).run(bundle)
     assert result.trades == []
+
 
 def test_iron_condor_trade_structure():
     """When filters pass, trades should have IRON_CONDOR side and proper features."""
@@ -156,6 +183,7 @@ def test_iron_condor_trade_structure():
         assert "risk_reward" in t.features
         assert "short_call" in t.features
         assert "long_call" in t.features
+
 
 def test_iron_condor_summary_has_win_rate():
     bundle = _make_bundle()
@@ -168,10 +196,12 @@ def test_iron_condor_summary_has_win_rate():
 def test_butterfly_registry():
     assert "butterfly_real" in MULTI_STRIKE_STRATEGIES
 
+
 def test_butterfly_blocks_low_iv_rv():
     bundle = _make_bundle(pd.DataFrame([_make_snapshot(iv30_rv30=1.0, expected_move_pct=4.0)]))
     result = ButterflyReal(iv_rv_min=1.15, min_expected_move=6.0).run(bundle)
     assert result.trades == []
+
 
 def test_butterfly_trade_structure():
     bundle = _make_bundle()
@@ -186,10 +216,12 @@ def test_butterfly_trade_structure():
 def test_risk_reversal_registry():
     assert "risk_reversal_real" in MULTI_STRIKE_STRATEGIES
 
+
 def test_risk_reversal_blocks_high_iv_rv():
     bundle = _make_bundle(pd.DataFrame([_make_snapshot(iv30_rv30=1.5)]))
     result = RiskReversalReal(iv_rv_max=1.3).run(bundle)
     assert result.trades == []
+
 
 def test_risk_reversal_trade_structure():
     bundle = _make_bundle(pd.DataFrame([_make_snapshot(iv30_rv30=1.0)]))
@@ -204,17 +236,25 @@ def test_risk_reversal_trade_structure():
 # Bundle options_chain DataLoader integration
 # ---------------------------------------------------------------------------
 
+
 def test_data_bundle_options_chain_field():
     bundle = _make_bundle()
     assert hasattr(bundle, "options_chain")
     assert bundle.options_chain.empty  # default empty
 
+
 def test_data_bundle_with_chain_data():
-    chain_df = pd.DataFrame([{
-        "ticker": "AAPL", "scan_date": "2025-01-09",
-        "contract_ticker": "AAPL250117C00150000",
-        "bid": 4.0, "ask": 5.0,
-    }])
+    chain_df = pd.DataFrame(
+        [
+            {
+                "ticker": "AAPL",
+                "scan_date": "2025-01-09",
+                "contract_ticker": "AAPL250117C00150000",
+                "bid": 4.0,
+                "ask": 5.0,
+            }
+        ]
+    )
     bundle = _make_bundle(options_chain=chain_df)
     assert len(bundle.options_chain) == 1
 
@@ -223,11 +263,13 @@ def test_data_bundle_with_chain_data():
 # run_multi_strike entry point
 # ---------------------------------------------------------------------------
 
+
 def test_run_multi_strike():
     bundle = _make_bundle()
     results = run_multi_strike(bundle)
     assert len(results) == 3
     assert set(results.keys()) == {"iron_condor_real", "butterfly_real", "risk_reversal_real"}
+
 
 def test_run_multi_strike_subset():
     bundle = _make_bundle()

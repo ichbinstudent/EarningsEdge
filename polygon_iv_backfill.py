@@ -44,7 +44,9 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 logger = get_logger("polygon_iv_backfill")
 
 
-def collect_iv_for_snapshot(pg: PolygonClient, ticker: str, earnings_date: date, as_of: date) -> dict[str, Any]:
+def collect_iv_for_snapshot(
+    pg: PolygonClient, ticker: str, earnings_date: date, as_of: date
+) -> dict[str, Any]:
     """Collect IV features from Polygon as of a specific historical date."""
     bars = pg.daily_bars(ticker, as_of - timedelta(days=120), as_of)
     if not bars:
@@ -59,17 +61,25 @@ def collect_iv_for_snapshot(pg: PolygonClient, ticker: str, earnings_date: date,
     hist_vol_3m = hist_vol(bars, 63)
 
     contracts = pg.option_contracts(
-        ticker, as_of=as_of,
+        ticker,
+        as_of=as_of,
         expiry_gte=earnings_date,
         expiry_lte=earnings_date + timedelta(days=70),
     )
     if not contracts:
-        return {"collection_error": "no historical option contracts", "rv30": rv30, "hist_vol_3m": hist_vol_3m}
+        return {
+            "collection_error": "no historical option contracts",
+            "rv30": rv30,
+            "hist_vol_3m": hist_vol_3m,
+        }
 
-    expiries = sorted({
-        datetime.strptime(c["expiration_date"], "%Y-%m-%d").date()
-        for c in contracts if c.get("expiration_date")
-    })
+    expiries = sorted(
+        {
+            datetime.strptime(c["expiration_date"], "%Y-%m-%d").date()
+            for c in contracts
+            if c.get("expiration_date")
+        }
+    )
     if not expiries:
         return {"collection_error": "contracts missing expiries", "rv30": rv30, "hist_vol_3m": hist_vol_3m}
 
@@ -94,13 +104,16 @@ def collect_iv_for_snapshot(pg: PolygonClient, ticker: str, earnings_date: date,
     near_iv = float(np.mean(near_iv_vals)) if near_iv_vals else None
 
     result: dict[str, Any] = {
-        "atm_call_iv": call_iv, "atm_put_iv": put_iv, "atm_iv_near": near_iv,
+        "atm_call_iv": call_iv,
+        "atm_put_iv": put_iv,
+        "atm_iv_near": near_iv,
         "atm_call_delta": delta(price, K_call, T_near, call_iv, "call") if call_iv else None,
         "atm_put_delta": delta(price, K_put, T_near, put_iv, "put") if put_iv else None,
         "straddle_price": call_px + put_px,
         "expected_move_dollars": call_px + put_px,
         "expected_move_pct": ((call_px + put_px) / price) * 100,
-        "rv30": rv30, "hist_vol_3m": hist_vol_3m,
+        "rv30": rv30,
+        "hist_vol_3m": hist_vol_3m,
         "iv30_rv30": (near_iv / rv30) if near_iv and rv30 else None,
     }
 
@@ -114,10 +127,12 @@ def collect_iv_for_snapshot(pg: PolygonClient, ticker: str, earnings_date: date,
             far_ivs = []
             if far_call_px is not None:
                 iv = implied_vol(far_call_px, price, float(far_call["strike_price"]), T_far, "call")
-                if iv: far_ivs.append(iv)
+                if iv:
+                    far_ivs.append(iv)
             if far_put_px is not None:
                 iv = implied_vol(far_put_px, price, float(far_put["strike_price"]), T_far, "put")
-                if iv: far_ivs.append(iv)
+                if iv:
+                    far_ivs.append(iv)
             if near_iv and far_ivs:
                 far_iv = float(np.mean(far_ivs))
                 day_gap = max((far_exp - near_exp).days, 1)
@@ -130,7 +145,7 @@ def collect_iv_for_snapshot(pg: PolygonClient, ticker: str, earnings_date: date,
         T_short_days = max((near_exp - as_of).days, 1)
         T_long_days = max((far_exp - as_of).days, T_short_days + 1)
         baseline_iv = min(near_iv, far_iv)
-        radicand = (far_iv ** 2 * T_long_days - baseline_iv ** 2 * (T_long_days - T_short_days)) / T_short_days
+        radicand = (far_iv**2 * T_long_days - baseline_iv**2 * (T_long_days - T_short_days)) / T_short_days
         if radicand > 0:
             sigma_short_leg_fair = float(np.sqrt(radicand))
             if sigma_short_leg_fair > 0:
@@ -156,13 +171,18 @@ def main():
     parser = argparse.ArgumentParser(description="Historical IV backfill")
     parser.add_argument("--source", choices=["polygon", "lse"], default="polygon")
     parser.add_argument("--limit", type=int, default=0, help="Max groups (0=all)")
-    parser.add_argument("--rate-sleep", type=float, default=None,
-                        help="Seconds between calls (default: 13 polygon / 0.35 lse)")
+    parser.add_argument(
+        "--rate-sleep",
+        type=float,
+        default=None,
+        help="Seconds between calls (default: 13 polygon / 0.35 lse)",
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
     if args.source == "lse":
         from earnings_edge.collectors.lse import LSECollector
+
         if not os.environ.get("LSE_API_KEY"):
             raise RuntimeError("LSE_API_KEY not set")
         pg = LSECollector()
@@ -193,8 +213,10 @@ def main():
         elapsed_min = (time.time() - start_time) / 60
         remaining = (len(groups) - i) * rate_sleep * 5 / 60  # ~5 calls per group
 
-        print(f"[{i}/{len(groups)}] {ticker} ed={group['earnings_date']} scan={group['scan_date']} "
-              f"({len(sids)} rows) ok={ok} fail={failed} skip={skipped} ~{remaining:.0f}min left")
+        print(
+            f"[{i}/{len(groups)}] {ticker} ed={group['earnings_date']} scan={group['scan_date']} "
+            f"({len(sids)} rows) ok={ok} fail={failed} skip={skipped} ~{remaining:.0f}min left"
+        )
 
         if args.dry_run:
             skipped += 1
@@ -207,18 +229,16 @@ def main():
                 err = features.get("collection_error", "no IV")
                 print(f"  SKIP: {err}")
                 skipped += 1
-                partial = {
-                    f: features[f]
-                    for f in ("rv30", "hist_vol_3m")
-                    if features.get(f) is not None
-                }
+                partial = {f: features[f] for f in ("rv30", "hist_vol_3m") if features.get(f) is not None}
                 snapshots_mark_iv_skip(sids, f"polygon_backfill: {err}", partial or None)
                 continue
 
             update_snapshots_iv(sids, features)
             ok += 1
             rows_updated += len(sids)
-            print(f"  OK: iv={features['atm_iv_near']:.4f} rv={features.get('rv30', 0):.4f} -> {len(sids)} rows")
+            print(
+                f"  OK: iv={features['atm_iv_near']:.4f} rv={features.get('rv30', 0):.4f} -> {len(sids)} rows"
+            )
 
         except Exception as exc:
             print(f"  ERROR: {exc}")
@@ -226,7 +246,9 @@ def main():
             logger.error("Backfill failed for %s: %s", ticker, exc)
 
     elapsed = time.time() - start_time
-    print(f"\nDone in {elapsed/60:.1f}min: {ok} groups ({rows_updated} rows) updated, {failed} failed, {skipped} skipped")
+    print(
+        f"\nDone in {elapsed / 60:.1f}min: {ok} groups ({rows_updated} rows) updated, {failed} failed, {skipped} skipped"
+    )
 
 
 if __name__ == "__main__":

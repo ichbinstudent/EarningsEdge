@@ -85,7 +85,7 @@ class TestOutcomeFromBars(unittest.TestCase):
         ed = date(2026, 7, 29)
         bars = [
             _bar(ed - timedelta(days=1), c=100.0, h=101.0, l=99.0),
-            _bar(ed, c=99.3, h=100.0, l=98.0),          # pre-announcement session
+            _bar(ed, c=99.3, h=100.0, l=98.0),  # pre-announcement session
             _bar(ed + timedelta(days=1), c=84.5, h=101.0, l=84.0),  # event move
         ]
         bmo = OutcomeService.outcome_from_bars(bars, ed)
@@ -139,19 +139,21 @@ class TestRunOutcomes(unittest.TestCase):
         db_engine.configure(self.db_path)
 
     def _insert_snapshot(self, ticker: str = "AAPL") -> int:
-        return insert_snapshot({
-            "ticker": ticker,
-            "earnings_date": self.earnings_date,
-            "scan_date": self.earnings_date,
-            "timing": "Post Market",
-        })
+        return insert_snapshot(
+            {
+                "ticker": ticker,
+                "earnings_date": self.earnings_date,
+                "scan_date": self.earnings_date,
+                "timing": "Post Market",
+            }
+        )
 
     def test_updates_snapshot_when_bars_available(self):
         self._insert_snapshot("AAPL")
         ed = datetime.strptime(self.earnings_date, "%Y-%m-%d").date()
         bars = [
             _bar(ed - timedelta(days=1), c=90.0, h=91.0, l=89.0),
-            _bar(ed, c=100.0, h=101.0, l=99.0),   # AMC pre-announcement close
+            _bar(ed, c=100.0, h=101.0, l=99.0),  # AMC pre-announcement close
             _bar(ed + timedelta(days=1), c=110.0, h=112.0, l=108.0),
         ]
         service = OutcomeService(polygon_client=FakePolygon(bars), db_path=self.db_path)
@@ -162,13 +164,17 @@ class TestRunOutcomes(unittest.TestCase):
         self.assertEqual(stats["processed"], 1)
 
         with db_engine.get_session() as s:
-            row = s.execute(
-                text(
-                    "SELECT actual_move_pct, actual_move_direction, outcome_fetched_at "
-                    "FROM snapshots WHERE ticker = :t"
-                ),
-                {"t": "AAPL"},
-            ).mappings().first()
+            row = (
+                s.execute(
+                    text(
+                        "SELECT actual_move_pct, actual_move_direction, outcome_fetched_at "
+                        "FROM snapshots WHERE ticker = :t"
+                    ),
+                    {"t": "AAPL"},
+                )
+                .mappings()
+                .first()
+            )
         self.assertAlmostEqual(row["actual_move_pct"], 10.0, places=1)
         self.assertEqual(row["actual_move_direction"], "UP")
         self.assertNotEqual(row["outcome_fetched_at"], "unavailable")
@@ -186,13 +192,14 @@ class TestRunOutcomes(unittest.TestCase):
         self.assertEqual(first["failed"], 1)
 
         with db_engine.get_session() as s:
-            mid = s.execute(
-                text(
-                    "SELECT outcome_fetched_at, outcome_attempt_count "
-                    "FROM snapshots WHERE ticker = :t"
-                ),
-                {"t": "AAPL"},
-            ).mappings().first()
+            mid = (
+                s.execute(
+                    text("SELECT outcome_fetched_at, outcome_attempt_count FROM snapshots WHERE ticker = :t"),
+                    {"t": "AAPL"},
+                )
+                .mappings()
+                .first()
+            )
         # After a single run it is only bumped, not yet unavailable.
         self.assertIsNone(mid["outcome_fetched_at"])
         self.assertEqual(mid["outcome_attempt_count"], 1)
@@ -201,13 +208,14 @@ class TestRunOutcomes(unittest.TestCase):
         self.assertEqual(second["failed"], 1)
 
         with db_engine.get_session() as s:
-            row = s.execute(
-                text(
-                    "SELECT outcome_fetched_at, outcome_attempt_count "
-                    "FROM snapshots WHERE ticker = :t"
-                ),
-                {"t": "AAPL"},
-            ).mappings().first()
+            row = (
+                s.execute(
+                    text("SELECT outcome_fetched_at, outcome_attempt_count FROM snapshots WHERE ticker = :t"),
+                    {"t": "AAPL"},
+                )
+                .mappings()
+                .first()
+            )
         self.assertEqual(row["outcome_fetched_at"], "unavailable")
         self.assertEqual(row["outcome_attempt_count"], 2)
 
@@ -222,13 +230,14 @@ class TestRunOutcomes(unittest.TestCase):
         # max_retries=5 → a single failure should bump to 1 but not mark unavailable.
         service.run_outcomes(min_age_days=2, max_retries=5)
         with db_engine.get_session() as s:
-            row = s.execute(
-                text(
-                    "SELECT outcome_fetched_at, outcome_attempt_count "
-                    "FROM snapshots WHERE ticker = :t"
-                ),
-                {"t": "AAPL"},
-            ).mappings().first()
+            row = (
+                s.execute(
+                    text("SELECT outcome_fetched_at, outcome_attempt_count FROM snapshots WHERE ticker = :t"),
+                    {"t": "AAPL"},
+                )
+                .mappings()
+                .first()
+            )
         self.assertIsNone(row["outcome_fetched_at"])
         self.assertEqual(row["outcome_attempt_count"], 1)
 
@@ -249,14 +258,23 @@ class TestRunOutcomes(unittest.TestCase):
 
     def test_pending_outcomes_prefer_has_options(self):
         from earnings_edge.db import fetch_pending_outcomes
-        insert_snapshot({
-            "ticker": "OTCJUNK", "earnings_date": self.earnings_date,
-            "scan_date": self.earnings_date, "has_options": 0,
-        })
-        insert_snapshot({
-            "ticker": "LIQUID", "earnings_date": self.earnings_date,
-            "scan_date": self.earnings_date, "has_options": 1,
-        })
+
+        insert_snapshot(
+            {
+                "ticker": "OTCJUNK",
+                "earnings_date": self.earnings_date,
+                "scan_date": self.earnings_date,
+                "has_options": 0,
+            }
+        )
+        insert_snapshot(
+            {
+                "ticker": "LIQUID",
+                "earnings_date": self.earnings_date,
+                "scan_date": self.earnings_date,
+                "has_options": 1,
+            }
+        )
         pending = fetch_pending_outcomes(min_age_days=2)
         tickers = [r["ticker"] for r in pending]
         self.assertIn("LIQUID", tickers)
@@ -275,11 +293,14 @@ class TestRunLiveCandidateOutcomes(unittest.TestCase):
 
     def _insert_candidate(self, ticker: str = "AAPL") -> int:
         from earnings_edge.db import insert_live_calendar_candidate
-        return insert_live_calendar_candidate({
-            "scan_timestamp": "2026-06-30T19:15:00Z",
-            "ticker": ticker,
-            "earnings_date": self.ed,
-        })
+
+        return insert_live_calendar_candidate(
+            {
+                "scan_timestamp": "2026-06-30T19:15:00Z",
+                "ticker": ticker,
+                "earnings_date": self.ed,
+            }
+        )
 
     def test_updates_live_candidate_when_bars_available(self):
         cid = self._insert_candidate("AAPL")
@@ -295,13 +316,17 @@ class TestRunLiveCandidateOutcomes(unittest.TestCase):
         self.assertEqual(stats["failed"], 0)
 
         with db_engine.get_session() as s:
-            row = s.execute(
-                text(
-                    "SELECT actual_move_pct, actual_move_direction "
-                    "FROM live_calendar_candidates WHERE id = :id"
-                ),
-                {"id": cid},
-            ).mappings().first()
+            row = (
+                s.execute(
+                    text(
+                        "SELECT actual_move_pct, actual_move_direction "
+                        "FROM live_calendar_candidates WHERE id = :id"
+                    ),
+                    {"id": cid},
+                )
+                .mappings()
+                .first()
+            )
         self.assertAlmostEqual(row["actual_move_pct"], 10.0, places=1)
         self.assertEqual(row["actual_move_direction"], "UP")
 

@@ -32,6 +32,7 @@ TOMORROW = AS_OF + timedelta(days=1)
 
 # ── earnings_picks -----------------------------------------------------------
 
+
 def _earnings_row(**over) -> dict:
     row = {
         "ticker": "AAA",
@@ -54,21 +55,26 @@ def _earnings_row(**over) -> dict:
 
 
 def test_earnings_window_amc_today_and_bmo_tomorrow_pass():
-    df = pd.DataFrame([
-        _earnings_row(ticker="AMC_TODAY", announcement_date=AS_OF, announcement_time="AMC"),
-        _earnings_row(ticker="BMO_TOMORROW", announcement_date=TOMORROW, announcement_time="BMO"),
-    ])
+    df = pd.DataFrame(
+        [
+            _earnings_row(ticker="AMC_TODAY", announcement_date=AS_OF, announcement_time="AMC"),
+            _earnings_row(ticker="BMO_TOMORROW", announcement_date=TOMORROW, announcement_time="BMO"),
+        ]
+    )
     out = earnings_picks(df, as_of=AS_OF)
     assert sorted(out["ticker"]) == ["AMC_TODAY", "BMO_TOMORROW"]
 
 
 def test_earnings_window_excludes_wrong_slots():
-    df = pd.DataFrame([
-        _earnings_row(ticker="BMO_TODAY", announcement_date=AS_OF, announcement_time="BMO"),
-        _earnings_row(ticker="AMC_TOMORROW", announcement_date=TOMORROW, announcement_time="AMC"),
-        _earnings_row(ticker="DAY_AFTER", announcement_date=TOMORROW + timedelta(days=1),
-                      announcement_time="BMO"),
-    ])
+    df = pd.DataFrame(
+        [
+            _earnings_row(ticker="BMO_TODAY", announcement_date=AS_OF, announcement_time="BMO"),
+            _earnings_row(ticker="AMC_TOMORROW", announcement_date=TOMORROW, announcement_time="AMC"),
+            _earnings_row(
+                ticker="DAY_AFTER", announcement_date=TOMORROW + timedelta(days=1), announcement_time="BMO"
+            ),
+        ]
+    )
     out = earnings_picks(df, as_of=AS_OF)
     assert len(out) == 0
     # but all spec columns are still present on the empty frame
@@ -76,11 +82,13 @@ def test_earnings_window_excludes_wrong_slots():
 
 
 def test_earnings_liquidity_boundary_and_missing_tolerance():
-    df = pd.DataFrame([
-        _earnings_row(ticker="AT_MIN", option_volume=10_000),
-        _earnings_row(ticker="BELOW_MIN", option_volume=9_999),
-        _earnings_row(ticker="MISSING", option_volume=np.nan),
-    ])
+    df = pd.DataFrame(
+        [
+            _earnings_row(ticker="AT_MIN", option_volume=10_000),
+            _earnings_row(ticker="BELOW_MIN", option_volume=9_999),
+            _earnings_row(ticker="MISSING", option_volume=np.nan),
+        ]
+    )
     out = earnings_picks(df, as_of=AS_OF)
     assert sorted(out["ticker"]) == ["AT_MIN", "MISSING"]
 
@@ -92,42 +100,50 @@ def test_earnings_liquidity_threshold_configurable():
 
 
 def test_earnings_requires_backwardation():
-    df = pd.DataFrame([
-        _earnings_row(ticker="BACK", term_structure_slope=-0.001),
-        _earnings_row(ticker="FLAT", term_structure_slope=0.0),
-        _earnings_row(ticker="CONTANGO", term_structure_slope=0.02),
-        _earnings_row(ticker="NAN", term_structure_slope=np.nan),
-    ])
+    df = pd.DataFrame(
+        [
+            _earnings_row(ticker="BACK", term_structure_slope=-0.001),
+            _earnings_row(ticker="FLAT", term_structure_slope=0.0),
+            _earnings_row(ticker="CONTANGO", term_structure_slope=0.02),
+            _earnings_row(ticker="NAN", term_structure_slope=np.nan),
+        ]
+    )
     out = earnings_picks(df, as_of=AS_OF)
     assert list(out["ticker"]) == ["BACK"]
 
 
 def test_earnings_iv_rv_strictly_above_one():
-    df = pd.DataFrame([
-        _earnings_row(ticker="AT_ONE", iv_rv=1.0),
-        _earnings_row(ticker="ABOVE", iv_rv=1.01),
-        _earnings_row(ticker="NAN", iv_rv=np.nan),
-    ])
+    df = pd.DataFrame(
+        [
+            _earnings_row(ticker="AT_ONE", iv_rv=1.0),
+            _earnings_row(ticker="ABOVE", iv_rv=1.01),
+            _earnings_row(ticker="NAN", iv_rv=np.nan),
+        ]
+    )
     out = earnings_picks(df, as_of=AS_OF)
     assert list(out["ticker"]) == ["ABOVE"]
 
 
 def test_earnings_sort_short_straddle_return_desc():
-    df = pd.DataFrame([
-        _earnings_row(ticker="LOW", short_straddle_return=0.02),
-        _earnings_row(ticker="HIGH", short_straddle_return=0.30),
-        _earnings_row(ticker="MID", short_straddle_return=0.10),
-        _earnings_row(ticker="NONE", short_straddle_return=np.nan),
-    ])
+    df = pd.DataFrame(
+        [
+            _earnings_row(ticker="LOW", short_straddle_return=0.02),
+            _earnings_row(ticker="HIGH", short_straddle_return=0.30),
+            _earnings_row(ticker="MID", short_straddle_return=0.10),
+            _earnings_row(ticker="NONE", short_straddle_return=np.nan),
+        ]
+    )
     out = earnings_picks(df, as_of=AS_OF)
     assert list(out["ticker"]) == ["HIGH", "MID", "LOW", "NONE"]
 
 
 def test_earnings_negative_straddle_history_filter():
-    df = pd.DataFrame([
-        _earnings_row(ticker="GOOD", short_straddle_return=0.05),
-        _earnings_row(ticker="BAD", short_straddle_return=-0.05),
-    ])
+    df = pd.DataFrame(
+        [
+            _earnings_row(ticker="GOOD", short_straddle_return=0.05),
+            _earnings_row(ticker="BAD", short_straddle_return=-0.05),
+        ]
+    )
     # default: preferred but not required -> both pass
     assert len(earnings_picks(df, as_of=AS_OF)) == 2
     # opt-in hard filter
@@ -136,10 +152,17 @@ def test_earnings_negative_straddle_history_filter():
 
 
 def test_earnings_tolerates_missing_optional_columns():
-    df = pd.DataFrame([
-        {"ticker": "AAA", "announcement_date": TOMORROW, "announcement_time": "BMO",
-         "term_structure_slope": -0.01, "iv_rv": 1.3},
-    ])
+    df = pd.DataFrame(
+        [
+            {
+                "ticker": "AAA",
+                "announcement_date": TOMORROW,
+                "announcement_time": "BMO",
+                "term_structure_slope": -0.01,
+                "iv_rv": 1.3,
+            },
+        ]
+    )
     out = earnings_picks(df, as_of=AS_OF)
     assert list(out.columns) == EARNINGS_COLUMNS
     assert len(out) == 1
@@ -154,6 +177,7 @@ def test_earnings_empty_input():
 
 
 # ── momentum_skew_picks -------------------------------------------------------
+
 
 def _skew_row(**over) -> dict:
     row = {
@@ -173,53 +197,64 @@ def _skew_row(**over) -> dict:
 
 
 def test_skew_zscore_boundary_inclusive():
-    df = pd.DataFrame([
-        _skew_row(ticker="AT", skew_zscore=-1.5),
-        _skew_row(ticker="ABOVE", skew_zscore=-1.49),
-        _skew_row(ticker="BELOW", skew_zscore=-3.0),
-        _skew_row(ticker="NAN", skew_zscore=np.nan),
-    ])
+    df = pd.DataFrame(
+        [
+            _skew_row(ticker="AT", skew_zscore=-1.5),
+            _skew_row(ticker="ABOVE", skew_zscore=-1.49),
+            _skew_row(ticker="BELOW", skew_zscore=-3.0),
+            _skew_row(ticker="NAN", skew_zscore=np.nan),
+        ]
+    )
     out = momentum_skew_picks(df)
     assert sorted(out["ticker"]) == ["AT", "BELOW"]
 
 
 def test_skew_call_side_requires_decile_8():
-    df = pd.DataFrame([
-        _skew_row(ticker="D8", direction="call", cs_momentum=8),
-        _skew_row(ticker="D7", direction="call", cs_momentum=7),
-        _skew_row(ticker="D10", direction="call", cs_momentum=10),
-    ])
+    df = pd.DataFrame(
+        [
+            _skew_row(ticker="D8", direction="call", cs_momentum=8),
+            _skew_row(ticker="D7", direction="call", cs_momentum=7),
+            _skew_row(ticker="D10", direction="call", cs_momentum=10),
+        ]
+    )
     out = momentum_skew_picks(df)
     assert sorted(out["ticker"]) == ["D10", "D8"]
 
 
 def test_skew_put_side_requires_decile_le_3():
-    df = pd.DataFrame([
-        _skew_row(ticker="D3", direction="put", cs_momentum=3),
-        _skew_row(ticker="D4", direction="put", cs_momentum=4),
-        _skew_row(ticker="D1", direction="put", cs_momentum=1),
-    ])
+    df = pd.DataFrame(
+        [
+            _skew_row(ticker="D3", direction="put", cs_momentum=3),
+            _skew_row(ticker="D4", direction="put", cs_momentum=4),
+            _skew_row(ticker="D1", direction="put", cs_momentum=1),
+        ]
+    )
     out = momentum_skew_picks(df)
     assert sorted(out["ticker"]) == ["D1", "D3"]
 
 
 def test_skew_volume_boundary_and_missing_tolerance():
-    df = pd.DataFrame([
-        _skew_row(ticker="AT", option_volume=5_000),
-        _skew_row(ticker="BELOW", option_volume=4_999),
-        _skew_row(ticker="MISSING", option_volume=np.nan),
-    ])
+    df = pd.DataFrame(
+        [
+            _skew_row(ticker="AT", option_volume=5_000),
+            _skew_row(ticker="BELOW", option_volume=4_999),
+            _skew_row(ticker="MISSING", option_volume=np.nan),
+        ]
+    )
     out = momentum_skew_picks(df)
     assert sorted(out["ticker"]) == ["AT", "MISSING"]
 
 
 def test_skew_cs_momentum_decile_computed_across_universe():
     # 10 tickers with evenly spaced momentum -> deciles 1..10
-    df = pd.DataFrame([
-        _skew_row(ticker=f"T{i}", ts_momentum=float(i), cs_momentum=np.nan,
-                  direction=None, skew_zscore=-2.0)
-        for i in range(1, 11)
-    ])
+    df = pd.DataFrame(
+        [
+            _skew_row(
+                ticker=f"T{i}", ts_momentum=float(i), cs_momentum=np.nan, direction=None, skew_zscore=-2.0
+            )
+            for i in range(1, 11)
+        ]
+    )
     out_all = momentum_skew_picks(df, min_option_volume=0)
     deciles = dict(zip(out_all["ticker"], out_all["cs_momentum"]))
     # bottom decile names trade put-side, top decile call-side
@@ -232,11 +267,13 @@ def test_skew_cs_momentum_decile_computed_across_universe():
 
 
 def test_skew_sort_zscore_asc():
-    df = pd.DataFrame([
-        _skew_row(ticker="MILD", skew_zscore=-1.6),
-        _skew_row(ticker="STEEP", skew_zscore=-3.5),
-        _skew_row(ticker="MID", skew_zscore=-2.0),
-    ])
+    df = pd.DataFrame(
+        [
+            _skew_row(ticker="MILD", skew_zscore=-1.6),
+            _skew_row(ticker="STEEP", skew_zscore=-3.5),
+            _skew_row(ticker="MID", skew_zscore=-2.0),
+        ]
+    )
     out = momentum_skew_picks(df)
     assert list(out["ticker"]) == ["STEEP", "MID", "MILD"]
 
@@ -257,28 +294,39 @@ def test_skew_empty_input():
 
 # ── forward_factor_picks ------------------------------------------------------
 
+
 def test_ff_computed_from_variance_decomposition():
     # front 45% / back 40%, T1=30d, T2=60d
     # fwd = sqrt((0.16*60 - 0.2025*30)/30) = sqrt(0.1175) ~ 0.3428
     # FF  = (0.45 - 0.3428)/0.3428 ~ 0.3127
-    df = pd.DataFrame([{
-        "ticker": "AAA", "next_earnings_date": date(2026, 9, 1),
-        "front_iv": 0.45, "back_iv": 0.40, "t1_dte": 30, "t2_dte": 60,
-        "option_volume": 12_000,
-    }])
+    df = pd.DataFrame(
+        [
+            {
+                "ticker": "AAA",
+                "next_earnings_date": date(2026, 9, 1),
+                "front_iv": 0.45,
+                "back_iv": 0.40,
+                "t1_dte": 30,
+                "t2_dte": 60,
+                "option_volume": 12_000,
+            }
+        ]
+    )
     out = forward_factor_picks(df)
     assert len(out) == 1
-    expected_fwd = math.sqrt((0.40 ** 2 * 60 - 0.45 ** 2 * 30) / 30)
+    expected_fwd = math.sqrt((0.40**2 * 60 - 0.45**2 * 30) / 30)
     expected_ff = (0.45 - expected_fwd) / expected_fwd
     assert out.iloc[0]["forward_factor"] == pytest.approx(expected_ff, rel=1e-6)
     assert expected_ff >= 0.20  # sanity: the fixture is tradeable
 
 
 def test_ff_boundary_exactly_0_20_passes():
-    df = pd.DataFrame([
-        {"ticker": "AT", "forward_factor": 0.20},
-        {"ticker": "BELOW", "forward_factor": 0.1999},
-    ])
+    df = pd.DataFrame(
+        [
+            {"ticker": "AT", "forward_factor": 0.20},
+            {"ticker": "BELOW", "forward_factor": 0.1999},
+        ]
+    )
     out = forward_factor_picks(df)
     assert list(out["ticker"]) == ["AT"]
 
@@ -290,32 +338,40 @@ def test_ff_threshold_configurable():
 
 
 def test_ff_uses_supplied_forward_iv_column():
-    df = pd.DataFrame([{
-        "ticker": "AAA", "front_iv": 0.48, "forward_iv": 0.40,
-    }])
+    df = pd.DataFrame(
+        [
+            {
+                "ticker": "AAA",
+                "front_iv": 0.48,
+                "forward_iv": 0.40,
+            }
+        ]
+    )
     out = forward_factor_picks(df)
     assert out.iloc[0]["forward_factor"] == pytest.approx(0.20)
 
 
 def test_ff_degenerate_rows_excluded():
     # back variance smaller than front -> no real forward vol -> no FF
-    df = pd.DataFrame([
-        {"ticker": "NEG_VAR", "front_iv": 0.60, "back_iv": 0.30,
-         "t1_dte": 30, "t2_dte": 60},
-        {"ticker": "NAN_IVS", "front_iv": np.nan, "back_iv": np.nan,
-         "t1_dte": 30, "t2_dte": 60},
-        {"ticker": "GOOD", "forward_factor": 0.25},
-    ])
+    df = pd.DataFrame(
+        [
+            {"ticker": "NEG_VAR", "front_iv": 0.60, "back_iv": 0.30, "t1_dte": 30, "t2_dte": 60},
+            {"ticker": "NAN_IVS", "front_iv": np.nan, "back_iv": np.nan, "t1_dte": 30, "t2_dte": 60},
+            {"ticker": "GOOD", "forward_factor": 0.25},
+        ]
+    )
     out = forward_factor_picks(df)
     assert list(out["ticker"]) == ["GOOD"]
 
 
 def test_ff_sort_desc():
-    df = pd.DataFrame([
-        {"ticker": "LOW", "forward_factor": 0.21},
-        {"ticker": "HIGH", "forward_factor": 0.60},
-        {"ticker": "MID", "forward_factor": 0.35},
-    ])
+    df = pd.DataFrame(
+        [
+            {"ticker": "LOW", "forward_factor": 0.21},
+            {"ticker": "HIGH", "forward_factor": 0.60},
+            {"ticker": "MID", "forward_factor": 0.35},
+        ]
+    )
     out = forward_factor_picks(df)
     assert list(out["ticker"]) == ["HIGH", "MID", "LOW"]
     assert list(out.columns) == FORWARD_FACTOR_COLUMNS
@@ -328,6 +384,7 @@ def test_ff_empty_input():
 
 
 # ── vrp_picks -----------------------------------------------------------------
+
 
 def _vrp_row(**over) -> dict:
     row = {
@@ -345,12 +402,14 @@ def _vrp_row(**over) -> dict:
 
 
 def test_vrp_iv_pctl_boundary_exclusive():
-    df = pd.DataFrame([
-        _vrp_row(ticker="BELOW", iv_pctl_1y=79.9),
-        _vrp_row(ticker="AT", iv_pctl_1y=80.0),
-        _vrp_row(ticker="ABOVE", iv_pctl_1y=95.0),
-        _vrp_row(ticker="NAN", iv_pctl_1y=np.nan),  # tolerated: no data source
-    ])
+    df = pd.DataFrame(
+        [
+            _vrp_row(ticker="BELOW", iv_pctl_1y=79.9),
+            _vrp_row(ticker="AT", iv_pctl_1y=80.0),
+            _vrp_row(ticker="ABOVE", iv_pctl_1y=95.0),
+            _vrp_row(ticker="NAN", iv_pctl_1y=np.nan),  # tolerated: no data source
+        ]
+    )
     out = vrp_picks(df)
     assert sorted(out["ticker"]) == ["BELOW", "NAN"]
 
@@ -362,22 +421,26 @@ def test_vrp_threshold_configurable():
 
 
 def test_vrp_requires_contango_or_flat():
-    df = pd.DataFrame([
-        _vrp_row(ticker="FLAT", term_structure_slope=0.0),
-        _vrp_row(ticker="CONTANGO", term_structure_slope=0.02),
-        _vrp_row(ticker="BACK", term_structure_slope=-0.001),
-        _vrp_row(ticker="NAN", term_structure_slope=np.nan),
-    ])
+    df = pd.DataFrame(
+        [
+            _vrp_row(ticker="FLAT", term_structure_slope=0.0),
+            _vrp_row(ticker="CONTANGO", term_structure_slope=0.02),
+            _vrp_row(ticker="BACK", term_structure_slope=-0.001),
+            _vrp_row(ticker="NAN", term_structure_slope=np.nan),
+        ]
+    )
     out = vrp_picks(df)
     assert sorted(out["ticker"]) == ["CONTANGO", "FLAT"]
 
 
 def test_vrp_sort_iron_condor_mean_return_desc():
-    df = pd.DataFrame([
-        _vrp_row(ticker="LOW", iron_condor_mean_return=0.01),
-        _vrp_row(ticker="HIGH", iron_condor_mean_return=0.09),
-        _vrp_row(ticker="NONE", iron_condor_mean_return=np.nan),
-    ])
+    df = pd.DataFrame(
+        [
+            _vrp_row(ticker="LOW", iron_condor_mean_return=0.01),
+            _vrp_row(ticker="HIGH", iron_condor_mean_return=0.09),
+            _vrp_row(ticker="NONE", iron_condor_mean_return=np.nan),
+        ]
+    )
     out = vrp_picks(df)
     assert list(out["ticker"]) == ["HIGH", "LOW", "NONE"]
 
@@ -399,8 +462,10 @@ def test_vrp_empty_input():
 
 # ── generate_picks orchestrator ----------------------------------------------
 
+
 def _build_test_db(path) -> None:
     from earnings_edge.db import engine as db_engine
+
     db_engine.configure(path)
     conn = sqlite3.connect(path)
     # current snapshot: AMC today, backwardated, IV/RV > 1
@@ -409,8 +474,7 @@ def _build_test_db(path) -> None:
         "avg_volume_30d, total_open_interest, atm_iv_near, rv30, iv30_rv30, "
         "term_slope, expected_move_pct, actual_move_pct) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        ("AAA", str(AS_OF), str(AS_OF), "Post Market", 100.0, 1e6, 50_000,
-         0.8, 0.5, 1.6, -0.01, 9.0, None),
+        ("AAA", str(AS_OF), str(AS_OF), "Post Market", 100.0, 1e6, 50_000, 0.8, 0.5, 1.6, -0.01, 9.0, None),
     )
     # historical outcomes for AAA (avg |move| = 5%, 2 events, avg implied 7%)
     for i, (move, implied) in enumerate(((4.0, 6.0), (-6.0, 8.0))):
@@ -419,8 +483,21 @@ def _build_test_db(path) -> None:
             "avg_volume_30d, total_open_interest, atm_iv_near, rv30, iv30_rv30, "
             "term_slope, expected_move_pct, actual_move_pct) "
             "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            ("AAA", f"2026-05-0{i + 1}", f"2026-04-3{i}", "Post Market", 90.0, 1e6, 40_000,
-             0.7, 0.5, 1.4, -0.01, implied, move),
+            (
+                "AAA",
+                f"2026-05-0{i + 1}",
+                f"2026-04-3{i}",
+                "Post Market",
+                90.0,
+                1e6,
+                40_000,
+                0.7,
+                0.5,
+                1.4,
+                -0.01,
+                implied,
+                move,
+            ),
         )
     # a contango name for the VRP list (earnings far out, slope >= 0)
     conn.execute(
@@ -428,8 +505,7 @@ def _build_test_db(path) -> None:
         "avg_volume_30d, total_open_interest, atm_iv_near, rv30, iv30_rv30, "
         "term_slope, expected_move_pct, actual_move_pct) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        ("BBB", "2026-11-01", str(AS_OF), "Pre Market", 50.0, 1e6, 20_000,
-         0.4, 0.35, 1.15, 0.01, 4.0, None),
+        ("BBB", "2026-11-01", str(AS_OF), "Pre Market", 50.0, 1e6, 20_000, 0.4, 0.35, 1.15, 0.01, 4.0, None),
     )
     # ff row with precomputed sigma_fwd: FF = (0.48 - 0.40)/0.40 = 0.20
     conn.execute(
@@ -489,6 +565,7 @@ def test_generate_picks_against_read_only_db(tmp_path):
 
 def test_generate_picks_tolerates_missing_tables(tmp_path):
     from earnings_edge.db import engine as db_engine
+
     db = tmp_path / "empty.db"
     db_engine.configure(db)
     picks = generate_picks(AS_OF)
@@ -511,7 +588,7 @@ def test_generate_picks_consumes_daily_signals(tmp_path):
     for i in range(25):
         conn.execute(
             ds_insert,
-            ("AAA", f"2026-07-{i+1:02d}", 20000.0, None, None, None, None, None, None, None),
+            ("AAA", f"2026-07-{i + 1:02d}", 20000.0, None, None, None, None, None, None, None),
         )
     conn.execute(
         ds_insert,
@@ -548,15 +625,19 @@ def test_generate_picks_consumes_daily_signals(tmp_path):
 
 # ── persistence -----------------------------------------------------------------
 
+
 def test_persist_and_load_picks_roundtrip(tmp_path):
     from earnings_edge.db import engine as db_engine
     from earnings_edge.picks import load_picks, persist_picks
+
     db_engine.configure(tmp_path / "p.db")
-    df = pd.DataFrame({
-        "ticker": ["AAA", "BBB"],
-        "forward_factor": [0.31, 0.20],
-        "option_volume": [20000.0, float("nan")],
-    })
+    df = pd.DataFrame(
+        {
+            "ticker": ["AAA", "BBB"],
+            "forward_factor": [0.31, 0.20],
+            "option_volume": [20000.0, float("nan")],
+        }
+    )
     n = persist_picks({"forward_factor": df}, AS_OF)
     assert n == 2
 
@@ -564,6 +645,7 @@ def test_persist_and_load_picks_roundtrip(tmp_path):
     assert len(loaded) == 2
     assert list(loaded["ticker"]) == ["AAA", "BBB"]  # rank order
     import json
+
     sig = json.loads(loaded.iloc[1]["signals_json"])
     assert sig["forward_factor"] == pytest.approx(0.20)
     assert sig["option_volume"] is None  # NaN serialized as null
@@ -577,4 +659,5 @@ def test_persist_and_load_picks_roundtrip(tmp_path):
 
 def test_persist_picks_empty():
     from earnings_edge.picks import persist_picks
+
     assert persist_picks({"earnings": pd.DataFrame()}, AS_OF) == 0

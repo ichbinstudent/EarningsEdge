@@ -11,6 +11,7 @@ Usage:
     ./.venv/bin/python backtest.py --all               # both families
     ./.venv/bin/python backtest.py --strategies short_straddle directional_call
 """
+
 from __future__ import annotations
 
 import argparse
@@ -50,7 +51,9 @@ def run_all(data: DataBundle, strategies: list[str] | None = None) -> dict[str, 
 def print_report(results: dict[str, StrategyResult], label: str) -> None:
     """Pretty-print a strategy comparison table."""
     print(f"\n=== {label} ===")
-    header = f"{'Strategy':<30} {'Trades':>6} {'Taken':>6} {'Avg PnL':>10} {'Win%':>7} {'Total PnL':>12} {'Note'}"
+    header = (
+        f"{'Strategy':<30} {'Trades':>6} {'Taken':>6} {'Avg PnL':>10} {'Win%':>7} {'Total PnL':>12} {'Note'}"
+    )
     print(header)
     print("-" * len(header))
 
@@ -63,19 +66,30 @@ def print_report(results: dict[str, StrategyResult], label: str) -> None:
         total_pnl = s.get("pnl", s.get("total_pnl", s.get("total_pnl_pct", 0.0)))
         note = s.get("note", "")
 
-        print(f"{name:<30} {n_trades:>6} {taken:>6} {avg_pnl:>10.2f} {win_rate:>6.1f}% {round(total_pnl, 4):>12} {note}")
+        print(
+            f"{name:<30} {n_trades:>6} {taken:>6} {avg_pnl:>10.2f} {win_rate:>6.1f}% {round(total_pnl, 4):>12} {note}"
+        )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Backtest all strategies")
     parser.add_argument("--db", default=None, help="Path to earnings_ml.db")
     parser.add_argument("--strategies", nargs="*", default=None, help="Subset of strategies to run")
-    parser.add_argument("--positional", action="store_true", help="Include non-calendar positional strategies")
-    parser.add_argument("--multi-strike", action="store_true", help="Include multi-strike (iron condor/butterfly/risk reversal)")
+    parser.add_argument(
+        "--positional", action="store_true", help="Include non-calendar positional strategies"
+    )
+    parser.add_argument(
+        "--multi-strike",
+        action="store_true",
+        help="Include multi-strike (iron condor/butterfly/risk reversal)",
+    )
     parser.add_argument("--all", action="store_true", help="Run all three strategy families")
-    parser.add_argument("--realism", action="store_true",
-                        help="Enrich multi-strike results with IBKR commissions, "
-                             "REG-T margin, and return-on-margin train/test stats")
+    parser.add_argument(
+        "--realism",
+        action="store_true",
+        help="Enrich multi-strike results with IBKR commissions, "
+        "REG-T margin, and return-on-margin train/test stats",
+    )
     parser.add_argument("--output", default=None, help="Write JSON report to file")
     args = parser.parse_args()
 
@@ -84,9 +98,11 @@ def main() -> int:
         args.multi_strike = True
 
     data = DataBundle.from_db(args.db)
-    print(f"Loaded {len(data.snapshots)} snapshots, {len(data.calendar_trades)} calendar trades, "
-          f"{len(data.live_candidates)} live candidates, {len(data.scan_outputs)} scan outputs, "
-          f"{len(data.options_chain)} chain rows\n")
+    print(
+        f"Loaded {len(data.snapshots)} snapshots, {len(data.calendar_trades)} calendar trades, "
+        f"{len(data.live_candidates)} live candidates, {len(data.scan_outputs)} scan outputs, "
+        f"{len(data.options_chain)} chain rows\n"
+    )
 
     results = run_all(data, args.strategies)
     print_report(results, "Calendar Call Family")
@@ -101,6 +117,7 @@ def main() -> int:
         ms_results = run_multi_strike(data, args.strategies)
         if args.realism:
             from earnings_edge.backtest.enrich import enrich_result
+
             ms_results = {name: enrich_result(res) for name, res in ms_results.items()}
         print_report(ms_results, "Multi-Strike Family")
         if args.realism:
@@ -110,10 +127,12 @@ def main() -> int:
                     continue
                 rom = s.get("avg_return_on_margin")
                 rom_txt = f"{rom:+.2%}" if rom is not None else "n/a"
-                print(f"  {name}: net ${s['net_total_pnl_dollars']:+,.0f} "
-                      f"(gross ${s['gross_total_pnl_dollars']:+,.0f}, "
-                      f"comm ${s.get('commissions_total', 0.0):,.0f}), "
-                      f"net win {s['net_win_rate']:.1%}, avg RoM {rom_txt}")
+                print(
+                    f"  {name}: net ${s['net_total_pnl_dollars']:+,.0f} "
+                    f"(gross ${s['gross_total_pnl_dollars']:+,.0f}, "
+                    f"comm ${s.get('commissions_total', 0.0):,.0f}), "
+                    f"net win {s['net_win_rate']:.1%}, avg RoM {rom_txt}"
+                )
         for k, v in ms_results.items():
             results[k] = v
 

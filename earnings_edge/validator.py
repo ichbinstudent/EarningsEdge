@@ -31,6 +31,7 @@ class StockValidator:
         self.browser = browser
         if provider is None:
             from .market_data_provider import get_provider
+
             provider = get_provider()
         self.provider = provider
         self.iv_rv_pass = DEFAULT_IV_RV_PASS
@@ -100,8 +101,7 @@ class StockValidator:
                     return _fail(f"OI {total_oi} < 2000")
                 m.open_interest = total_oi
             else:
-                logger.info("%s: OI gate skipped (%s backend has no open interest)",
-                            ticker, chain.source)
+                logger.info("%s: OI gate skipped (%s backend has no open interest)", ticker, chain.source)
 
             # 5. Core analysis (term structure, IVs, etc.)
             analysis = self.analyzer.compute_recommendation(ticker, candidate.earnings_date)
@@ -179,10 +179,14 @@ class StockValidator:
             m.tier = 1 if is_pass else 2 if is_tier2 else 0
 
             reason = (
-                " | ".join(failed) if failed
-                else " | ".join(near_miss) if near_miss
-                else "Tier 1 Trade" if is_pass
-                else "Tier 2 Trade" if is_tier2
+                " | ".join(failed)
+                if failed
+                else " | ".join(near_miss)
+                if near_miss
+                else "Tier 1 Trade"
+                if is_pass
+                else "Tier 2 Trade"
+                if is_tier2
                 else "Near Miss"
             )
             return ValidationResult(
@@ -200,7 +204,9 @@ class StockValidator:
     # -- helpers ----------------------------------------------------------
 
     @staticmethod
-    def _check_expected_move(raw, price, m: ValidationMetrics, provider, options_dates, ticker) -> ValidationResult | None:
+    def _check_expected_move(
+        raw, price, m: ValidationMetrics, provider, options_dates, ticker
+    ) -> ValidationResult | None:
         """Return a fail-result if expected move < $0.90, else None."""
         try:
             pct = float(str(raw).strip("%")) / 100 if isinstance(raw, str) else float(raw) / 100
@@ -210,8 +216,10 @@ class StockValidator:
                 ch = provider.option_chain(ticker, options_dates[0])
                 ci = (ch.calls["strike"] - price).abs().idxmin()
                 pi = (ch.puts["strike"] - price).abs().idxmin()
-                pct = ((ch.calls.loc[ci, "bid"] + ch.calls.loc[ci, "ask"]) / 2 +
-                       (ch.puts.loc[pi, "bid"] + ch.puts.loc[pi, "ask"]) / 2) / price
+                pct = (
+                    (ch.calls.loc[ci, "bid"] + ch.calls.loc[ci, "ask"]) / 2
+                    + (ch.puts.loc[pi, "bid"] + ch.puts.loc[pi, "ask"]) / 2
+                ) / price
             except Exception:
                 return None
 

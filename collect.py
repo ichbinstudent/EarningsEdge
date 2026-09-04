@@ -41,6 +41,7 @@ def collect_features(
     errors: list[str] = []
 
     from earnings_edge.market_data_provider import get_provider
+
     provider = get_provider()
 
     # ── Price ────────────────────────────────────────────────────────
@@ -67,9 +68,7 @@ def collect_features(
         row["has_options"] = 1 if opts else 0
         if opts:
             row["nearest_expiry"] = opts[0]
-            row["days_to_expiry"] = (
-                datetime.strptime(opts[0], "%Y-%m-%d").date() - date.today()
-            ).days
+            row["days_to_expiry"] = (datetime.strptime(opts[0], "%Y-%m-%d").date() - date.today()).days
 
             # Open interest (not available on the Polygon fallback)
             try:
@@ -160,6 +159,7 @@ def run_collection(scan_date: str | None = None) -> int:
 
 if __name__ == "__main__":
     import argparse
+
     p = argparse.ArgumentParser(description="Daily ML feature collector")
     p.add_argument("--date", "-d", help="Override scan date (MM/DD/YYYY)")
     args = p.parse_args()

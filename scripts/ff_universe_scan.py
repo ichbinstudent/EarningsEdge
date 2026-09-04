@@ -35,6 +35,7 @@ from scripts.ff_backfill import atm_contract, pick_expiries
 
 SELECTOR_VERSION = 2
 
+
 def get_latest_chain(ticker: str, as_of: str):
     return _fetchall(
         None,
@@ -45,6 +46,7 @@ def get_latest_chain(ticker: str, as_of: str):
         {"ticker": ticker, "as_of": as_of},
     )
 
+
 def get_earnings_in_window(ticker: str, scan_date: str, t1_expiry: str):
     """Finds earnings date strictly after scan_date and on or before t1_expiry."""
     rows = _fetchall(
@@ -52,9 +54,10 @@ def get_earnings_in_window(ticker: str, scan_date: str, t1_expiry: str):
         "SELECT earnings_date FROM snapshots "
         "WHERE ticker = :ticker AND earnings_date > :scan_date AND earnings_date <= :t1_expiry "
         "ORDER BY earnings_date ASC LIMIT 1",
-        {"ticker": ticker, "scan_date": scan_date, "t1_expiry": t1_expiry}
+        {"ticker": ticker, "scan_date": scan_date, "t1_expiry": t1_expiry},
     )
     return rows[0]["earnings_date"] if rows else None
+
 
 def hist_move_stats(ticker: str, exclude_scan: str) -> tuple[float | None, float | None, int]:
     vals = sorted(snapshots_hist_move_abs(ticker, exclude_scan))
@@ -65,11 +68,12 @@ def hist_move_stats(ticker: str, exclude_scan: str) -> tuple[float | None, float
     rms = math.sqrt(sum(v * v for v in vals) / n)
     return med, rms, n
 
+
 def get_spot(ticker: str, scan_date: str) -> float | None:
     rows = _fetchall(
         None,
         "SELECT price FROM snapshots WHERE ticker = :ticker AND scan_date = :scan_date AND price IS NOT NULL",
-        {"ticker": ticker, "scan_date": scan_date}
+        {"ticker": ticker, "scan_date": scan_date},
     )
     if rows:
         return rows[0]["price"]
@@ -78,7 +82,7 @@ def get_spot(ticker: str, scan_date: str) -> float | None:
     rows = _fetchall(
         None,
         "SELECT price FROM snapshots WHERE ticker = :ticker AND price IS NOT NULL ORDER BY scan_date DESC LIMIT 1",
-        {"ticker": ticker}
+        {"ticker": ticker},
     )
     return rows[0]["price"] if rows else None
 
@@ -94,7 +98,8 @@ def process_ticker(ticker: str, scan: date) -> dict:
         "selector_version": SELECTOR_VERSION,
     }
 
-    spot = get_spot(ticker, scan_date_str); spot = float(spot) if spot else None
+    spot = get_spot(ticker, scan_date_str)
+    spot = float(spot) if spot else None
     if not spot:
         row["skip_reason"] = "no_spot_price"
         return row
@@ -132,14 +137,22 @@ def process_ticker(ticker: str, scan: date) -> dict:
     iv1 = implied_volatility(close1, spot, float(c1["strike_price"]), T1, 0.045, "call") if close1 else None
     iv2 = implied_volatility(close2, spot, float(c2["strike_price"]), T2, 0.045, "call") if close2 else None
 
-    row.update({
-        "t1_expiry": t1["expiry"], "t1_dte": t1["dte"],
-        "t1_strike": float(c1["strike_price"]), "t1_contract": c1["ticker"],
-        "t1_close": close1, "t1_iv": iv1,
-        "t2_expiry": t2["expiry"], "t2_dte": t2["dte"],
-        "t2_strike": float(c2["strike_price"]), "t2_contract": c2["ticker"],
-        "t2_close": close2, "t2_iv": iv2,
-    })
+    row.update(
+        {
+            "t1_expiry": t1["expiry"],
+            "t1_dte": t1["dte"],
+            "t1_strike": float(c1["strike_price"]),
+            "t1_contract": c1["ticker"],
+            "t1_close": close1,
+            "t1_iv": iv1,
+            "t2_expiry": t2["expiry"],
+            "t2_dte": t2["dte"],
+            "t2_strike": float(c2["strike_price"]),
+            "t2_contract": c2["ticker"],
+            "t2_close": close2,
+            "t2_iv": iv2,
+        }
+    )
 
     if not iv1 or not iv2:
         row["skip_reason"] = "iv_unsolvable"
@@ -168,7 +181,7 @@ def process_ticker(ticker: str, scan: date) -> dict:
         row["hist_rms_move_pct"] = rms
         row["n_hist_events"] = n_hist
 
-        event_var = iv1 ** 2 * T1 - sigma_fwd ** 2 * (T1 - tau)
+        event_var = iv1**2 * T1 - sigma_fwd**2 * (T1 - tau)
         if event_var > 0:
             implied_move = math.sqrt(event_var) * 100.0
             row["implied_event_move_pct"] = implied_move
@@ -176,6 +189,7 @@ def process_ticker(ticker: str, scan: date) -> dict:
                 row["premium_ratio"] = implied_move / rms
 
     return row
+
 
 def main() -> None:
     ap = argparse.ArgumentParser()
@@ -193,7 +207,7 @@ def main() -> None:
 
     tickers = snapshots_optionable_universe(10000)
     if args.limit:
-        tickers = tickers[:args.limit]
+        tickers = tickers[: args.limit]
 
     total = len(tickers)
     print(f"ff_universe_scan: {total} tickers to process for scan_date {scan_date_str}", flush=True)
@@ -209,10 +223,11 @@ def main() -> None:
             row = process_ticker(ticker, scan)
         except Exception as exc:
             row = {
-                "ticker": ticker, "scan_date": scan_date_str,
+                "ticker": ticker,
+                "scan_date": scan_date_str,
                 "has_earnings_in_window": 0,
                 "selector_version": SELECTOR_VERSION,
-                "skip_reason": f"error:{exc}"[:80]
+                "skip_reason": f"error:{exc}"[:80],
             }
         batch.append(row)
 
@@ -228,7 +243,7 @@ def main() -> None:
                 batch = []
             rate = (i + 1) / (time.time() - t0)
             eta = (total - i - 1) / rate / 60 if rate else 0
-            print(f"  {i+1}/{total} ok={done} skip={skipped} eta={eta:.0f}min", flush=True)
+            print(f"  {i + 1}/{total} ok={done} skip={skipped} eta={eta:.0f}min", flush=True)
 
     if batch and not args.dry_run:
         ff_universe_snapshots_upsert_many(batch)
@@ -252,7 +267,8 @@ def main() -> None:
         if no_earning:
             print(no_earning[0])
 
-    print(f"DONE ok={done} skip={skipped} fail={failed} elapsed={(time.time()-t0)/60:.0f}min", flush=True)
+    print(f"DONE ok={done} skip={skipped} fail={failed} elapsed={(time.time() - t0) / 60:.0f}min", flush=True)
+
 
 if __name__ == "__main__":
     main()

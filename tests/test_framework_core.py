@@ -17,16 +17,17 @@ from framework.core.universe import (
 
 # ── Trading calendar (XNYS facts) ------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def cal():
     return TradingCalendar()
 
 
 def test_calendar_sessions_and_holidays(cal):
-    assert cal.is_session(date(2026, 7, 6))          # Monday
-    assert not cal.is_session(date(2026, 7, 4))      # Saturday
-    assert not cal.is_session(date(2026, 7, 3))      # observed Independence Day
-    assert not cal.is_session(date(2026, 11, 26))    # Thanksgiving
+    assert cal.is_session(date(2026, 7, 6))  # Monday
+    assert not cal.is_session(date(2026, 7, 4))  # Saturday
+    assert not cal.is_session(date(2026, 7, 3))  # observed Independence Day
+    assert not cal.is_session(date(2026, 11, 26))  # Thanksgiving
 
 
 def test_calendar_next_prev_session(cal):
@@ -43,17 +44,17 @@ def test_calendar_add_sessions_skips_holidays(cal):
 
 
 def test_calendar_early_close(cal):
-    assert cal.is_early_close(date(2026, 11, 27))    # day after Thanksgiving
+    assert cal.is_early_close(date(2026, 11, 27))  # day after Thanksgiving
     assert not cal.is_early_close(date(2026, 7, 6))
 
 
 # ── Strategy config ----------------------------------------------------------
 
+
 def _raw(**over):
     base = {
         "strategy": {"name": "s1", "execution_mode": "approval", "lifecycle": "paper"},
-        "risk": {"sizer": {"name": "pct_portfolio", "pct": 0.05},
-                 "limits": {"max_pct_per_trade": 0.1}},
+        "risk": {"sizer": {"name": "pct_portfolio", "pct": 0.05}, "limits": {"max_pct_per_trade": 0.1}},
         "exits": [{"rule": "time", "days_after_entry": 3}],
     }
     base.update(over)
@@ -78,12 +79,9 @@ def test_validate_rejects_bad_files(tmp_path):
 
 
 def test_load_configs_skips_invalid_and_duplicates(tmp_path):
-    (tmp_path / "good.toml").write_text(
-        '[strategy]\nname = "good"\n')
-    (tmp_path / "bad.toml").write_text(
-        '[strategy]\nname = "bad"\nexecution_mode = "yolo"\n')
-    (tmp_path / "dup.toml").write_text(
-        '[strategy]\nname = "good"\n')
+    (tmp_path / "good.toml").write_text('[strategy]\nname = "good"\n')
+    (tmp_path / "bad.toml").write_text('[strategy]\nname = "bad"\nexecution_mode = "yolo"\n')
+    (tmp_path / "dup.toml").write_text('[strategy]\nname = "good"\n')
     configs = load_strategy_configs(tmp_path)
     assert list(configs) == ["good"]
 
@@ -92,8 +90,11 @@ def test_shipped_example_configs_are_valid():
     configs = load_strategy_configs()
     # Every strategy the engines can emit has a config, named by its code name
     expected = {
-        "calendar_call_ml", "short_straddle",
-        "vol_risk_premium", "earnings_quality", "ff_ladder",
+        "calendar_call_ml",
+        "short_straddle",
+        "vol_risk_premium",
+        "earnings_quality",
+        "ff_ladder",
         "forward_factor_arb",
     }
     assert expected <= set(configs)
@@ -105,6 +106,7 @@ def test_shipped_example_configs_are_valid():
 
 
 # ── Universes ---------------------------------------------------------------
+
 
 def test_static_universe():
     u = StaticListUniverse(["aapl", "MSFT"])

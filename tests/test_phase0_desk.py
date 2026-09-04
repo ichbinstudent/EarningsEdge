@@ -1,4 +1,5 @@
 """Phase 0 desk safety: operator lock, instance lock, broker-truth book."""
+
 from __future__ import annotations
 
 from datetime import date
@@ -70,39 +71,89 @@ def test_instance_lock_second_process_refused(tmp_path):
 
 def test_classify_book_three_buckets(tmp_path):
     configure(tmp_path / "fw.db")
-    record_open_positions([
-            {"symbol": "META260828C00595000", "side": "sell", "ratio_qty": 1,
-             "option_type": "call", "strike": 595.0, "expiry": date(2026, 8, 28)},
-            {"symbol": "META260918C00595000", "side": "buy", "ratio_qty": 1,
-             "option_type": "call", "strike": 595.0, "expiry": date(2026, 9, 18)},
+    record_open_positions(
+        [
+            {
+                "symbol": "META260828C00595000",
+                "side": "sell",
+                "ratio_qty": 1,
+                "option_type": "call",
+                "strike": 595.0,
+                "expiry": date(2026, 8, 28),
+            },
+            {
+                "symbol": "META260918C00595000",
+                "side": "buy",
+                "ratio_qty": 1,
+                "option_type": "call",
+                "strike": 595.0,
+                "expiry": date(2026, 9, 18),
+            },
         ],
-        "ff_ladder", group_id="g-meta", entry_price=10.2,
+        "ff_ladder",
+        group_id="g-meta",
+        entry_price=10.2,
         metadata={"side": "CALENDAR", "earnings_date": "2026-07-29"},
     )
-    record_open_positions([{"symbol": "GONE260828C00100000", "side": "sell", "ratio_qty": 1,
-          "option_type": "call", "strike": 100.0, "expiry": date(2026, 8, 28)}],
-        "ff_ladder", group_id="g-gone", entry_price=1.0,
+    record_open_positions(
+        [
+            {
+                "symbol": "GONE260828C00100000",
+                "side": "sell",
+                "ratio_qty": 1,
+                "option_type": "call",
+                "strike": 100.0,
+                "expiry": date(2026, 8, 28),
+            }
+        ],
+        "ff_ladder",
+        group_id="g-gone",
+        entry_price=1.0,
         metadata={"side": "CALENDAR", "earnings_date": "2026-07-29"},
     )
     from framework.execution.managed import open_groups
+
     broker = [
-        {"symbol": "META260828C00595000", "qty": "-1", "side": "short",
-         "unrealized_pl": "10", "current_price": "20", "avg_entry_price": "32"},
-        {"symbol": "META260918C00595000", "qty": "1", "side": "long",
-         "unrealized_pl": "-5", "current_price": "30", "avg_entry_price": "42"},
-        {"symbol": "ATLO260918C00030000", "qty": "-1", "side": "short",
-         "unrealized_pl": "-300", "current_price": "4", "avg_entry_price": "1"},
-        {"symbol": "NU", "qty": "-2500", "side": "short",
-         "unrealized_pl": "-3000", "current_price": "15", "avg_entry_price": "14"},
+        {
+            "symbol": "META260828C00595000",
+            "qty": "-1",
+            "side": "short",
+            "unrealized_pl": "10",
+            "current_price": "20",
+            "avg_entry_price": "32",
+        },
+        {
+            "symbol": "META260918C00595000",
+            "qty": "1",
+            "side": "long",
+            "unrealized_pl": "-5",
+            "current_price": "30",
+            "avg_entry_price": "42",
+        },
+        {
+            "symbol": "ATLO260918C00030000",
+            "qty": "-1",
+            "side": "short",
+            "unrealized_pl": "-300",
+            "current_price": "4",
+            "avg_entry_price": "1",
+        },
+        {
+            "symbol": "NU",
+            "qty": "-2500",
+            "side": "short",
+            "unrealized_pl": "-3000",
+            "current_price": "15",
+            "avg_entry_price": "14",
+        },
     ]
     book = classify_book(open_groups(), broker)
-    assert {i.symbol for i in book.managed} == {
-        "META260828C00595000", "META260918C00595000"}
+    assert {i.symbol for i in book.managed} == {"META260828C00595000", "META260918C00595000"}
     assert {i.symbol for i in book.orphan} == {"ATLO260918C00030000", "NU"}
     assert {i.symbol for i in book.missing} == {"GONE260828C00100000"}
     nu = next(i for i in book.orphan if i.symbol == "NU")
     assert nu.ticker == "NU" and nu.qty == -2500
-    text = positions_view( broker_positions=broker)
+    text = positions_view(broker_positions=broker)
     assert "ORPHAN" in text and "ATLO" in text and "NU" in text
     assert "MISSING" in text and "GONE" in text
     assert "MANAGED" in text and "META" in text
@@ -111,7 +162,7 @@ def test_classify_book_three_buckets(tmp_path):
 def test_positions_view_empty_local_still_legacy(tmp_path):
     configure(tmp_path / "fw.db")
     assert "No open managed positions" in positions_view()
-    assert "No positions at broker or locally" in positions_view( broker_positions=[])
+    assert "No positions at broker or locally" in positions_view(broker_positions=[])
 
 
 def test_book_action_banner_and_panel_refresh(tmp_path):
@@ -124,13 +175,20 @@ def test_book_action_banner_and_panel_refresh(tmp_path):
     from framework.positions.book import classify_book
 
     assert "Adopted ATLO" in book_action_banner(
-        "adopt", {"ok": True, "group_id": "adopt-ATLO"}, "ATLO260918C00030000")
+        "adopt", {"ok": True, "group_id": "adopt-ATLO"}, "ATLO260918C00030000"
+    )
     assert "⚠️" in book_action_banner("adopt", {"ok": False, "error": "gone"})
 
     configure(tmp_path / "fw.db")
     broker = [
-        {"symbol": "ATLO260918C00030000", "qty": "-1", "side": "short",
-         "unrealized_pl": "-300", "current_price": "4", "avg_entry_price": "1"},
+        {
+            "symbol": "ATLO260918C00030000",
+            "qty": "-1",
+            "side": "short",
+            "unrealized_pl": "-300",
+            "current_price": "4",
+            "avg_entry_price": "1",
+        },
     ]
     text, rows = build_positions_panel(broker_positions=broker)
     assert "ORPHAN" in text and "ATLO" in text
@@ -144,16 +202,25 @@ def test_book_action_banner_and_panel_refresh(tmp_path):
     ign = ignore_orphan("DAL", by="pre")
     assert ign["ok"]
     text_ig, _ = build_positions_panel(
-        broker_positions=broker + [
-            {"symbol": "DAL", "qty": "10", "side": "long",
-             "avg_entry_price": "1", "current_price": "1", "unrealized_pl": "0"},
-        ])
+        broker_positions=broker
+        + [
+            {
+                "symbol": "DAL",
+                "qty": "10",
+                "side": "long",
+                "avg_entry_price": "1",
+                "current_price": "1",
+                "unrealized_pl": "0",
+            },
+        ]
+    )
     assert "DAL" not in text_ig
 
     rec = adopt_orphan(broker[0], by="test")
     assert rec["ok"]
     text2, rows2 = build_positions_panel(
-        broker_positions=broker, banner="✅ Adopted ATLO260918C00030000 — now on the managed book.")
+        broker_positions=broker, banner="✅ Adopted ATLO260918C00030000 — now on the managed book."
+    )
     assert text2.startswith("✅ Adopted ATLO")
     assert "MANAGED" in text2
     assert "ORPHAN" not in text2
@@ -171,10 +238,16 @@ def test_adopt_callback_edits_positions_panel(tmp_path, monkeypatch):
 
     path = tmp_path / "fw.db"
     configure(path)
-    broker = [{
-        "symbol": "ATLO260918C00030000", "qty": "-1", "side": "short",
-        "avg_entry_price": "1", "current_price": "4", "unrealized_pl": "-300",
-    }]
+    broker = [
+        {
+            "symbol": "ATLO260918C00030000",
+            "qty": "-1",
+            "side": "short",
+            "avg_entry_price": "1",
+            "current_price": "4",
+            "unrealized_pl": "-300",
+        }
+    ]
 
     class _Client:
         def get_positions(self):
@@ -196,8 +269,7 @@ def test_adopt_callback_edits_positions_panel(tmp_path, monkeypatch):
     query = MagicMock()
     query.edit_message_text = AsyncMock()
     query.message.reply_text = AsyncMock()
-    asyncio.run(TradingBot._handle_book_callback(
-        _Bot(), query, uid=1, data="bk_ad_ATLO260918C00030000"))
+    asyncio.run(TradingBot._handle_book_callback(_Bot(), query, uid=1, data="bk_ad_ATLO260918C00030000"))
     query.edit_message_text.assert_awaited()
     text = query.edit_message_text.await_args.args[0]
     assert "Adopted ATLO260918C00030000" in text
@@ -222,9 +294,14 @@ def test_inbox_skip_rewrites_same_panel(tmp_path):
     configure(path)
     store = PendingTradeStore(str(tmp_path / "pending.db"))
     trade = Trade(
-        ticker="FRESH", earnings_date=date(2026, 8, 20), scan_date=date(2026, 8, 15),
-        strategy="calendar_call_ml", side="CALENDAR", entry_price=1.5,
-        features={}, ml_decision="TAKE",
+        ticker="FRESH",
+        earnings_date=date(2026, 8, 20),
+        scan_date=date(2026, 8, 15),
+        strategy="calendar_call_ml",
+        side="CALENDAR",
+        entry_price=1.5,
+        features={},
+        ml_decision="TAKE",
     )
     pid = store.add(trade, "card")
 
@@ -243,8 +320,7 @@ def test_inbox_skip_rewrites_same_panel(tmp_path):
     query = MagicMock()
     query.edit_message_text = AsyncMock()
     query.message.reply_text = AsyncMock()
-    asyncio.run(TradingBot._handle_inbox_callback(
-        _Bot(), query, uid=1, data=f"in_sk_{pid}"))
+    asyncio.run(TradingBot._handle_inbox_callback(_Bot(), query, uid=1, data=f"in_sk_{pid}"))
     query.edit_message_text.assert_awaited()
     text = query.edit_message_text.await_args.args[0]
     assert "Skipped" in text or "Pending inbox" in text
@@ -256,21 +332,37 @@ def test_inbox_skip_rewrites_same_panel(tmp_path):
 
 def test_adopt_ignore_mark(tmp_path):
     configure(tmp_path / "fw.db")
-    rec = adopt_orphan({
-        "symbol": "ATLO260918C00030000", "qty": "-1", "side": "short",
-        "avg_entry_price": "1",
-    }, by="test")
+    rec = adopt_orphan(
+        {
+            "symbol": "ATLO260918C00030000",
+            "qty": "-1",
+            "side": "short",
+            "avg_entry_price": "1",
+        },
+        by="test",
+    )
     assert rec["ok"]
     from framework.execution.managed import open_groups
+
     groups = open_groups()
     assert any(g.ticker == "ATLO" for g in groups)
     ign = ignore_orphan("DAL", by="test")
     assert ign["ok"]
     with db_engine.get_session() as s:
         assert s.execute(text("SELECT symbol FROM adopted_positions WHERE symbol='DAL'")).first()
-    record_open_positions([{"symbol": "MISS260101C00100000", "side": "buy", "ratio_qty": 1,
-          "option_type": "call", "strike": 10, "expiry": date(2026, 1, 1)}],
-        "unmanaged", group_id="g-miss",
+    record_open_positions(
+        [
+            {
+                "symbol": "MISS260101C00100000",
+                "side": "buy",
+                "ratio_qty": 1,
+                "option_type": "call",
+                "strike": 10,
+                "expiry": date(2026, 1, 1),
+            }
+        ],
+        "unmanaged",
+        group_id="g-miss",
     )
     marked = mark_missing_closed("g-miss", by="test")
     assert marked["ok"]

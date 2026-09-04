@@ -25,9 +25,11 @@ def _build_session() -> curl_requests.Session:
 
     # Enforce default timeout to prevent indefinite hangs if yfinance misses it
     orig_request = sess.request
+
     def _request_with_timeout(*args, **req_kwargs):
         req_kwargs.setdefault("timeout", 30.0)
         return orig_request(*args, **req_kwargs)
+
     sess.request = _request_with_timeout
     return sess
 
@@ -53,6 +55,7 @@ MIN_EXPECTED_MOVE = _filters.min_expected_move
 
 # ── Logging ───────────────────────────────────────────────────────────
 
+
 def get_logger(name: str) -> logging.Logger:
     """Return a logger under the ``earnings_edge`` namespace."""
     return logging.getLogger(f"earnings_edge.{name}")
@@ -61,7 +64,7 @@ def get_logger(name: str) -> logging.Logger:
 def setup_logging(log_dir: str = "logs") -> None:
     """Configure root ``earnings_edge`` logger with file + console output."""
     logger = logging.getLogger("earnings_edge")
-    if logger.handlers:          # already configured
+    if logger.handlers:  # already configured
         return
 
     logger.setLevel(logging.INFO)
@@ -70,9 +73,7 @@ def setup_logging(log_dir: str = "logs") -> None:
 
     fmt = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
-    fh = logging.FileHandler(
-        f"{log_dir}/scanner_{datetime.now().strftime('%Y%m%d')}.log"
-    )
+    fh = logging.FileHandler(f"{log_dir}/scanner_{datetime.now().strftime('%Y%m%d')}.log")
     fh.setFormatter(fmt)
     logger.addHandler(fh)
 

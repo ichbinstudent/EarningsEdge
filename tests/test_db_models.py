@@ -1,4 +1,5 @@
 """Model definitions must match the production schema exactly."""
+
 import shutil
 import sqlite3
 
@@ -13,14 +14,20 @@ def _live_schema(db_file) -> dict:
     con = sqlite3.connect(db_file)
     try:
         out = {}
-        tables = [r[0] for r in con.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name != 'sqlite_sequence'"
-            " AND name != 'lost_and_found'")]  # DBCC salvage table from the 2026-08-31 recovery
+        tables = [
+            r[0]
+            for r in con.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name != 'sqlite_sequence'"
+                " AND name != 'lost_and_found'"
+            )
+        ]  # DBCC salvage table from the 2026-08-31 recovery
         for t in tables:
             # Full tuple: (name, type, notnull, dflt_value, pk). dflt_value is
             # compared verbatim — the generator emits server_default=text(...) so
             # create_all renders the identical SQL literal ('pending', 0, etc.).
-            out[t] = [(r[1], r[2].upper(), r[3], r[4], r[5]) for r in con.execute(f'PRAGMA table_info("{t}")')]
+            out[t] = [
+                (r[1], r[2].upper(), r[3], r[4], r[5]) for r in con.execute(f'PRAGMA table_info("{t}")')
+            ]
         return out
     finally:
         con.close()
@@ -38,6 +45,7 @@ def test_models_match_production_schema(tmp_path):
 
     assert sorted(live) == sorted(created), (
         f"table mismatch: only-live={sorted(set(live) - set(created))} "
-        f"only-created={sorted(set(created) - set(live))}")
+        f"only-created={sorted(set(created) - set(live))}"
+    )
     for table, cols in live.items():
         assert cols == created[table], f"column mismatch in {table}"

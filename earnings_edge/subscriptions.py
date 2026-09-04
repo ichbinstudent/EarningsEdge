@@ -13,6 +13,7 @@ Persistence: data/strategy_subscribers.json, shape
 
 Pure Python, no telegram imports — unit-testable.
 """
+
 from __future__ import annotations
 
 import json
@@ -57,10 +58,7 @@ class StrategySubscriptions:
         try:
             with open(self._path) as f:
                 raw = json.load(f)
-            self._opt_outs = {
-                str(k): {int(u) for u in v}
-                for k, v in (raw.get("opt_outs") or {}).items()
-            }
+            self._opt_outs = {str(k): {int(u) for u in v} for k, v in (raw.get("opt_outs") or {}).items()}
             self._known = {int(u) for u in (raw.get("known_users") or [])}
         except Exception as exc:
             logger.error("Failed to load strategy subscriptions: %s", exc)
@@ -72,8 +70,10 @@ class StrategySubscriptions:
         tmp = self._path + ".tmp"
         with open(tmp, "w") as f:
             json.dump(
-                {"opt_outs": {k: sorted(v) for k, v in self._opt_outs.items()},
-                 "known_users": sorted(self._known)},
+                {
+                    "opt_outs": {k: sorted(v) for k, v in self._opt_outs.items()},
+                    "known_users": sorted(self._known),
+                },
                 f,
                 indent=2,
             )

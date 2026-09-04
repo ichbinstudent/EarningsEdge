@@ -7,6 +7,7 @@ hourly during RTH; this CLI is the same path for manual/backfill runs.
 
 Rate limit: Alpaca data tier allows ~5 req/sec sustained.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -36,12 +37,11 @@ def _parse_args():
     p = argparse.ArgumentParser(description="Live options-chain collector")
     p.add_argument("--api-key", default=os.environ.get("APCA_API_KEY_ID"))
     p.add_argument("--api-secret", default=os.environ.get("APCA_API_SECRET_KEY"))
-    p.add_argument("--underlyings", nargs="*", default=[],
-                   help="Underlying tickers; default from DB.")
-    p.add_argument("--max-tickers", type=int, default=DEFAULT_MAX_TICKERS,
-                   help="Cap tickers to avoid long runs.")
-    p.add_argument("--dry-run", action="store_true",
-                   help="Pull only; don't persist.")
+    p.add_argument("--underlyings", nargs="*", default=[], help="Underlying tickers; default from DB.")
+    p.add_argument(
+        "--max-tickers", type=int, default=DEFAULT_MAX_TICKERS, help="Cap tickers to avoid long runs."
+    )
+    p.add_argument("--dry-run", action="store_true", help="Pull only; don't persist.")
     return p.parse_args()
 
 
@@ -51,6 +51,7 @@ def main():
         raise RuntimeError("Must pass --api-key + --api-secret or set env APCA_API_KEY+SECRET")
 
     from earnings_edge.collectors.alpaca_options import AlpacaOptionsClient
+
     client = AlpacaOptionsClient(api_key=args.api_key, api_secret=args.api_secret)
 
     if args.underlyings:
@@ -63,8 +64,7 @@ def main():
         return
 
     run_id = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-    logger.info("Starting options-chain collection run=%s (%d underlyings)",
-                run_id, len(underlyings))
+    logger.info("Starting options-chain collection run=%s (%d underlyings)", run_id, len(underlyings))
     stats = collect(client, underlyings, run_id=run_id, dry_run=args.dry_run)
     logger.info("Run %s complete: %s", run_id, stats)
 

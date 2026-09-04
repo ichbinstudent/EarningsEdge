@@ -10,8 +10,9 @@ BANNED_PATHS = [
     "framework/risk/",
     "framework/positions/exits.py",
     "framework/positions/guards.py",
-    "framework/positions/book_actions.py"
+    "framework/positions/book_actions.py",
 ]
+
 
 def is_banned(path: Path) -> bool:
     rel_path = path.as_posix()
@@ -19,6 +20,7 @@ def is_banned(path: Path) -> bool:
         if (b.endswith("/") and rel_path.startswith(b)) or rel_path == b:
             return True
     return False
+
 
 def contains_record_event(node):
     # Walk the exception handler body looking for a Call to record_event or a bare raise
@@ -29,6 +31,7 @@ def contains_record_event(node):
         if isinstance(child, ast.Raise):
             return True
     return False
+
 
 def check_file(path: Path) -> list:
     errors = []
@@ -53,6 +56,7 @@ def check_file(path: Path) -> list:
                     errors.append(f"{path}:{node.lineno}")
     return errors
 
+
 def test_exception_policy():
     errors = []
     root = Path(".")
@@ -63,6 +67,7 @@ def test_exception_policy():
     if errors:
         msg = "Found banned broad exceptions without record_event:\n" + "\n".join(errors)
         raise AssertionError(msg)
+
 
 if __name__ == "__main__":
     test_exception_policy()

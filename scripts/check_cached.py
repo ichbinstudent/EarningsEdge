@@ -10,7 +10,8 @@ from earnings_edge.db import get_session
 if __name__ == "__main__":
     with get_session() as session:
         # What snapshot fields are already populated for May+ rows?
-        rows = session.execute(text("""
+        rows = session.execute(
+            text("""
             SELECT
                 COUNT(*) as total,
                 SUM(CASE WHEN price IS NOT NULL AND price > 0 THEN 1 ELSE 0 END) as has_price,
@@ -20,7 +21,8 @@ if __name__ == "__main__":
                 SUM(CASE WHEN term_slope IS NOT NULL THEN 1 ELSE 0 END) as has_term,
                 SUM(CASE WHEN straddle_price IS NOT NULL THEN 1 ELSE 0 END) as has_straddle
             FROM snapshots WHERE scan_date >= '2026-05-01' AND has_options = 1
-        """)).fetchone()
+        """)
+        ).fetchone()
         print("May+ snapshots with has_options=1:")
         print(f"  Total: {rows[0]}")
         print(f"  Has price: {rows[1]}")
@@ -35,20 +37,28 @@ if __name__ == "__main__":
         # Only the IV-specific fields (atm_iv_near, rv30, etc.) are missing
 
         # How many have any IV-adjacent data already?
-        has_any_iv = session.execute(text("""
+        has_any_iv = session.execute(
+            text("""
             SELECT COUNT(*) FROM snapshots
             WHERE scan_date >= '2026-05-01' AND has_options = 1
             AND (expected_move_pct IS NOT NULL OR straddle_price IS NOT NULL OR term_slope IS NOT NULL)
-        """)).scalar()
+        """)
+        ).scalar()
         print(f"  Has any IV-adjacent data: {has_any_iv}")
 
         # Check what collect.py actually writes vs what polygon_backfill writes
         print("\nSample snapshot (has_options=1, latest):")
-        sample = session.execute(text("""
+        sample = (
+            session.execute(
+                text("""
             SELECT * FROM snapshots
             WHERE scan_date >= '2026-05-01' AND has_options = 1 AND price > 0
             ORDER BY scan_date DESC LIMIT 1
-        """)).mappings().fetchone()
+        """)
+            )
+            .mappings()
+            .fetchone()
+        )
         if sample:
             for key in sample.keys():
                 print(f"  {key} = {sample[key]}")

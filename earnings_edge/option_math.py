@@ -27,7 +27,7 @@ def black_scholes_price(
             return max(0.0, (S - K) if option_type == "call" else (K - S))
         return np.nan
 
-    d1 = (np.log(S / K) + (r - q + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+    d1 = (np.log(S / K) + (r - q + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
     d2 = d1 - sigma * np.sqrt(T)
 
     if option_type == "call":
@@ -47,14 +47,14 @@ def black_scholes_delta(
     """Black-Scholes delta (nan when undefined)."""
     if T <= 0 or sigma <= 0 or S <= 0 or K <= 0:
         return np.nan
-    d1 = (np.log(S / K) + (r - q + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+    d1 = (np.log(S / K) + (r - q + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
     if option_type == "call":
         return float(np.exp(-q * T) * norm.cdf(d1))
     return float(-np.exp(-q * T) * norm.cdf(-d1))
 
 
 def _d1(S: float, K: float, T: float, r: float, sigma: float, q: float) -> float:
-    return (np.log(S / K) + (r - q + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+    return (np.log(S / K) + (r - q + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
 
 
 def black_scholes_gamma(
@@ -89,10 +89,8 @@ def black_scholes_theta(
     d2 = d1 - sigma * np.sqrt(T)
     decay = -np.exp(-q * T) * S * norm.pdf(d1) * sigma / (2 * np.sqrt(T))
     if option_type == "call":
-        return float(decay - r * K * np.exp(-r * T) * norm.cdf(d2)
-                     + q * S * np.exp(-q * T) * norm.cdf(d1))
-    return float(decay + r * K * np.exp(-r * T) * norm.cdf(-d2)
-                 - q * S * np.exp(-q * T) * norm.cdf(-d1))
+        return float(decay - r * K * np.exp(-r * T) * norm.cdf(d2) + q * S * np.exp(-q * T) * norm.cdf(d1))
+    return float(decay + r * K * np.exp(-r * T) * norm.cdf(-d2) - q * S * np.exp(-q * T) * norm.cdf(-d1))
 
 
 def black_scholes_vega(
@@ -143,6 +141,7 @@ def implied_volatility(
     vol_max: float = 5.0,
 ) -> float:
     """Solve for the IV that makes BS price equal *market_price*."""
+
     def objective(sigma: float) -> float:
         try:
             return black_scholes_price(S, K, T, r, sigma, option_type, q) - market_price

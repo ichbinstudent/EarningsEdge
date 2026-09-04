@@ -29,12 +29,12 @@ class ConfigError(Exception):
 class StrategyConfig:
     name: str
     enabled: bool = True
-    schedule: str = ""                 # cron, interpreted in America/New_York
+    schedule: str = ""  # cron, interpreted in America/New_York
     execution_mode: str = "approval"
-    engine: str = "immediate"          # 'immediate' or 'limit_ladder'
+    engine: str = "immediate"  # 'immediate' or 'limit_ladder'
     lifecycle: str = "paper"
     universe: dict = field(default_factory=dict)
-    sizer: dict = field(default_factory=dict)   # {"name": ..., params...}
+    sizer: dict = field(default_factory=dict)  # {"name": ..., params...}
     limits: dict = field(default_factory=dict)  # overrides for RiskLimits fields
     exits: list[dict] = field(default_factory=list)
     path: str = ""
@@ -42,6 +42,7 @@ class StrategyConfig:
     def risk_limit_overrides(self) -> dict:
         """Only the limits keys that map onto RiskLimits fields."""
         from ..risk.manager import RiskLimits
+
         valid = set(RiskLimits.__dataclass_fields__)
         return {k: v for k, v in self.limits.items() if k in valid}
 
@@ -109,6 +110,11 @@ def load_strategy_configs(config_dir: Path | None = None) -> dict[str, StrategyC
             logger.error("Duplicate strategy name %s in %s — skipping", cfg.name, path.name)
             continue
         configs[cfg.name] = cfg
-        logger.info("Loaded strategy config %s (%s, mode=%s, lifecycle=%s)",
-                    cfg.name, path.name, cfg.execution_mode, cfg.lifecycle)
+        logger.info(
+            "Loaded strategy config %s (%s, mode=%s, lifecycle=%s)",
+            cfg.name,
+            path.name,
+            cfg.execution_mode,
+            cfg.lifecycle,
+        )
     return configs

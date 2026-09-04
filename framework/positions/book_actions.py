@@ -4,6 +4,7 @@ All writes audit ``trade_events``. Broker mutations go through
 ``client.close_position`` (one symbol). Local group close uses
 ``mark_group_closed`` only after the broker side is gone or the close filled.
 """
+
 from __future__ import annotations
 
 import logging
@@ -32,8 +33,12 @@ def close_symbol(client, symbol: str, *, by: str = "operator") -> dict:
     # close pass will mark missing. If it was the last live leg of a group
     # and the broker accepted, we still wait for reconcile unless the
     # caller closes the group explicitly.
-    _event("close_submitted", symbol, None,
-           detail=f"{by}: broker accepted {getattr(resp, 'get', lambda k, d=None: d)('id') if isinstance(resp, dict) else ''}")
+    _event(
+        "close_submitted",
+        symbol,
+        None,
+        detail=f"{by}: broker accepted {getattr(resp, 'get', lambda k, d=None: d)('id') if isinstance(resp, dict) else ''}",
+    )
     if isinstance(resp, dict):
         return {"ok": True, "order_id": resp.get("id"), "status": resp.get("status")}
     return {"ok": True, "order_id": None, "status": "submitted"}
@@ -66,13 +71,11 @@ def close_group_at_broker(client, group_id: str, *, by: str = "operator") -> dic
             errors.append(f"{leg.symbol}: {result.get('error')}")
     if errors:
         return {"ok": False, "error": "; ".join(errors), "closed": closed}
-    n = mark_group_closed(group_id, f"{by}: closed at broker",
-                          ticker=group.ticker, strategy=group.strategy)
+    n = mark_group_closed(group_id, f"{by}: closed at broker", ticker=group.ticker, strategy=group.strategy)
     return {"ok": True, "closed": closed, "local_rows": n}
 
 
-def adopt_orphan(broker_pos: dict, *, strategy: str = "unmanaged",
-                 by: str = "operator") -> dict:
+def adopt_orphan(broker_pos: dict, *, strategy: str = "unmanaged", by: str = "operator") -> dict:
     """Book an orphan broker position into managed_positions."""
     symbol = broker_pos.get("symbol")
     if not symbol:
@@ -81,18 +84,22 @@ def adopt_orphan(broker_pos: dict, *, strategy: str = "unmanaged",
     side = "sell" if (broker_pos.get("side") or "").lower() == "short" else "buy"
     qty = abs(float(broker_pos.get("qty") or 1))
     expiry = parsed.expiry if parsed else None
-    legs = [{
-        "symbol": symbol,
-        "side": side,
-        "ratio_qty": qty,
-        "option_type": parsed.option_type if parsed else "",
-        "strike": parsed.strike if parsed else 0.0,
-        "expiry": expiry,
-    }]
+    legs = [
+        {
+            "symbol": symbol,
+            "side": side,
+            "ratio_qty": qty,
+            "option_type": parsed.option_type if parsed else "",
+            "strike": parsed.strike if parsed else 0.0,
+            "expiry": expiry,
+        }
+    ]
     exit_by = expiry
     gid = f"adopt-{symbol}"
     record_open_positions(
-        legs, strategy, group_id=gid,
+        legs,
+        strategy,
+        group_id=gid,
         entry_price=_f(broker_pos.get("avg_entry_price")),
         exit_by=exit_by if isinstance(exit_by, date) else None,
         metadata={"side": "ORPHAN", "adopted_by": by, "earnings_date": None},
@@ -114,16 +121,20 @@ def mark_missing_closed(group_id: str, *, by: str = "operator") -> dict:
     if group is None:
         return {"ok": False, "error": "not open"}
     n = mark_group_closed(
-        group_id, f"{by}: broker already flat",
-        ticker=group.ticker, strategy=group.strategy,
+        group_id,
+        f"{by}: broker already flat",
+        ticker=group.ticker,
+        strategy=group.strategy,
     )
     return {"ok": True, "local_rows": n}
 
 
-def _event(event_type: str, symbol: str | None, strategy: str | None,
-           detail: str = "") -> None:
+def _event(event_type: str, symbol: str | None, strategy: str | None, detail: str = "") -> None:
     trade_events_insert(
-        event_type, symbol=symbol, strategy=strategy, detail=detail,
+        event_type,
+        symbol=symbol,
+        strategy=strategy,
+        detail=detail,
     )
 
 

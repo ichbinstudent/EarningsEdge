@@ -11,10 +11,12 @@ from bot import TradingBot
 @pytest.fixture
 def mock_bot(tmp_path):
     from earnings_edge.db import configure
+
     configure(tmp_path / "fw.db")
     bot = TradingBot("dummy_token")
     bot.application = MagicMock()
     return bot
+
 
 def test_cmd_designer_invalid_args(mock_bot):
     update = MagicMock(spec=Update)
@@ -23,7 +25,10 @@ def test_cmd_designer_invalid_args(mock_bot):
     ctx = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
     ctx.args = ["AAPL"]
     asyncio.run(mock_bot._cmd_designer(update, ctx))
-    update.message.reply_text.assert_called_with("Usage: /designer <ticker> <legs...>\nExample: /designer AAPL buy call 190 2026-10-16 1 5.0 0.3")
+    update.message.reply_text.assert_called_with(
+        "Usage: /designer <ticker> <legs...>\nExample: /designer AAPL buy call 190 2026-10-16 1 5.0 0.3"
+    )
+
 
 def test_cmd_designer_invalid_leg_count(mock_bot):
     update = MagicMock(spec=Update)
@@ -33,6 +38,7 @@ def test_cmd_designer_invalid_leg_count(mock_bot):
     ctx.args = ["AAPL", "buy", "call"]
     asyncio.run(mock_bot._cmd_designer(update, ctx))
     pass  # We now support 4-part legs and have different error messages
+
 
 @patch("earnings_edge.alpaca_trading.create_client")
 def test_cmd_designer_valid_args(mock_create_client, mock_bot):
@@ -53,6 +59,7 @@ def test_cmd_designer_valid_args(mock_create_client, mock_bot):
     assert "Spot: $195.00" in msg
     assert "Direction: Bullish" in msg
 
+
 @patch("earnings_edge.picks.generate_picks")
 @patch("bot.snapshots_max_scan_date", return_value=None)
 def test_cmd_picks_no_data(mock_max, mock_generate, mock_bot):
@@ -64,16 +71,32 @@ def test_cmd_picks_no_data(mock_max, mock_generate, mock_bot):
 
     update.message.reply_text.assert_called_with("No data in snapshots table.")
 
+
 @patch("earnings_edge.picks.generate_picks")
 @patch("bot.snapshots_max_scan_date", return_value="2026-08-19 12:00:00")
 def test_cmd_picks_with_data(mock_max, mock_generate, mock_bot):
     import pandas as pd
 
     # 20 rows to exceed the 10-row limit and test truncation logic
-    rows = [{"ticker": f"T{i}", "announcement_date": "2026-08-20", "announcement_time": "BMO", "implied_move": 10.5, "implied_vs_avg_realized": 5.0, "historical_events_count": 4.0} for i in range(20)]
+    rows = [
+        {
+            "ticker": f"T{i}",
+            "announcement_date": "2026-08-20",
+            "announcement_time": "BMO",
+            "implied_move": 10.5,
+            "implied_vs_avg_realized": 5.0,
+            "historical_events_count": 4.0,
+        }
+        for i in range(20)
+    ]
     df1 = pd.DataFrame(rows)
     df2 = pd.DataFrame()
-    mock_generate.return_value = {"earnings": df1, "momentum_skew": df2, "forward_factor": pd.DataFrame(), "vrp": pd.DataFrame()}
+    mock_generate.return_value = {
+        "earnings": df1,
+        "momentum_skew": df2,
+        "forward_factor": pd.DataFrame(),
+        "vrp": pd.DataFrame(),
+    }
 
     update = MagicMock(spec=Update)
     update.message = MagicMock()
@@ -106,6 +129,7 @@ def test_cmd_picks_with_data(mock_max, mock_generate, mock_bot):
     # Assert size limit
     assert len(msg) < 4096
 
+
 @patch("earnings_edge.picks.generate_picks")
 @patch("bot.snapshots_max_scan_date", return_value="2026-08-19 12:00:00")
 @patch("httpx.AsyncClient")
@@ -119,10 +143,25 @@ def test_cmd_picks_rich_message_success(mock_httpx, mock_max, mock_generate, moc
     mock_client_instance.post.return_value = mock_response
     mock_httpx.return_value.__aenter__.return_value = mock_client_instance
 
-    rows = [{"ticker": f"T{i}", "announcement_date": "2026-08-20", "announcement_time": "BMO", "implied_move": 10.5, "implied_vs_avg_realized": 5.0, "historical_events_count": 4.0} for i in range(55)]
+    rows = [
+        {
+            "ticker": f"T{i}",
+            "announcement_date": "2026-08-20",
+            "announcement_time": "BMO",
+            "implied_move": 10.5,
+            "implied_vs_avg_realized": 5.0,
+            "historical_events_count": 4.0,
+        }
+        for i in range(55)
+    ]
     df1 = pd.DataFrame(rows)
     df2 = pd.DataFrame()
-    mock_generate.return_value = {"earnings": df1, "momentum_skew": df2, "forward_factor": pd.DataFrame(), "vrp": pd.DataFrame()}
+    mock_generate.return_value = {
+        "earnings": df1,
+        "momentum_skew": df2,
+        "forward_factor": pd.DataFrame(),
+        "vrp": pd.DataFrame(),
+    }
 
     update = MagicMock(spec=Update)
     update.message = MagicMock()
@@ -159,6 +198,7 @@ def test_cmd_picks_rich_message_success(mock_httpx, mock_max, mock_generate, moc
     # Check that fallback wasn't triggered
     update.message.reply_text.assert_not_called()
 
+
 @patch("earnings_edge.picks.generate_picks")
 @patch("bot.snapshots_max_scan_date", return_value="2026-08-19 12:00:00")
 @patch("httpx.AsyncClient")
@@ -173,10 +213,25 @@ def test_cmd_picks_rich_message_fallback(mock_httpx, mock_max, mock_generate, mo
     mock_client_instance.post.return_value = mock_response
     mock_httpx.return_value.__aenter__.return_value = mock_client_instance
 
-    rows = [{"ticker": f"T{i}", "announcement_date": "2026-08-20", "announcement_time": "BMO", "implied_move": 10.5, "implied_vs_avg_realized": 5.0, "historical_events_count": 4.0} for i in range(20)]
+    rows = [
+        {
+            "ticker": f"T{i}",
+            "announcement_date": "2026-08-20",
+            "announcement_time": "BMO",
+            "implied_move": 10.5,
+            "implied_vs_avg_realized": 5.0,
+            "historical_events_count": 4.0,
+        }
+        for i in range(20)
+    ]
     df1 = pd.DataFrame(rows)
     df2 = pd.DataFrame()
-    mock_generate.return_value = {"earnings": df1, "momentum_skew": df2, "forward_factor": pd.DataFrame(), "vrp": pd.DataFrame()}
+    mock_generate.return_value = {
+        "earnings": df1,
+        "momentum_skew": df2,
+        "forward_factor": pd.DataFrame(),
+        "vrp": pd.DataFrame(),
+    }
 
     update = MagicMock(spec=Update)
     update.message = MagicMock()

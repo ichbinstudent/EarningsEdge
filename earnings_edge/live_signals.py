@@ -22,6 +22,7 @@ NOT mapped:
   - option magnitude/direction models are backtest-only; live short_straddle
     / vol_risk_premium are IV/RV filter gates, not those heads.
 """
+
 from __future__ import annotations
 
 import logging
@@ -85,16 +86,11 @@ def latest_scan_frame(db_path=None, max_age_hours: float = 30.0) -> pd.DataFrame
     engine = get_engine()
     with engine.connect() as conn:
         tables = {
-            r[0]
-            for r in conn.execute(
-                text("SELECT name FROM sqlite_master WHERE type='table'")
-            ).fetchall()
+            r[0] for r in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()
         }
         if "scanner_scan_outputs" not in tables:
             return pd.DataFrame()
-        latest = conn.execute(
-            text("SELECT MAX(scan_timestamp) FROM scanner_scan_outputs")
-        ).scalar()
+        latest = conn.execute(text("SELECT MAX(scan_timestamp) FROM scanner_scan_outputs")).scalar()
     if not latest:
         return pd.DataFrame()
     ts = _parse_ts(latest)
@@ -156,9 +152,7 @@ def _calendar_trade(row, strategy: str, decision: str = "TAKE") -> Trade | None:
     earnings = row.get("_earnings")
     if not (strike and price and near and far and earnings):
         return None
-    debit = _first_positive(
-        row.get("net_debit_ask"), row.get("net_debit"), row.get("net_debit_mid")
-    )
+    debit = _first_positive(row.get("net_debit_ask"), row.get("net_debit"), row.get("net_debit_mid"))
     if debit <= 0:
         return None
     score = row.get("model_expected_return")
@@ -217,18 +211,13 @@ def _straddle_trade(row, strategy: str) -> Trade | None:
         },
         model_score=None,
         ml_decision="TAKE",
-        notes=(
-            f"live scan; iv_rv={row.get('iv_rv_ratio')}; "
-            f"em={row.get('expected_move_pct')}%"
-        ),
+        notes=(f"live scan; iv_rv={row.get('iv_rv_ratio')}; em={row.get('expected_move_pct')}%"),
     )
 
 
 def calendar_row_reason(row) -> str:
     """Why a calendar_call_ml row died or passed: take | model_skip | no_quote | no_decision."""
-    get = row.get if hasattr(row, "get") else lambda k, default=None: (
-        row[k] if k in row else default
-    )
+    get = row.get if hasattr(row, "get") else lambda k, default=None: row[k] if k in row else default
     strike = _first_positive(get("strike"))
     near = _parse_date(get("near_expiry"))
     far = _parse_date(get("far_expiry"))

@@ -34,9 +34,7 @@ class TradegateCollector:
         index_isins: tuple[str, ...] | None = None,
         session: requests.Session | None = None,
     ):
-        self.index_isins = tuple(
-            i.strip() for i in (index_isins or DEFAULT_INDEX_ISINS) if i.strip()
-        )
+        self.index_isins = tuple(i.strip() for i in (index_isins or DEFAULT_INDEX_ISINS) if i.strip())
         self._session = session or requests.Session()
 
     def fetch_index_quotes(self) -> list[dict]:

@@ -73,6 +73,7 @@ class EarningsCalendarUniverse(Universe):
     def _get_collector(self):
         if self._collector is None:
             from earnings_edge.collectors.earnings_calendar import EarningsCalendarCollector
+
             self._collector = EarningsCalendarCollector()
         return self._collector
 

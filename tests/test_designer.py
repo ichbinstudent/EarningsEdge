@@ -34,24 +34,20 @@ EXP2 = date(2026, 12, 18)
 R = 0.045
 
 
-def call(action: str, strike: float, price: float, iv: float = 0.30,
-         qty: int = 1, expiry: date = EXP) -> Leg:
-    return Leg(action=action, kind="call", strike=strike, expiry=expiry,
-               quantity=qty, price=price, iv=iv)
+def call(action: str, strike: float, price: float, iv: float = 0.30, qty: int = 1, expiry: date = EXP) -> Leg:
+    return Leg(action=action, kind="call", strike=strike, expiry=expiry, quantity=qty, price=price, iv=iv)
 
 
-def put(action: str, strike: float, price: float, iv: float = 0.30,
-        qty: int = 1, expiry: date = EXP) -> Leg:
-    return Leg(action=action, kind="put", strike=strike, expiry=expiry,
-               quantity=qty, price=price, iv=iv)
+def put(action: str, strike: float, price: float, iv: float = 0.30, qty: int = 1, expiry: date = EXP) -> Leg:
+    return Leg(action=action, kind="put", strike=strike, expiry=expiry, quantity=qty, price=price, iv=iv)
 
 
 def stock(action: str, price: float, qty: int = 1) -> Leg:
-    return Leg(action=action, kind="stock", strike=0.0, expiry=EXP,
-               quantity=qty, price=price, iv=0.0)
+    return Leg(action=action, kind="stock", strike=0.0, expiry=EXP, quantity=qty, price=price, iv=0.0)
 
 
 # ── Leg basics ---------------------------------------------------------------
+
 
 def test_leg_signed_quantity():
     assert call("buy", 100, 5.0).signed_quantity == 1
@@ -62,14 +58,13 @@ def test_leg_signed_quantity():
 
 def test_leg_validation():
     with pytest.raises(ValueError):
-        Leg(action="hold", kind="call", strike=100, expiry=EXP,
-            quantity=1, price=5.0, iv=0.3)
+        Leg(action="hold", kind="call", strike=100, expiry=EXP, quantity=1, price=5.0, iv=0.3)
     with pytest.raises(ValueError):
-        Leg(action="buy", kind="call", strike=100, expiry=EXP,
-            quantity=0, price=5.0, iv=0.3)
+        Leg(action="buy", kind="call", strike=100, expiry=EXP, quantity=0, price=5.0, iv=0.3)
 
 
 # ── P&L at expiry (known answers) ---------------------------------------------
+
 
 def test_long_call_pnl_at_expiry():
     legs = [call("buy", 100, 5.0)]
@@ -83,11 +78,11 @@ def test_short_put_and_stock_pnl_at_expiry():
     legs = [put("sell", 100, 4.0), stock("buy", 95.0, qty=100)]
     pnl = pnl_at_expiry(legs, np.array([90.0, 110.0]))
     # put: (4 - max(100-S,0)) * 100 ; stock: (S-95)*100
-    np.testing.assert_allclose(pnl, [(4 - 10) * 100 + (90 - 95) * 100,
-                                     4 * 100 + (110 - 95) * 100])
+    np.testing.assert_allclose(pnl, [(4 - 10) * 100 + (90 - 95) * 100, 4 * 100 + (110 - 95) * 100])
 
 
 # ── Iron condor analyze (hand-computed) ---------------------------------------
+
 
 def iron_condor() -> list[Leg]:
     # 90/95/105/110 iron condor for a $2.00 net credit
@@ -125,6 +120,7 @@ def test_unbounded_profit_and_loss():
 
 # ── Greeks --------------------------------------------------------------------
 
+
 def test_stock_leg_greeks():
     g = position_greeks([stock("buy", 100.0, qty=10)], S=100.0, r=R, as_of=AS_OF)
     assert g["delta"] == pytest.approx(10.0)
@@ -135,7 +131,7 @@ def test_stock_leg_greeks():
 
 def test_new_greeks_known_answers():
     S, K, T, r, sigma = 100.0, 100.0, 0.25, 0.05, 0.20
-    d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
+    d1 = (math.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * math.sqrt(T))
     expected_gamma = norm.pdf(d1) / (S * sigma * math.sqrt(T))
     expected_vega = S * norm.pdf(d1) * math.sqrt(T)
     assert black_scholes_gamma(S, K, T, r, sigma) == pytest.approx(expected_gamma)
@@ -157,6 +153,7 @@ def test_position_greeks_long_call():
 
 
 # ── P&L at date / IV shocks ----------------------------------------------------
+
 
 def test_iv_shock_raises_long_lowers_short():
     T = (EXP - AS_OF).days / 365
@@ -186,16 +183,28 @@ def test_per_expiry_shock_only_affects_matching_legs():
 
 # ── RV scenario -----------------------------------------------------------------
 
+
 def test_rv_scenario_keys_and_determinism():
     legs = iron_condor()
     kwargs = dict(S=100.0, r=R, forecast_rv=0.25, n_sims=2000, seed=42, as_of=AS_OF)
     res1 = rv_scenario(legs, **kwargs)
     res2 = rv_scenario(legs, **kwargs)
     expected = {
-        "mean_return", "mean_pnl", "return_std", "win_rate", "kelly_fraction",
-        "min_return", "percentile_25", "median_return", "percentile_75",
-        "max_return", "min_pnl", "percentile_25_pnl", "median_pnl",
-        "percentile_75_pnl", "max_pnl",
+        "mean_return",
+        "mean_pnl",
+        "return_std",
+        "win_rate",
+        "kelly_fraction",
+        "min_return",
+        "percentile_25",
+        "median_return",
+        "percentile_75",
+        "max_return",
+        "min_pnl",
+        "percentile_25_pnl",
+        "median_pnl",
+        "percentile_75_pnl",
+        "max_pnl",
     }
     assert expected <= set(res1)
     assert res1 == res2  # deterministic under fixed seed
@@ -205,8 +214,7 @@ def test_rv_scenario_keys_and_determinism():
 
 def test_rv_scenario_deep_itm_stock_always_wins():
     # stock bought at $50, spot $100 -> pnl = S_T - 50 > 0 for any S_T > 0
-    res = rv_scenario([stock("buy", 50.0)], S=100.0, r=R, forecast_rv=0.25,
-                      n_sims=2000, seed=7, as_of=AS_OF)
+    res = rv_scenario([stock("buy", 50.0)], S=100.0, r=R, forecast_rv=0.25, n_sims=2000, seed=7, as_of=AS_OF)
     assert res["win_rate"] == 1.0
     assert res["mean_pnl"] > 0
 
@@ -222,6 +230,7 @@ def test_rv_scenario_mean_pnl_sign_long_vs_short_call():
 
 
 # ── Hedge / fill IV --------------------------------------------------------------
+
 
 def test_optimal_delta_hedge_zeroes_delta():
     legs = [call("buy", 100, 5.0, iv=0.30), put("buy", 95, 2.0, iv=0.32)]
@@ -247,6 +256,7 @@ def test_net_premium():
 
 # ── Multi-expiry (calendar) semantics ---------------------------------------------
 
+
 def calendar() -> list[Leg]:
     """Long call calendar: sell near, buy far, same strike."""
     return [
@@ -270,7 +280,7 @@ def test_calendar_win_rate_matches_lognormal_front_horizon():
     res = analyze(legs, S=100.0, r=R, as_of=AS_OF)
     T_front = (EXP - AS_OF).days / 365
     sigma = effective_fill_iv(legs, 0.0)["effective_fill_iv"]
-    mu = math.log(100.0) + (R - 0.5 * sigma ** 2) * T_front
+    mu = math.log(100.0) + (R - 0.5 * sigma**2) * T_front
     sd = sigma * math.sqrt(T_front)
     lo, hi = res["breakevens"]
     p = float(norm.cdf((math.log(hi) - mu) / sd) - norm.cdf((math.log(lo) - mu) / sd))
@@ -281,8 +291,7 @@ def test_rv_scenario_calendar_settles_at_front_expiry():
     # Regression: settlement at max expiry made every simulated outcome equal
     # -debit (zero variance, win_rate 0). Settlement must happen at the front
     # expiry with back legs BSM-repriced, so the calendar tent survives.
-    res = rv_scenario(calendar(), S=100.0, r=R, forecast_rv=0.30,
-                      n_sims=5000, seed=3, as_of=AS_OF)
+    res = rv_scenario(calendar(), S=100.0, r=R, forecast_rv=0.30, n_sims=5000, seed=3, as_of=AS_OF)
     assert res["T_years"] == pytest.approx((EXP - AS_OF).days / 365)
     assert res["return_std"] > 0
     assert res["max_pnl"] > 0
@@ -291,6 +300,5 @@ def test_rv_scenario_calendar_settles_at_front_expiry():
 
 def test_rv_scenario_single_expiry_unchanged_horizon():
     # Single-expiry positions keep the (only) expiry as the horizon.
-    res = rv_scenario(iron_condor(), S=100.0, r=R, forecast_rv=0.25,
-                      n_sims=1000, seed=5, as_of=AS_OF)
+    res = rv_scenario(iron_condor(), S=100.0, r=R, forecast_rv=0.25, n_sims=1000, seed=5, as_of=AS_OF)
     assert res["T_years"] == pytest.approx((EXP - AS_OF).days / 365)

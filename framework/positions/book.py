@@ -5,6 +5,7 @@ Buckets:
 - orphan  — at the broker, not in an open local group (ATLO/BA, assignments)
 - missing — open locally, gone at the broker
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -26,11 +27,11 @@ def _f(value) -> float | None:
 
 @dataclass
 class BookItem:
-    bucket: str                  # managed | orphan | missing
+    bucket: str  # managed | orphan | missing
     symbol: str
     ticker: str
     qty: float
-    side: str                    # long | short | buy | sell
+    side: str  # long | short | buy | sell
     strategy: str | None = None
     group_id: str | None = None
     event_date: date | None = None
@@ -55,8 +56,7 @@ class Book:
         return len(self.managed) + len(self.missing)
 
 
-def classify_book(groups, broker_positions: list[dict],
-                  ignored: set[str] | None = None) -> Book:
+def classify_book(groups, broker_positions: list[dict], ignored: set[str] | None = None) -> Book:
     """Diff open PositionGroups against Alpaca ``get_positions()`` rows.
 
     ``ignored`` is ``adopted_positions`` (operator Ignore / baseline adopt):
@@ -91,16 +91,18 @@ def classify_book(groups, broker_positions: list[dict],
         if sym in local_syms or sym in ignored:
             continue
         parsed = parse_occ(sym)
-        book.orphan.append(BookItem(
-            bucket="orphan",
-            symbol=sym,
-            ticker=ticker_of(sym),
-            qty=_f(bp.get("qty")) or 0.0,
-            side=bp.get("side") or "long",
-            strategy="unmanaged",
-            expiry=parsed.expiry if parsed else None,
-            upl=_f(bp.get("unrealized_pl")),
-            current_price=_f(bp.get("current_price")),
-            avg_entry=_f(bp.get("avg_entry_price")),
-        ))
+        book.orphan.append(
+            BookItem(
+                bucket="orphan",
+                symbol=sym,
+                ticker=ticker_of(sym),
+                qty=_f(bp.get("qty")) or 0.0,
+                side=bp.get("side") or "long",
+                strategy="unmanaged",
+                expiry=parsed.expiry if parsed else None,
+                upl=_f(bp.get("unrealized_pl")),
+                current_price=_f(bp.get("current_price")),
+                avg_entry=_f(bp.get("avg_entry_price")),
+            )
+        )
     return book

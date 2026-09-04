@@ -10,6 +10,7 @@ from pathlib import Path
 @dataclass(frozen=True)
 class FilterThresholds:
     """Scanner filter gate values — adjustable per-run via env."""
+
     min_price: float = 3.0
     min_volume: float = 1_500_000
     near_miss_volume: float = 1_000_000
@@ -38,28 +39,28 @@ class Settings:
     lse_api_key: str = field(default_factory=lambda: os.environ.get("LSE_API_KEY", ""))
 
     # Rate limits
-    polygon_rate_sleep: float = field(default_factory=lambda: float(os.environ.get("POLYGON_RATE_SLEEP", "13")))
+    polygon_rate_sleep: float = field(
+        default_factory=lambda: float(os.environ.get("POLYGON_RATE_SLEEP", "13"))
+    )
     yfinance_sleep: float = 0.3
     yfinance_batch_size: int = 8
     yfinance_batch_sleep: float = 5.0
 
     # Market-data provider: auto | lse | yahoo | polygon.
     # auto = LSE primary (when LSE_API_KEY set) → Yahoo → Polygon failover.
-    price_provider: str = field(
-        default_factory=lambda: os.environ.get("EARNINGS_PRICE_PROVIDER", "auto")
-    )
+    price_provider: str = field(default_factory=lambda: os.environ.get("EARNINGS_PRICE_PROVIDER", "auto"))
     # Optional proxy for the shared yfinance session, e.g.
     # socks5://127.0.0.1:1080 or http://user:pass@host:3128
-    yfinance_proxy: str = field(
-        default_factory=lambda: os.environ.get("YFINANCE_PROXY", "")
-    )
+    yfinance_proxy: str = field(default_factory=lambda: os.environ.get("YFINANCE_PROXY", ""))
 
     # Model
     calendar_model_path: Path = field(
-        default_factory=lambda: Path(os.environ.get(
-            "EARNINGS_CALENDAR_MODEL",
-            "data/models/calendar_call_filter_ridge_allfeatures.joblib",
-        ))
+        default_factory=lambda: Path(
+            os.environ.get(
+                "EARNINGS_CALENDAR_MODEL",
+                "data/models/calendar_call_filter_ridge_allfeatures.joblib",
+            )
+        )
     )
     calendar_model_threshold: float = field(
         default_factory=lambda: float(os.environ.get("EARNINGS_CALENDAR_MODEL_THRESHOLD", "0.20"))

@@ -1,4 +1,5 @@
 """Telegram Mini App initData verification (HMAC) + operator gate."""
+
 from __future__ import annotations
 
 import hashlib
@@ -113,4 +114,5 @@ def sign_init_data(fields: dict, bot_token: str) -> str:
     secret = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
     payload["hash"] = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
     from urllib.parse import urlencode
+
     return urlencode(payload)

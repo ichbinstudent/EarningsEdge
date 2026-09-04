@@ -134,9 +134,7 @@ def _build_result() -> ScanResult:
     reports = {
         "AAPL": _report("AAPL", tier=1, passed=True),
         "MSFT": _report("MSFT", tier=2, passed=True),
-        "NVDA": _report(
-            "NVDA", tier=0, passed=False, near_miss=True, reason="volume too low"
-        ),
+        "NVDA": _report("NVDA", tier=0, passed=False, near_miss=True, reason="volume too low"),
         "ORCL": _report("ORCL", tier=0, passed=False),  # non-selected filler
     }
     return ScanResult(
@@ -220,10 +218,14 @@ class TestScanService(unittest.TestCase):
 
         db_engine.configure(self.db_path)
         with db_engine.get_session() as s:
-            row = s.execute(
-                text("SELECT * FROM scan_runs WHERE id = :id"),
-                {"id": out["scan_run_id"]},
-            ).mappings().first()
+            row = (
+                s.execute(
+                    text("SELECT * FROM scan_runs WHERE id = :id"),
+                    {"id": out["scan_run_id"]},
+                )
+                .mappings()
+                .first()
+            )
         self.assertIsNotNone(row)
         self.assertEqual(row["trigger_type"], "manual")
         self.assertEqual(row["scanner_name"], "Earnings Calendar")
@@ -251,10 +253,14 @@ class TestScanService(unittest.TestCase):
 
         db_engine.configure(self.db_path)
         with db_engine.get_session() as s:
-            row = s.execute(
-                text("SELECT * FROM scan_runs WHERE id = :id"),
-                {"id": out["scan_run_id"]},
-            ).mappings().first()
+            row = (
+                s.execute(
+                    text("SELECT * FROM scan_runs WHERE id = :id"),
+                    {"id": out["scan_run_id"]},
+                )
+                .mappings()
+                .first()
+            )
         self.assertEqual(row["success"], 0)
         self.assertIn("boom", row["error_message"])
 
@@ -270,12 +276,17 @@ class TestScanService(unittest.TestCase):
         from sqlalchemy import text
 
         from earnings_edge.db import engine as db_engine
+
         db_engine.configure(self.db_path)
         with db_engine.get_session() as s:
-            row = s.execute(
-                text("SELECT * FROM scan_runs WHERE id = :id"),
-                {"id": out["scan_run_id"]},
-            ).mappings().first()
+            row = (
+                s.execute(
+                    text("SELECT * FROM scan_runs WHERE id = :id"),
+                    {"id": out["scan_run_id"]},
+                )
+                .mappings()
+                .first()
+            )
         self.assertEqual(row["success"], 0)
         self.assertTrue(row["error_message"])
 

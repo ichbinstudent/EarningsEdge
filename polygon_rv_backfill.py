@@ -6,6 +6,7 @@ Only needs 1 API call per unique ticker (daily bars for 120 days).
 --source polygon (default): Polygon.io, 13s rate limit.
 --source lse:               London Strategic Edge vault, ~0.35s pacing.
 """
+
 import argparse
 import os
 import sys
@@ -33,6 +34,7 @@ def main():
 
     if args.source == "lse":
         from earnings_edge.collectors.lse import LSECollector
+
         if not os.environ.get("LSE_API_KEY"):
             raise RuntimeError("LSE_API_KEY not set")
         pg = LSECollector()

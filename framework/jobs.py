@@ -29,7 +29,8 @@ def run_job(
         result = fn()
     except Exception as exc:
         job_runs_finish(
-            run_id, success=0,
+            run_id,
+            success=0,
             stats_json=json.dumps(stats, default=str),
             error=str(exc)[:500],
         )
@@ -38,7 +39,9 @@ def run_job(
     if isinstance(result, dict):
         stats.update(result)
     job_runs_finish(
-        run_id, success=1, stats_json=json.dumps(stats, default=str),
+        run_id,
+        success=1,
+        stats_json=json.dumps(stats, default=str),
     )
     return result
 

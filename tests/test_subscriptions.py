@@ -1,4 +1,5 @@
 """Tests for per-strategy signal subscriptions, routing, funnel line, setups."""
+
 from __future__ import annotations
 
 from earnings_edge.bot_views import SETUP_STRATEGIES, setup_card, setup_menu_text
@@ -36,6 +37,7 @@ def test_opt_out_persists_roundtrip(tmp_path):
 def test_unknown_strategy_rejected(tmp_path):
     subs = StrategySubscriptions(str(tmp_path / "subs.json"))
     import pytest
+
     with pytest.raises(KeyError):
         subs.set_subscribed("not_a_strategy", 1, False)
 
@@ -72,12 +74,22 @@ def test_funnel_line():
     funnel = {
         "proposals": 3,
         "strategies": {
-            "calendar_call_ml": {"rows_scanned": 10, "decision_pass": 4,
-                                 "legs_ok": 4, "dte_ok": 3, "position_ok": 3,
-                                 "proposals_created": 2},
-            "vol_risk_premium": {"rows_scanned": 10, "decision_pass": 2,
-                                 "legs_ok": 2, "dte_ok": 2, "position_ok": 2,
-                                 "proposals_created": 1},
+            "calendar_call_ml": {
+                "rows_scanned": 10,
+                "decision_pass": 4,
+                "legs_ok": 4,
+                "dte_ok": 3,
+                "position_ok": 3,
+                "proposals_created": 2,
+            },
+            "vol_risk_premium": {
+                "rows_scanned": 10,
+                "decision_pass": 2,
+                "legs_ok": 2,
+                "dte_ok": 2,
+                "position_ok": 2,
+                "proposals_created": 1,
+            },
         },
     }
     line = funnel_line(funnel)
@@ -115,6 +127,7 @@ def test_signal_strategies_are_live_mapped():
     # proposal-flow strategies (live_signals) plus ff_ladder, whose live
     # path is the LadderRunner arm-card flow rather than live_signals.
     from earnings_edge.live_signals import LIVE_STRATEGIES
+
     assert set(SIGNAL_STRATEGIES) <= set(LIVE_STRATEGIES) | {"ff_ladder", "forward_factor_arb"}
 
 

@@ -44,6 +44,7 @@ from polygon_backfill import PolygonClient, implied_vol
 # v1: T1 closest to 45, T2 +28. v2: T1 closest to 30, T2 +30 (2026-07-25).
 SELECTOR_VERSION = 2
 
+
 def get_pairs() -> list[dict]:
     """(ticker, scan_date) pairs with outcomes and >=3 realized events per ticker."""
     return ff_snapshots_pending_pairs(SELECTOR_VERSION)
@@ -112,8 +113,10 @@ def process_pair(pg: PolygonClient, pair: dict) -> dict:
     earnings = datetime.strptime(pair["earnings_date"], "%Y-%m-%d").date()
     spot = float(pair["price"])
     row: dict = {
-        "ticker": ticker, "scan_date": pair["scan_date"],
-        "earnings_date": pair["earnings_date"], "spot": spot,
+        "ticker": ticker,
+        "scan_date": pair["scan_date"],
+        "earnings_date": pair["earnings_date"],
+        "spot": spot,
         "skip_reason": None,
     }
 
@@ -126,7 +129,8 @@ def process_pair(pg: PolygonClient, pair: dict) -> dict:
         return row
 
     contracts = pg.option_contracts(
-        ticker, as_of=scan,
+        ticker,
+        as_of=scan,
         expiry_gte=scan + timedelta(days=25),
         expiry_lte=scan + timedelta(days=110),
         contract_type="call",
@@ -157,20 +161,28 @@ def process_pair(pg: PolygonClient, pair: dict) -> dict:
     iv1 = implied_vol(close1, spot, float(c1["strike_price"]), T1, "call") if close1 else None
     iv2 = implied_vol(close2, spot, float(c2["strike_price"]), T2, "call") if close2 else None
 
-    row.update({
-        "t1_expiry": t1["expiry"], "t1_dte": t1["dte"],
-        "t1_strike": float(c1["strike_price"]), "t1_contract": c1["ticker"],
-        "t1_close": close1, "t1_iv": iv1,
-        "t2_expiry": t2["expiry"], "t2_dte": t2["dte"],
-        "t2_strike": float(c2["strike_price"]), "t2_contract": c2["ticker"],
-        "t2_close": close2, "t2_iv": iv2,
-    })
+    row.update(
+        {
+            "t1_expiry": t1["expiry"],
+            "t1_dte": t1["dte"],
+            "t1_strike": float(c1["strike_price"]),
+            "t1_contract": c1["ticker"],
+            "t1_close": close1,
+            "t1_iv": iv1,
+            "t2_expiry": t2["expiry"],
+            "t2_dte": t2["dte"],
+            "t2_strike": float(c2["strike_price"]),
+            "t2_contract": c2["ticker"],
+            "t2_close": close2,
+            "t2_iv": iv2,
+        }
+    )
 
     if not iv1 or not iv2:
         row["skip_reason"] = "iv_unsolvable"
         return row
 
-    var_diff = iv2 ** 2 * T2 - iv1 ** 2 * T1
+    var_diff = iv2**2 * T2 - iv1**2 * T1
     if var_diff <= 0:
         row["skip_reason"] = "negative_fwd_variance"
         return row
@@ -182,7 +194,7 @@ def process_pair(pg: PolygonClient, pair: dict) -> dict:
     tau = tau_days / 365.0
     row["tau_days"] = tau_days
 
-    event_var = iv1 ** 2 * T1 - sigma_fwd ** 2 * (T1 - tau)
+    event_var = iv1**2 * T1 - sigma_fwd**2 * (T1 - tau)
     if event_var <= 0:
         row["skip_reason"] = "negative_event_variance"
         return row
@@ -220,9 +232,13 @@ def main() -> None:
         try:
             row = process_pair(pg, pair)
         except Exception as exc:
-            row = {"ticker": pair["ticker"], "scan_date": pair["scan_date"],
-                   "earnings_date": pair["earnings_date"], "spot": pair["price"],
-                   "skip_reason": f"error:{exc}"[:80]}
+            row = {
+                "ticker": pair["ticker"],
+                "scan_date": pair["scan_date"],
+                "earnings_date": pair["earnings_date"],
+                "spot": pair["price"],
+                "skip_reason": f"error:{exc}"[:80],
+            }
         row["selector_version"] = SELECTOR_VERSION
         batch.append(row)
         if row.get("skip_reason"):
@@ -234,9 +250,9 @@ def main() -> None:
             batch = []
             rate = (i + 1) / (time.time() - t0)
             eta = (total - i - 1) / rate / 60 if rate else 0
-            print(f"  {i+1}/{total} ok={done} skip={skipped} eta={eta:.0f}min", flush=True)
+            print(f"  {i + 1}/{total} ok={done} skip={skipped} eta={eta:.0f}min", flush=True)
     ff_snapshots_upsert_many(batch)
-    print(f"DONE ok={done} skip={skipped} fail={failed} elapsed={(time.time()-t0)/60:.0f}min", flush=True)
+    print(f"DONE ok={done} skip={skipped} fail={failed} elapsed={(time.time() - t0) / 60:.0f}min", flush=True)
 
 
 if __name__ == "__main__":

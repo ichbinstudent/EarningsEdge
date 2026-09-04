@@ -30,13 +30,14 @@ def is_gcd_reject(detail: str) -> bool:
 @dataclass(frozen=True)
 class RiskLimits:
     """Portfolio-level limits (global defaults; strategy TOML may tighten)."""
-    max_pct_per_trade: float = 0.10        # of buying power, per order
-    max_pct_per_underlying: float = 0.25   # of equity, aggregate per ticker
-    max_pct_per_strategy_day: float = 0.30 # of equity, new spend per strategy/day
-    daily_loss_limit_pct: float = 0.05     # of day-start equity → trips kill switch
-    min_buying_power: float = 10_000.0     # halt new entries below this
-    probation_size_mult: float = 0.5       # size multiplier while on probation
-    max_consecutive_rejections: int = 3    # broker rejections → trips kill switch
+
+    max_pct_per_trade: float = 0.10  # of buying power, per order
+    max_pct_per_underlying: float = 0.25  # of equity, aggregate per ticker
+    max_pct_per_strategy_day: float = 0.30  # of equity, new spend per strategy/day
+    daily_loss_limit_pct: float = 0.05  # of day-start equity → trips kill switch
+    min_buying_power: float = 10_000.0  # halt new entries below this
+    probation_size_mult: float = 0.5  # size multiplier while on probation
+    max_consecutive_rejections: int = 3  # broker rejections → trips kill switch
 
 
 @dataclass
@@ -95,6 +96,7 @@ class RiskManager:
         if live_broker is None:
             try:
                 from earnings_edge.alpaca_mode import alpaca_live_enabled
+
                 live_broker = alpaca_live_enabled()
             except Exception as exc:
                 # exc-policy: keep broad, fallback if import fails
@@ -147,7 +149,8 @@ class RiskManager:
         """Record committed dollars so daily/strategy budgets are enforced."""
         record_event(
             "entry",
-            f"{ticker} cost={cost:.2f} {detail}".strip(), strategy=strategy,
+            f"{ticker} cost={cost:.2f} {detail}".strip(),
+            strategy=strategy,
         )
 
     def check_daily_loss(self, equity_now: float, on: date | None = None) -> bool:
@@ -186,7 +189,8 @@ class RiskManager:
                 break
         if streak >= self.limits.max_consecutive_rejections and not self.killswitch.is_halted():
             self.killswitch.trip(
-                f"{streak} consecutive broker rejections", by="risk_manager",
+                f"{streak} consecutive broker rejections",
+                by="risk_manager",
             )
         return streak
 
@@ -199,7 +203,10 @@ class RiskManager:
     def _strategy_spend_today(self, strategy: str) -> float:
         today = datetime.now(UTC).date().isoformat()
         rows = risk_events_list(
-            event_type="entry", strategy=strategy, since=today, newest_first=False,
+            event_type="entry",
+            strategy=strategy,
+            since=today,
+            newest_first=False,
         )
         total = 0.0
         for r in rows:

@@ -49,9 +49,11 @@ def _age(ts: str | None) -> str:
 
 # ── /status ─────────────────────────────────────────────────────────────
 
+
 def _equity_curve(points: int = 16) -> str:
     """Sparkline of the last `points` equity snapshots ('' when unavailable)."""
     from earnings_edge.bot_live import sparkline
+
     try:
         vals = equity_snapshots_equities(points)
     except Exception:
@@ -59,18 +61,22 @@ def _equity_curve(points: int = 16) -> str:
     return sparkline(vals)
 
 
-def status_view(*, market_open: bool | None = None,
-                pending_proposals: int = 0, pending_exits: int = 0,
-                next_events: list | None = None,
-                funnel: str | None = None,
-                last_scan_ts: str | None = None,
-                last_equity_ts: str | None = None,
-                reconcile_summary: str | None = None,
-                broker_ok: bool | None = None,
-                broker_count: int | None = None,
-                orphan_count: int | None = None,
-                sha: str | None = None,
-                started_at: str | None = None) -> str:
+def status_view(
+    *,
+    market_open: bool | None = None,
+    pending_proposals: int = 0,
+    pending_exits: int = 0,
+    next_events: list | None = None,
+    funnel: str | None = None,
+    last_scan_ts: str | None = None,
+    last_equity_ts: str | None = None,
+    reconcile_summary: str | None = None,
+    broker_ok: bool | None = None,
+    broker_count: int | None = None,
+    orphan_count: int | None = None,
+    sha: str | None = None,
+    started_at: str | None = None,
+) -> str:
     from framework.execution.managed import open_groups
     from framework.risk.equity import daily_pnl, latest_equity
     from framework.risk.killswitch import KillSwitch
@@ -81,16 +87,20 @@ def status_view(*, market_open: bool | None = None,
 
     ks = KillSwitch().status()
     if ks.get("halted"):
-        lines.append(f"<b>Kill switch:</b> 🛑 HALTED — {html.escape(str(ks.get('reason')))} (by {html.escape(str(ks.get('tripped_by')))})")
+        lines.append(
+            f"<b>Kill switch:</b> 🛑 HALTED — {html.escape(str(ks.get('reason')))} (by {html.escape(str(ks.get('tripped_by')))})"
+        )
     else:
         lines.append("<b>Kill switch:</b> 🟢 armed")
 
     eq = latest_equity()
     if eq:
-        pnl = daily_pnl( eq["equity"])
+        pnl = daily_pnl(eq["equity"])
         pnl_txt = f" | day PnL ${pnl:+,.0f}" if pnl is not None else ""
-        lines.append(f"<b>Equity:</b> ${eq['equity']:,.0f} | <b>BP</b> ${eq['buying_power']:,.0f}"
-                     f"{pnl_txt} ({_age(eq['ts'])})")
+        lines.append(
+            f"<b>Equity:</b> ${eq['equity']:,.0f} | <b>BP</b> ${eq['buying_power']:,.0f}"
+            f"{pnl_txt} ({_age(eq['ts'])})"
+        )
         curve = _equity_curve()
         if curve:
             lines.append(f"  {curve}")
@@ -111,11 +121,15 @@ def status_view(*, market_open: bool | None = None,
         lines.append("<b>Strategies:</b> " + ", ".join(parts))
 
     groups = open_groups()
-    lines.append(f"<b>Open position groups:</b> {len(groups)}"
-                 + (f" vs broker {broker_count}" if broker_count is not None else ""))
+    lines.append(
+        f"<b>Open position groups:</b> {len(groups)}"
+        + (f" vs broker {broker_count}" if broker_count is not None else "")
+    )
     if orphan_count is not None:
         lines.append(f"<b>Orphans: {orphan_count}</b>")
-    lines.append(f"<b>Pending proposals: {pending_proposals}</b> | <b>Pending exit cards: {pending_exits}</b>")
+    lines.append(
+        f"<b>Pending proposals: {pending_proposals}</b> | <b>Pending exit cards: {pending_exits}</b>"
+    )
     if last_scan_ts:
         lines.append(f"<b>Last scan:</b> {_age(last_scan_ts)} ({_ts_short(last_scan_ts)})")
     elif last_scan_ts == "":
@@ -146,15 +160,21 @@ def status_view(*, market_open: bool | None = None,
         lines.append("")
         lines.append("<b>Recent job failures:</b>")
         for f in fails:
-            lines.append(f"  ✗ {f['job_name']} ({_ts_short(f['finished_at'])}): "
-                         f"{(f['error'] or '')[:80]}")
+            lines.append(f"  ✗ {f['job_name']} ({_ts_short(f['finished_at'])}): {(f['error'] or '')[:80]}")
     return "\n".join(lines)
 
 
 # Shared kwargs /status and /monitor pass into their views.
 DESK_VIEW_KEYS = (
-    "market_open", "last_scan_ts", "last_equity_ts", "reconcile_summary",
-    "broker_ok", "broker_count", "orphan_count", "sha", "started_at",
+    "market_open",
+    "last_scan_ts",
+    "last_equity_ts",
+    "reconcile_summary",
+    "broker_ok",
+    "broker_count",
+    "orphan_count",
+    "sha",
+    "started_at",
 )
 
 
@@ -162,8 +182,7 @@ def desk_view_kwargs(facts: dict) -> dict:
     return {k: facts[k] for k in DESK_VIEW_KEYS if k in facts}
 
 
-def collect_desk_facts(*,
-                       get_clock: Any=None, get_positions: Any=None) -> dict:
+def collect_desk_facts(*, get_clock: Any = None, get_positions: Any = None) -> dict:
     """Broker + DB facts for /status and the live /monitor.
 
     ``clock_exc`` / ``positions_exc`` stay on the dict so the bot can emit
@@ -209,8 +228,7 @@ def collect_desk_facts(*,
         try:
             broker = get_positions() or []
             broker_ok, broker_n = True, len(broker)
-            orphans = len(classify_book(
-                open_groups(), broker, ignored=_ignored_symbols()).orphan)
+            orphans = len(classify_book(open_groups(), broker, ignored=_ignored_symbols()).orphan)
         except Exception as exc:
             broker_ok = False
             positions_exc = exc
@@ -232,19 +250,24 @@ def collect_desk_facts(*,
 
 # ── /monitor (live-updating ops panel) ───────────────────────────────────
 
-def monitor_view(*, tick: int,
-                 pending_proposals: int = 0, pending_exits: int = 0,
-                 next_events: list | None = None,
-                 funnel: str | None = None,
-                 last_scan_ts: str | None = None,
-                 last_equity_ts: str | None = None,
-                 reconcile_summary: str | None = None,
-                 broker_ok: bool | None = None,
-                 broker_count: int | None = None,
-                 orphan_count: int | None = None,
-                 sha: str | None = None,
-                 started_at: str | None = None,
-                 market_open: bool | None = None) -> str:
+
+def monitor_view(
+    *,
+    tick: int,
+    pending_proposals: int = 0,
+    pending_exits: int = 0,
+    next_events: list | None = None,
+    funnel: str | None = None,
+    last_scan_ts: str | None = None,
+    last_equity_ts: str | None = None,
+    reconcile_summary: str | None = None,
+    broker_ok: bool | None = None,
+    broker_count: int | None = None,
+    orphan_count: int | None = None,
+    sha: str | None = None,
+    started_at: str | None = None,
+    market_open: bool | None = None,
+) -> str:
     """Compact ops panel rendered every 30s by the bot's monitor loop."""
     from earnings_edge.bot_live import spinner_frame
     from framework.execution.managed import open_groups
@@ -255,11 +278,13 @@ def monitor_view(*, tick: int,
     if market_open is not None:
         lines.append("<b>Market:</b> " + ("🟢 open" if market_open else "⚫ closed"))
     ks = KillSwitch().status()
-    lines.append("<b>Kill switch:</b> " + (f"🛑 HALTED — {html.escape(str(ks.get('reason')))}"
-                                    if ks.get("halted") else "🟢 armed"))
+    lines.append(
+        "<b>Kill switch:</b> "
+        + (f"🛑 HALTED — {html.escape(str(ks.get('reason')))}" if ks.get("halted") else "🟢 armed")
+    )
     eq = latest_equity()
     if eq:
-        pnl = daily_pnl( eq["equity"])
+        pnl = daily_pnl(eq["equity"])
         pnl_txt = f" | day ${pnl:+,.0f}" if pnl is not None else ""
         lines.append(f"<b>Equity</b> ${eq['equity']:,.0f}{pnl_txt} ({_age(eq['ts'])})")
         curve = _equity_curve()
@@ -300,6 +325,7 @@ def monitor_view(*, tick: int,
 
 # ── /positions ──────────────────────────────────────────────────────────
 
+
 def _ignored_symbols() -> set[str]:
     try:
         return adopted_positions_symbols()
@@ -307,8 +333,7 @@ def _ignored_symbols() -> set[str]:
         return set()
 
 
-def positions_view(broker_positions: list | None = None,
-                   broker_error: str | None = None) -> str:
+def positions_view(broker_positions: list | None = None, broker_error: str | None = None) -> str:
     """Render the book. With ``broker_positions``, show managed / orphan /
     missing. Without, fall back to local groups only and say so."""
     from framework.execution.managed import open_groups
@@ -335,8 +360,7 @@ def positions_view(broker_positions: list | None = None,
             for leg in g.legs:
                 side = "SELL" if leg.side == "sell" else "BUY"
                 exp = leg.expiry.isoformat() if leg.expiry else "?"
-                lines.append(f"  {side} {leg.qty:g} {leg.symbol} ({leg.option_type} "
-                             f"{leg.strike:g} {exp})")
+                lines.append(f"  {side} {leg.qty:g} {leg.symbol} ({leg.option_type} {leg.strike:g} {exp})")
             lines.append("")
         return "\n".join(lines).rstrip()
 
@@ -371,9 +395,7 @@ def _render_items(items: Any) -> list[str]:
         px = f" @ {it.current_price:g}" if it.current_price is not None else ""
         ev = f" event {it.event_date.isoformat()}" if it.event_date else ""
         exp = f" exp {it.expiry.isoformat()}" if it.expiry else ""
-        lines.append(
-            f"{tag}{it.ticker} {it.side} {it.qty:g} {it.symbol}{px}{upl}{ev}{exp}"
-        )
+        lines.append(f"{tag}{it.ticker} {it.side} {it.qty:g} {it.symbol}{px}{upl}{ev}{exp}")
     return lines
 
 
@@ -396,12 +418,11 @@ def book_action_banner(kind: str, result: dict, target: str = "") -> str:
     return "✅ Done."
 
 
-def build_positions_panel(broker_positions: list | None = None,
-                          broker_error: str | None = None,
-                          banner: str | None = None) -> tuple[str, list]:
+def build_positions_panel(
+    broker_positions: list | None = None, broker_error: str | None = None, banner: str | None = None
+) -> tuple[str, list]:
     """Book text + inline rows for one Telegram message that can be edited."""
-    text = positions_view(broker_positions=broker_positions,
-                          broker_error=broker_error)
+    text = positions_view(broker_positions=broker_positions, broker_error=broker_error)
     if banner:
         text = f"{banner}\n\n{text}"
     rows = positions_keyboard_for(broker_positions)
@@ -410,48 +431,52 @@ def build_positions_panel(broker_positions: list | None = None,
 
 def positions_keyboard_for(broker_positions: list | None) -> list[list]:
     from telegram import InlineKeyboardButton
+
     if broker_positions is None:
         return [[InlineKeyboardButton("🔄 Refresh", callback_data="bk_rf")]]
     from framework.execution.managed import open_groups
     from framework.positions.book import classify_book
-    book = classify_book(open_groups(), broker_positions,
-                         ignored=_ignored_symbols())
+
+    book = classify_book(open_groups(), broker_positions, ignored=_ignored_symbols())
     return positions_keyboard(book)
 
 
 def positions_keyboard(book: Any) -> list[list]:
     """Inline button rows for a classified Book (callback_data ≤ 64 bytes)."""
     from telegram import InlineKeyboardButton
+
     rows = []
     seen_groups: set[str] = set()
     for it in book.managed:
         if it.group_id and it.group_id not in seen_groups:
             seen_groups.add(it.group_id)
-            rows.append([
-                InlineKeyboardButton(
-                    f"🔒 Close {it.ticker}",
-                    callback_data=f"bk_xg_{it.group_id}"),
-            ])
-        rows.append([
-            InlineKeyboardButton(
-                f"Close {it.symbol[-12:]}",
-                callback_data=f"bk_xs_{it.symbol}"),
-        ])
+            rows.append(
+                [
+                    InlineKeyboardButton(f"🔒 Close {it.ticker}", callback_data=f"bk_xg_{it.group_id}"),
+                ]
+            )
+        rows.append(
+            [
+                InlineKeyboardButton(f"Close {it.symbol[-12:]}", callback_data=f"bk_xs_{it.symbol}"),
+            ]
+        )
     for it in book.orphan:
-        rows.append([
-            InlineKeyboardButton(f"Adopt {it.symbol[-12:]}", callback_data=f"bk_ad_{it.symbol}"),
-            InlineKeyboardButton(f"Close {it.symbol[-12:]}", callback_data=f"bk_xs_{it.symbol}"),
-            InlineKeyboardButton("Ignore", callback_data=f"bk_ig_{it.symbol}"),
-        ])
+        rows.append(
+            [
+                InlineKeyboardButton(f"Adopt {it.symbol[-12:]}", callback_data=f"bk_ad_{it.symbol}"),
+                InlineKeyboardButton(f"Close {it.symbol[-12:]}", callback_data=f"bk_xs_{it.symbol}"),
+                InlineKeyboardButton("Ignore", callback_data=f"bk_ig_{it.symbol}"),
+            ]
+        )
     seen_missing: set[str] = set()
     for it in book.missing:
         if it.group_id and it.group_id not in seen_missing:
             seen_missing.add(it.group_id)
-            rows.append([
-                InlineKeyboardButton(
-                    f"Mark closed {it.ticker}",
-                    callback_data=f"bk_ml_{it.group_id}"),
-            ])
+            rows.append(
+                [
+                    InlineKeyboardButton(f"Mark closed {it.ticker}", callback_data=f"bk_ml_{it.group_id}"),
+                ]
+            )
     # Telegram cap 100 buttons; keep Refresh even on a large book.
     if len(rows) > 98:
         rows = rows[:98]
@@ -460,6 +485,7 @@ def positions_keyboard(book: Any) -> list[list]:
 
 
 # ── /orders ─────────────────────────────────────────────────────────────
+
 
 def orders_view(limit: int = 12) -> str:
     rows = trade_events_list(limit=limit)
@@ -481,6 +507,7 @@ def orders_view(limit: int = 12) -> str:
 
 
 # ── /jobs ───────────────────────────────────────────────────────────────
+
 
 def jobs_view(limit: int = 12) -> str:
     rows = job_runs_list(limit=limit)
@@ -507,6 +534,7 @@ def jobs_view(limit: int = 12) -> str:
 
 # ── /equity ─────────────────────────────────────────────────────────────
 
+
 def equity_view(days: int = 7) -> str:
     from framework.risk.equity import daily_pnl, day_start_equity, latest_equity
 
@@ -514,10 +542,11 @@ def equity_view(days: int = 7) -> str:
     if not eq:
         return "💰 <b>No equity snapshots yet</b> (snapshots run during market hours)."
     lines = ["💰 <b>EQUITY</b>", ""]
-    lines.append(f"<b>Latest:</b> ${eq['equity']:,.0f} | <b>BP</b> ${eq['buying_power']:,.0f} "
-                 f"({ _age(eq['ts'])})")
+    lines.append(
+        f"<b>Latest:</b> ${eq['equity']:,.0f} | <b>BP</b> ${eq['buying_power']:,.0f} ({_age(eq['ts'])})"
+    )
     start = day_start_equity()
-    pnl = daily_pnl( eq["equity"])
+    pnl = daily_pnl(eq["equity"])
     if start:
         pct = (pnl / start * 100) if pnl is not None else 0.0
         lines.append(f"<b>Day start:</b> ${start:,.0f} | <b>Day PnL:</b> ${pnl:+,.0f} ({pct:+.2f}%)")
@@ -533,7 +562,8 @@ def equity_view(days: int = 7) -> str:
 
 # ── /strategies ─────────────────────────────────────────────────────────
 
-def strategies_view(registry: Any=None) -> tuple[str, list[dict]]:
+
+def strategies_view(registry: Any = None) -> tuple[str, list[dict]]:
     """Per-strategy status lines + button specs for the toggle keyboard.
 
     Returns (text, buttons) where buttons = [{"name", "enabled"}] in display
@@ -551,6 +581,7 @@ def strategies_view(registry: Any=None) -> tuple[str, list[dict]]:
     rm = RiskManager()
 
     from earnings_edge.alpaca_mode import broker_label
+
     broker = broker_label()
     live_mark = "🔴 LIVE BROKER" if broker == "live" else "paper broker"
     lines = ["⚙️ <b>STRATEGIES</b>", live_mark, ""]
@@ -566,19 +597,24 @@ def strategies_view(registry: Any=None) -> tuple[str, list[dict]]:
         spend = rm.strategy_spend_today(name)
         mark = "🟢" if on else "⏸"
         src = "" if on == toml_on else (" (TOML off)" if not toml_on else " (override)")
-        lines.append(f"{mark} <b>{html.escape(str(name))}</b> — {lifecycle} | {mode}{mode_src} | today ${spend:,.0f}{src}")
+        lines.append(
+            f"{mark} <b>{html.escape(str(name))}</b> — {lifecycle} | {mode}{mode_src} | today ${spend:,.0f}{src}"
+        )
         if cfg and cfg.sizer:
             params = {k: v for k, v in cfg.sizer.items() if k != "name"}
             lines.append(f"    sizer {cfg.sizer.get('name')} {params}")
         buttons.append({"name": name, "enabled": on})
     lines.append("")
-    lines.append("Tap a button to pause/resume. Paused strategies stop producing "
-                 "proposals; open positions keep being managed to exit. "
-                 "Execution mode (approval/auto) toggles live in /signals.")
+    lines.append(
+        "Tap a button to pause/resume. Paused strategies stop producing "
+        "proposals; open positions keep being managed to exit. "
+        "Execution mode (approval/auto) toggles live in /signals."
+    )
     return "\n".join(lines), buttons
 
 
 # ── /exits ──────────────────────────────────────────────────────────────
+
 
 def pending_exits() -> list[Any]:
     return exit_proposals_list_pending()
@@ -711,12 +747,12 @@ def _format_exits(exits: list[dict]) -> str:
             parts.append(f"time exit {e['days_before_event']}d before event")
         elif rule == "time" and "days_after_event" in e:
             n = int(e["days_after_event"])
-            parts.append("time exit on event day" if n == 0
-                         else f"time exit {n}d after event")
+            parts.append("time exit on event day" if n == 0 else f"time exit {n}d after event")
         elif rule == "scheduled":
             mins = e.get("minutes_before_close", 90)
-            parts.append(f"auto-close ~{mins}min before close on/after the "
-                         f"structural deadline (e.g. near-leg expiry)")
+            parts.append(
+                f"auto-close ~{mins}min before close on/after the structural deadline (e.g. near-leg expiry)"
+            )
         else:
             parts.append(str(e))
     return "Exits (from TOML): " + "; ".join(parts) + "."
@@ -737,5 +773,9 @@ def setup_card(name: str, strategies_dir: str | None = None) -> str:
         return f"No setup card for <code>{html.escape(str(name))}</code>."
     header = f"<b>SETUP:</b> <code>{html.escape(str(name))}</code>"
     meta = _toml_meta(name, strategies_dir)
-    tail = f"{_format_exits(_toml_exits(name, strategies_dir))}\n{meta}" if meta else _format_exits(_toml_exits(name, strategies_dir))
+    tail = (
+        f"{_format_exits(_toml_exits(name, strategies_dir))}\n{meta}"
+        if meta
+        else _format_exits(_toml_exits(name, strategies_dir))
+    )
     return f"{header}\n\n{html.escape(body)}\n{html.escape(tail)}"

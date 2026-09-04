@@ -21,14 +21,18 @@ setup_logging()
 
 if __name__ == "__main__":
     import argparse
+
     p = argparse.ArgumentParser(description="Post-earnings outcome tracker")
     p.add_argument("--min-age", type=int, default=2, help="Min days past earnings to check")
     p.add_argument("--limit", type=int, default=0, help="Max outcomes to process (0=all)")
     p.add_argument("--max-retries", type=int, default=2, help="Attempts before marking unavailable")
-    p.add_argument("--live-candidates", action="store_true",
-                   help="Also process live_calendar_candidates")
-    p.add_argument("--live-candidate-limit", type=int, default=0,
-                   help="Max live candidates to process (0=all, only with --live-candidates)")
+    p.add_argument("--live-candidates", action="store_true", help="Also process live_calendar_candidates")
+    p.add_argument(
+        "--live-candidate-limit",
+        type=int,
+        default=0,
+        help="Max live candidates to process (0=all, only with --live-candidates)",
+    )
     args = p.parse_args()
 
     svc = OutcomeService()
@@ -45,5 +49,7 @@ if __name__ == "__main__":
             limit=args.live_candidate_limit,
             max_retries=args.max_retries,
         )
-        print(f"Live candidates: {live_stats['updated']} updated, "
-              f"{live_stats['failed']} no data, {live_stats['processed']} processed")
+        print(
+            f"Live candidates: {live_stats['updated']} updated, "
+            f"{live_stats['failed']} no data, {live_stats['processed']} processed"
+        )

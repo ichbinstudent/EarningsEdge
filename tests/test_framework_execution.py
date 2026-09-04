@@ -26,6 +26,7 @@ def conn(tmp_path):
 
 # ── Stub broker ----------------------------------------------------------
 
+
 class StubBroker:
     """Alpaca-shaped stub; fills on a configurable submit number."""
 
@@ -73,6 +74,7 @@ def _manager(broker):
 
 # ── Pricing policies -------------------------------------------------------
 
+
 def test_limit_walk_buy_walks_up_from_mid():
     prices = LimitWalkPolicy(steps=3, step_improve_bps=0, final_improve_bps=100).walk(10.0, "buy")
     assert prices == [10.0, 10.05, 10.1]
@@ -88,6 +90,7 @@ def test_mid_policy():
 
 
 # ── Order manager -----------------------------------------------------------
+
 
 def test_execute_fills_first_rung():
     broker = StubBroker(fill_on_submit=1)
@@ -130,11 +133,19 @@ def test_execute_refuses_market_when_no_limit_price():
 
 # ── Reconcile --------------------------------------------------------------
 
+
 def _broker_positions(*rows):
     client = MagicMock()
     client.get_positions.return_value = [
-        {"symbol": s, "qty": q, "side": "long", "avg_entry_price": e,
-         "current_price": c, "market_value": mv, "unrealized_pl": pl}
+        {
+            "symbol": s,
+            "qty": q,
+            "side": "long",
+            "avg_entry_price": e,
+            "current_price": c,
+            "market_value": mv,
+            "unrealized_pl": pl,
+        }
         for s, q, e, c, mv, pl in rows
     ]
     return client
@@ -153,13 +164,16 @@ def test_reconcile_matched_position(conn):
 def test_reconcile_orphan_position(conn):
     # Baseline already established → a NEW unknown position alerts as orphan
     from earnings_edge.db import adopted_positions_insert
+
     adopted_positions_insert("BASE", "2026-07-25")
     record_open_positions([{"symbol": "BASE", "ratio_qty": 1}], "s1", group_id="g0")
     rec = Reconciler(_broker_positions(("ORPH", 2, 1.0, 1.5, 300, 100)))
     report = rec.run()
     assert report.orphans == ["ORPH"]
     with db_engine.get_session() as s:
-        ev = s.execute(text("SELECT * FROM trade_events WHERE event_type = 'orphan_found'")).mappings().first()
+        ev = (
+            s.execute(text("SELECT * FROM trade_events WHERE event_type = 'orphan_found'")).mappings().first()
+        )
         row = s.execute(text("SELECT * FROM alpaca_positions WHERE symbol = 'ORPH'")).mappings().first()
     assert ev["symbol"] == "ORPH"
     assert row["managed"] == 0 and row["strategy"] == "unmanaged"
@@ -194,15 +208,31 @@ def test_backfill_exit_by_and_local_mark(tmp_path):
         open_groups,
         record_open_positions,
     )
+
     db_engine.configure(tmp_path / "bf.db")
 
-    record_open_positions([
-            {"symbol": "NU260814C00014000", "side": "sell", "ratio_qty": 25,
-             "option_type": "call", "strike": 14.0, "expiry": date(2026, 8, 14)},
-            {"symbol": "NU260911C00014000", "side": "buy", "ratio_qty": 25,
-             "option_type": "call", "strike": 14.0, "expiry": date(2026, 9, 11)},
+    record_open_positions(
+        [
+            {
+                "symbol": "NU260814C00014000",
+                "side": "sell",
+                "ratio_qty": 25,
+                "option_type": "call",
+                "strike": 14.0,
+                "expiry": date(2026, 8, 14),
+            },
+            {
+                "symbol": "NU260911C00014000",
+                "side": "buy",
+                "ratio_qty": 25,
+                "option_type": "call",
+                "strike": 14.0,
+                "expiry": date(2026, 9, 11),
+            },
         ],
-        "debit_size_exploit", group_id="nu1", entry_price=0.27,
+        "debit_size_exploit",
+        group_id="nu1",
+        entry_price=0.27,
         metadata={"side": "CALENDAR", "earnings_date": "2026-08-13"},
     )
     assert open_groups()[0].exit_by is None
@@ -214,6 +244,7 @@ def test_backfill_exit_by_and_local_mark(tmp_path):
 
 
 # ── Lifecycle --------------------------------------------------------------
+
 
 def test_lifecycle_defaults_to_paper(conn):
     assert LifecycleManager().state("s1") == "paper"
@@ -229,9 +260,11 @@ def test_lifecycle_promote_demote(conn):
     with pytest.raises(ValueError):
         lm.set_state("s1", "bogus")
     with db_engine.get_session() as s:
-        events = s.execute(
-            text("SELECT event_type FROM risk_events WHERE strategy = 's1' ORDER BY id")
-        ).mappings().all()
+        events = (
+            s.execute(text("SELECT event_type FROM risk_events WHERE strategy = 's1' ORDER BY id"))
+            .mappings()
+            .all()
+        )
     assert [e["event_type"] for e in events] == ["promote", "promote"]
 
 
@@ -245,20 +278,34 @@ def test_lifecycle_eligibility():
 
 # ── Managed positions --------------------------------------------------------
 
+
 def test_record_and_query_open_positions(conn):
     legs = [
-        {"symbol": "A", "side": "sell", "ratio_qty": 1, "option_type": "call",
-         "strike": 100.0, "expiry": date(2026, 8, 1)},
-        {"symbol": "B", "side": "buy", "ratio_qty": 1, "option_type": "call",
-         "strike": 110.0, "expiry": date(2026, 9, 1)},
+        {
+            "symbol": "A",
+            "side": "sell",
+            "ratio_qty": 1,
+            "option_type": "call",
+            "strike": 100.0,
+            "expiry": date(2026, 8, 1),
+        },
+        {
+            "symbol": "B",
+            "side": "buy",
+            "ratio_qty": 1,
+            "option_type": "call",
+            "strike": 110.0,
+            "expiry": date(2026, 9, 1),
+        },
     ]
-    n = record_open_positions(legs, "s1", group_id="g1",
-                              order_id="o1", entry_price=2.5,
-                              metadata={"side": "CALENDAR"})
+    n = record_open_positions(
+        legs, "s1", group_id="g1", order_id="o1", entry_price=2.5, metadata={"side": "CALENDAR"}
+    )
     assert n == 2
     rows = open_positions()
     assert len(rows) == 2
     import json
+
     meta = json.loads(rows[0]["metadata"])
     assert meta["leg_side"] == "sell" and meta["strike"] == 100.0
     assert open_positions(strategy="other") == []
@@ -266,15 +313,19 @@ def test_record_and_query_open_positions(conn):
 
 # ── Reconcile orphan baseline (Part C) ----------------------------------------
 
+
 def test_reconcile_baseline_adoption_silences_preexisting(conn):
     """First reconcile ever: existing broker positions adopted, zero orphan alerts."""
-    rec = Reconciler(_broker_positions(
-        ("OLD1", 1, 5.0, 6.0, 600, 100), ("OLD2", 2, 1.0, 1.5, 300, 100)))
+    rec = Reconciler(_broker_positions(("OLD1", 1, 5.0, 6.0, 600, 100), ("OLD2", 2, 1.0, 1.5, 300, 100)))
     report = rec.run()
     assert report.orphans == []  # adopted, not alerted
     with db_engine.get_session() as s:
         adopted = {r["symbol"] for r in s.execute(text("SELECT symbol FROM adopted_positions")).mappings()}
-        ev = s.execute(text("SELECT * FROM risk_events WHERE event_type = 'baseline_adopted'")).mappings().first()
+        ev = (
+            s.execute(text("SELECT * FROM risk_events WHERE event_type = 'baseline_adopted'"))
+            .mappings()
+            .first()
+        )
         rows = s.execute(text("SELECT managed FROM alpaca_positions")).mappings().all()
     assert adopted == {"OLD1", "OLD2"}
     assert ev is not None
@@ -283,11 +334,13 @@ def test_reconcile_baseline_adoption_silences_preexisting(conn):
 
 def test_reconcile_new_orphan_alerts_after_baseline(conn):
     from earnings_edge.db import adopted_positions_insert
+
     adopted_positions_insert("OLD1", "2026-07-25")
-    rec = Reconciler(_broker_positions(
-        ("OLD1", 1, 5.0, 6.0, 600, 100), ("NEW1", 1, 2.0, 2.5, 250, 50)))
+    rec = Reconciler(_broker_positions(("OLD1", 1, 5.0, 6.0, 600, 100), ("NEW1", 1, 2.0, 2.5, 250, 50)))
     report = rec.run()
     assert report.orphans == ["NEW1"]  # baseline symbol quiet, new one alerts
     with db_engine.get_session() as s:
-        ev = s.execute(text("SELECT * FROM trade_events WHERE event_type = 'orphan_found'")).mappings().first()
+        ev = (
+            s.execute(text("SELECT * FROM trade_events WHERE event_type = 'orphan_found'")).mappings().first()
+        )
     assert ev["symbol"] == "NEW1"

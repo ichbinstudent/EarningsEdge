@@ -22,6 +22,7 @@ from earnings_edge.validator import StockValidator
 
 # ── helpers ---------------------------------------------------------------
 
+
 def _hist_df(close: float, days: int = 5, volume: float = 2_000_000) -> pd.DataFrame:
     idx = pd.date_range(end=datetime.today(), periods=days, freq="B").normalize()
     idx.name = "Date"
@@ -92,6 +93,7 @@ class StubProvider:
 
 # ── _thin_expiries ---------------------------------------------------------
 
+
 def test_thin_expiries_keeps_anchors():
     dates = ["2026-08-01", "2026-08-08", "2026-08-15", "2026-08-22", "2026-09-20"]
     thinned = _thin_expiries(dates, 3)
@@ -108,6 +110,7 @@ def test_thin_expiries_noop_when_small_or_none():
 
 # ── PolygonProvider (HTTP stubbed) -----------------------------------------
 
+
 class FakePolygon(PolygonProvider):
     """PolygonProvider with _get replaced by canned responses."""
 
@@ -121,28 +124,62 @@ class FakePolygon(PolygonProvider):
     def _get(self, path, params=None, kind="stock"):
         today_ms = int(datetime.now().timestamp() * 1000)
         if "grouped" in path:
-            return {"resultsCount": 1, "results": [
-                {"T": "TEST", "o": self.spot, "h": self.spot * 1.01,
-                 "l": self.spot * 0.99, "c": self.spot, "v": 3_000_000, "t": today_ms}
-            ]}
+            return {
+                "resultsCount": 1,
+                "results": [
+                    {
+                        "T": "TEST",
+                        "o": self.spot,
+                        "h": self.spot * 1.01,
+                        "l": self.spot * 0.99,
+                        "c": self.spot,
+                        "v": 3_000_000,
+                        "t": today_ms,
+                    }
+                ],
+            }
         if "reference/options/contracts" in path:
             d1 = (date.today() + timedelta(days=7)).isoformat()
             d2 = (date.today() + timedelta(days=30)).isoformat()
-            return {"results": [
-                {"ticker": "O:TEST1", "contract_type": "call", "expiration_date": d1, "strike_price": self.spot},
-                {"ticker": "O:TEST2", "contract_type": "put", "expiration_date": d1, "strike_price": self.spot},
-                {"ticker": "O:TEST3", "contract_type": "call", "expiration_date": d2, "strike_price": self.spot * 1.2},
-            ]}
+            return {
+                "results": [
+                    {
+                        "ticker": "O:TEST1",
+                        "contract_type": "call",
+                        "expiration_date": d1,
+                        "strike_price": self.spot,
+                    },
+                    {
+                        "ticker": "O:TEST2",
+                        "contract_type": "put",
+                        "expiration_date": d1,
+                        "strike_price": self.spot,
+                    },
+                    {
+                        "ticker": "O:TEST3",
+                        "contract_type": "call",
+                        "expiration_date": d2,
+                        "strike_price": self.spot * 1.2,
+                    },
+                ]
+            }
         if "/range/1/day/" in path and "/O:" in path:
             # ATM call ~100 spot, 7 DTE, strike 100: fair value at IV 50% ≈ 2.2
-            return {"resultsCount": 1, "results": [
-                {"T": "O:TEST", "o": 2.2, "h": 2.3, "l": 2.1, "c": 2.2, "v": 500, "t": today_ms}
-            ]}
+            return {
+                "resultsCount": 1,
+                "results": [{"T": "O:TEST", "o": 2.2, "h": 2.3, "l": 2.1, "c": 2.2, "v": 500, "t": today_ms}],
+            }
         if "/range/1/day/" in path:
             bars = [
-                {"T": "TEST", "o": self.spot, "h": self.spot * 1.01, "l": self.spot * 0.99,
-                 "c": self.spot * (1 + 0.001 * i), "v": 3_000_000,
-                 "t": today_ms - (30 - i) * 86_400_000}
+                {
+                    "T": "TEST",
+                    "o": self.spot,
+                    "h": self.spot * 1.01,
+                    "l": self.spot * 0.99,
+                    "c": self.spot * (1 + 0.001 * i),
+                    "v": 3_000_000,
+                    "t": today_ms - (30 - i) * 86_400_000,
+                }
                 for i in range(30)
             ]
             return {"resultsCount": len(bars), "results": bars}
@@ -190,10 +227,20 @@ def test_polygon_missing_ticker_returns_empty_history():
     class EmptyPolygon(FakePolygon):
         def _get(self, path, params=None, kind="stock"):
             if "grouped" in path:
-                return {"resultsCount": 1, "results": [
-                    {"T": "OTHER", "o": 1, "h": 1, "l": 1, "c": 1, "v": 1,
-                     "t": int(datetime.now().timestamp() * 1000)}
-                ]}
+                return {
+                    "resultsCount": 1,
+                    "results": [
+                        {
+                            "T": "OTHER",
+                            "o": 1,
+                            "h": 1,
+                            "l": 1,
+                            "c": 1,
+                            "v": 1,
+                            "t": int(datetime.now().timestamp() * 1000),
+                        }
+                    ],
+                }
             return super()._get(path, params, kind)
 
     p = EmptyPolygon()
@@ -202,6 +249,7 @@ def test_polygon_missing_ticker_returns_empty_history():
 
 
 # ── ResilientProvider failover ----------------------------------------------
+
 
 class FailingYahoo:
     name = "yahoo"
@@ -283,6 +331,7 @@ def test_yahoo_provider_healthy_uses_session():
 
 
 # ── analyzer + validator integration with stub provider ---------------------
+
 
 def test_analyzer_with_stub_provider():
     analyzer = OptionsAnalyzer()
@@ -372,6 +421,7 @@ def test_validator_oi_gate_applies_when_available():
 
 # ── LSEProvider ------------------------------------------------------------
 
+
 class FakeLSEClient:
     """Stub for the lse-data LSE client surface used by LSEProvider."""
 
@@ -382,38 +432,66 @@ class FakeLSEClient:
         self.far = (today + timedelta(days=30)).isoformat()
         self.past = (today - timedelta(days=7)).isoformat()
 
-    def candles(self, symbol, timeframe="1m", start=None, end=None, limit=5000,
-                order="asc", dataset=None):
+    def candles(self, symbol, timeframe="1m", start=None, end=None, limit=5000, order="asc", dataset=None):
         return [
-            {"symbol": symbol, "open": 100.0, "high": 102.0, "low": 99.0,
-             "close": 101.0, "volume": 1_000_000,
-             "timestamp": "2026-07-20T00:00:00.000000Z"},
-            {"symbol": symbol, "open": 101.0, "high": 103.0, "low": 100.0,
-             "close": 102.0, "volume": 2_000_000,
-             "timestamp": "2026-07-21T00:00:00.000000Z"},
+            {
+                "symbol": symbol,
+                "open": 100.0,
+                "high": 102.0,
+                "low": 99.0,
+                "close": 101.0,
+                "volume": 1_000_000,
+                "timestamp": "2026-07-20T00:00:00.000000Z",
+            },
+            {
+                "symbol": symbol,
+                "open": 101.0,
+                "high": 103.0,
+                "low": 100.0,
+                "close": 102.0,
+                "volume": 2_000_000,
+                "timestamp": "2026-07-21T00:00:00.000000Z",
+            },
         ]
 
-    def options(self, underlying, type=None, expiry=None, strike=None,
-                min_dte=None, max_dte=None, limit=5000):
+    def options(
+        self, underlying, type=None, expiry=None, strike=None, min_dte=None, max_dte=None, limit=5000
+    ):
         rows = []
         for i, k in enumerate((315.0, 320.0, 325.0)):
             for ctype in ("call", "put"):
-                rows.append({
-                    "ticker": f"{underlying}{self.near}{ctype[0].upper()}{int(k)}",
-                    "underlying": underlying, "strike": k, "expiry": self.near,
-                    "contract_type": ctype, "last_price": 5.0 - i,
-                    "volume_today": 100 + i, "iv": 0.40,
-                    "delta": 0.55 - 0.1 * i if ctype == "call" else -0.45 - 0.1 * i,
-                    "underlying_price": self.spot, "dte": 7,
-                    "updated_at": "2026-07-24T20:00:00.000000Z",
-                })
-        rows.append({
-            "ticker": "OLD", "underlying": underlying, "strike": 320.0,
-            "expiry": self.past, "contract_type": "call", "last_price": 1.0,
-            "volume_today": 5, "iv": 0.9, "delta": 0.1,
-            "underlying_price": self.spot, "dte": -7,
-            "updated_at": "2026-07-01T20:00:00.000000Z",
-        })
+                rows.append(
+                    {
+                        "ticker": f"{underlying}{self.near}{ctype[0].upper()}{int(k)}",
+                        "underlying": underlying,
+                        "strike": k,
+                        "expiry": self.near,
+                        "contract_type": ctype,
+                        "last_price": 5.0 - i,
+                        "volume_today": 100 + i,
+                        "iv": 0.40,
+                        "delta": 0.55 - 0.1 * i if ctype == "call" else -0.45 - 0.1 * i,
+                        "underlying_price": self.spot,
+                        "dte": 7,
+                        "updated_at": "2026-07-24T20:00:00.000000Z",
+                    }
+                )
+        rows.append(
+            {
+                "ticker": "OLD",
+                "underlying": underlying,
+                "strike": 320.0,
+                "expiry": self.past,
+                "contract_type": "call",
+                "last_price": 1.0,
+                "volume_today": 5,
+                "iv": 0.9,
+                "delta": 0.1,
+                "underlying_price": self.spot,
+                "dte": -7,
+                "updated_at": "2026-07-01T20:00:00.000000Z",
+            }
+        )
         return rows
 
 
@@ -453,8 +531,16 @@ def test_lse_option_chain_maps_columns():
     assert ch.source == "lse"
     assert ch.oi_available is False
     assert list(ch.calls.columns) == [
-        "contractSymbol", "strike", "bid", "ask", "lastPrice",
-        "impliedVolatility", "openInterest", "volume", "delta", "inTheMoney",
+        "contractSymbol",
+        "strike",
+        "bid",
+        "ask",
+        "lastPrice",
+        "impliedVolatility",
+        "openInterest",
+        "volume",
+        "delta",
+        "inTheMoney",
     ]
     assert len(ch.calls) == 3 and len(ch.puts) == 3
     assert list(ch.calls["strike"]) == [315.0, 320.0, 325.0]
@@ -513,6 +599,7 @@ def test_lse_call_releases_concurrency_slot_after_failure():
 
 class _FakeStatusError(Exception):
     """Stands in for lse.client.LSEError, which carries a real .status."""
+
     def __init__(self, status):
         self.status = status
         super().__init__(f"status={status}")
@@ -554,6 +641,7 @@ def test_lse_call_throttles_on_unrecognized_exception():
 
 # ── ResilientProvider with LSE in the chain ---------------------------------
 
+
 class StubLSE:
     """Healthy LSE-shaped stub."""
 
@@ -573,9 +661,9 @@ class StubLSE:
         return ["2026-08-01"]
 
     def option_chain(self, ticker, expiry):
-        return OptionChainData(calls=_chain_df(100.0, 0.5),
-                               puts=_chain_df(100.0, 0.5),
-                               oi_available=False, source=self.name)
+        return OptionChainData(
+            calls=_chain_df(100.0, 0.5), puts=_chain_df(100.0, 0.5), oi_available=False, source=self.name
+        )
 
 
 class FailingLSE(StubLSE):
@@ -590,8 +678,7 @@ class FailingLSE(StubLSE):
 
 
 def test_resilient_starts_on_lse_when_healthy():
-    r = ResilientProvider(lse=StubLSE(), yahoo=FailingYahoo(healthy=False),
-                          polygon=StubProvider())
+    r = ResilientProvider(lse=StubLSE(), yahoo=FailingYahoo(healthy=False), polygon=StubProvider())
     assert r.active_name == "lse"
     assert not r.history("TEST", "1d").empty
 
@@ -603,15 +690,13 @@ def test_resilient_skips_unhealthy_lse_for_yahoo():
         def healthy(self, timeout=6.0):
             return True
 
-    r = ResilientProvider(lse=StubLSE(healthy=False), yahoo=HealthyYahoo(),
-                          polygon=StubProvider())
+    r = ResilientProvider(lse=StubLSE(healthy=False), yahoo=HealthyYahoo(), polygon=StubProvider())
     assert r.active_name == "yahoo"
 
 
 def test_resilient_failover_lse_to_yahoo_to_polygon():
     yahoo = FailingYahoo(healthy=True)  # healthy at init, dies per-call
-    r = ResilientProvider(lse=FailingLSE(healthy=True), yahoo=yahoo,
-                          polygon=StubProvider())
+    r = ResilientProvider(lse=FailingLSE(healthy=True), yahoo=yahoo, polygon=StubProvider())
     assert r.active_name == "lse"
     df = r.history("TEST", "1d")  # lse raises → yahoo raises → polygon
     assert not df.empty
@@ -620,8 +705,7 @@ def test_resilient_failover_lse_to_yahoo_to_polygon():
 
 def test_resilient_recovers_to_lse():
     lse = FailingLSE(healthy=False)
-    r = ResilientProvider(lse=lse, yahoo=FailingYahoo(healthy=False),
-                          polygon=StubProvider(), recheck_calls=2)
+    r = ResilientProvider(lse=lse, yahoo=FailingYahoo(healthy=False), polygon=StubProvider(), recheck_calls=2)
     assert r.active_name == "stub"
     lse._healthy = True
     lse.history = lambda *a, **k: _hist_df(100.0)

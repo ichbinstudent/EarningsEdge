@@ -14,6 +14,7 @@ logger = logging.getLogger("earnings_edge.collectors")
 
 class CircuitBreakerOpen(Exception):
     """Raised when the circuit breaker is open (too many recent failures)."""
+
     pass
 
 
@@ -64,7 +65,11 @@ class BaseCollector:
                     delay = min(self.base_delay * (2 ** (attempt - 1)), self.max_delay)
                     logger.warning(
                         "[%s] attempt %d/%d failed: %s, retrying in %.1fs",
-                        self.name, attempt, self.max_retries, exc, delay,
+                        self.name,
+                        attempt,
+                        self.max_retries,
+                        exc,
+                        delay,
                     )
                     time.sleep(delay)
 
@@ -81,8 +86,7 @@ class BaseCollector:
             self._circuit_open = False
             return
         raise CircuitBreakerOpen(
-            f"[{self.name}] circuit breaker open, "
-            f"reset in {self.circuit_reset_secs - elapsed:.0f}s"
+            f"[{self.name}] circuit breaker open, reset in {self.circuit_reset_secs - elapsed:.0f}s"
         )
 
     def _on_success(self) -> None:
@@ -97,7 +101,8 @@ class BaseCollector:
             self._circuit_opened_at = time.monotonic()
             logger.error(
                 "[%s] circuit breaker opened after %d consecutive failures",
-                self.name, self._consecutive_failures,
+                self.name,
+                self._consecutive_failures,
             )
 
     @property

@@ -4,6 +4,7 @@ ALPACA_LIVE=1 switches create_client() onto the live trading URL and
 (when set) APCA_LIVE_API_KEY_ID / APCA_LIVE_API_SECRET_KEY. Everything
 else — tests, preflight without --i-mean-live, unset env — stays paper.
 """
+
 from __future__ import annotations
 
 import os
@@ -64,14 +65,8 @@ def resolve_credentials(
         secret = api_secret or os.environ.get("APCA_API_SECRET_KEY", "")
         return key, secret, True
 
-    key = (
-        api_key
-        or os.environ.get("APCA_LIVE_API_KEY_ID")
-        or os.environ.get("APCA_API_KEY_ID", "")
-    )
+    key = api_key or os.environ.get("APCA_LIVE_API_KEY_ID") or os.environ.get("APCA_API_KEY_ID", "")
     secret = (
-        api_secret
-        or os.environ.get("APCA_LIVE_API_SECRET_KEY")
-        or os.environ.get("APCA_API_SECRET_KEY", "")
+        api_secret or os.environ.get("APCA_LIVE_API_SECRET_KEY") or os.environ.get("APCA_API_SECRET_KEY", "")
     )
     return key, secret, False

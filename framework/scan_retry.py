@@ -1,4 +1,5 @@
 """Exactly one follow-up scan after a failed/empty run, 10–15 minutes later."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta

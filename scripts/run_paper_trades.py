@@ -3,6 +3,7 @@
 
 The Hermes cron that called this is paused. Do not wire it back as the live path.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -36,6 +37,7 @@ LOCK_STALE_S = 30 * 60
 # Overlap guard
 # ---------------------------------------------------------------------------
 
+
 def acquire_lock() -> bool:
     """Create the run lock. Fresh lock -> skip run; stale lock -> take over."""
     try:
@@ -64,6 +66,7 @@ def release_lock() -> None:
 # Telegram
 # ---------------------------------------------------------------------------
 
+
 def telegram_token_valid() -> bool:
     """Preflight the bot token (it has been revoked repeatedly)."""
     if not TELEGRAM_BOT_TOKEN:
@@ -71,8 +74,7 @@ def telegram_token_valid() -> bool:
     try:
         import requests
 
-        resp = requests.post(
-            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getMe", timeout=10)
+        resp = requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getMe", timeout=10)
         return resp.status_code == 200
     except Exception as e:
         logger.error("Telegram token check failed: %s", e)
@@ -152,7 +154,9 @@ def format_summary(summary: dict) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run paper-trading strategies")
-    parser.add_argument("--strategies", nargs="*", default=None, help="Strategies to run (default: BEST_STRATEGIES)")
+    parser.add_argument(
+        "--strategies", nargs="*", default=None, help="Strategies to run (default: BEST_STRATEGIES)"
+    )
     parser.add_argument("--notify", default=None, help="Telegram chat ID to send notification to")
     parser.add_argument("--output", default=None, help="Write JSON output to file")
     parser.add_argument("--db", default=None, help="Path to earnings_ml.db")

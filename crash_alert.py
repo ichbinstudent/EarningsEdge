@@ -5,6 +5,7 @@ Polls Gettex/Xetra/Frankfurt every 2 min 07:30–23:00 Europe/Berlin weekdays.
 Telegram only (no orders). Does not long-poll Telegram, so it can share the
 bot token with bot.py.
 """
+
 from __future__ import annotations
 
 import json
@@ -50,9 +51,7 @@ def _send_html(chat_id: int, text: str) -> None:
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
     if not token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN unset")
-    body = json.dumps(
-        {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
-    ).encode()
+    body = json.dumps({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode()
     req = urllib.request.Request(
         f"https://api.telegram.org/bot{token}/sendMessage",
         data=body,
@@ -98,12 +97,27 @@ def main() -> None:
     tz = pytz.timezone("Europe/Berlin")
     sched = BlockingScheduler(timezone=tz)
     kw = dict(max_instances=1, coalesce=True, misfire_grace_time=90)
-    sched.add_job(tick, CronTrigger.from_crontab("30-59/2 7 * * mon-fri", timezone=tz),
-                  id="german_crash_pre", name="German crash alert (7:30-7:58)", **kw)
-    sched.add_job(tick, CronTrigger.from_crontab("*/2 8-22 * * mon-fri", timezone=tz),
-                  id="german_crash", name="German crash alert (8:00-22:58)", **kw)
-    sched.add_job(tick, CronTrigger.from_crontab("0 23 * * mon-fri", timezone=tz),
-                  id="german_crash_close", name="German crash alert (23:00)", **kw)
+    sched.add_job(
+        tick,
+        CronTrigger.from_crontab("30-59/2 7 * * mon-fri", timezone=tz),
+        id="german_crash_pre",
+        name="German crash alert (7:30-7:58)",
+        **kw,
+    )
+    sched.add_job(
+        tick,
+        CronTrigger.from_crontab("*/2 8-22 * * mon-fri", timezone=tz),
+        id="german_crash",
+        name="German crash alert (8:00-22:58)",
+        **kw,
+    )
+    sched.add_job(
+        tick,
+        CronTrigger.from_crontab("0 23 * * mon-fri", timezone=tz),
+        id="german_crash_close",
+        name="German crash alert (23:00)",
+        **kw,
+    )
     logger.info("crash_alert scheduler 07:30–23:00 Europe/Berlin; pid=%s", os.getpid())
     sched.start()
 

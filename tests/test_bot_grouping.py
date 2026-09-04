@@ -5,6 +5,7 @@ reading proposal ids back off a clicked message's own keyboard. No
 Telegram Application/token is instantiated — TradingBot.__init__ is never
 called, only its @staticmethods.
 """
+
 from __future__ import annotations
 
 import sys

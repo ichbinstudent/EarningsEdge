@@ -125,6 +125,7 @@ def _main_reply_kb() -> ReplyKeyboardMarkup:
     Tapping it sends the working inline Mini App button instead.
     """
     from dashboard.tg_auth import webapp_url
+
     rows = [list(r) for r in MAIN_KB]
     if webapp_url():
         rows.append(["🖥 Open desk"])
@@ -133,18 +134,25 @@ def _main_reply_kb() -> ReplyKeyboardMarkup:
 
 def _desk_webapp_markup() -> InlineKeyboardMarkup | None:
     from dashboard.tg_auth import webapp_url
+
     url = webapp_url()
     if not url:
         return None
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton("🖥 Open desk", web_app=WebAppInfo(url=url)),
-    ]])
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("🖥 Open desk", web_app=WebAppInfo(url=url)),
+            ]
+        ]
+    )
 
 
 # ── Health endpoint ──────────────────────────────────────────────────────
 
+
 class _HealthHandler(BaseHTTPRequestHandler):
     """Ready/not-ready JSON. ``facts_fn`` is swapped in by TradingBot.run."""
+
     facts_fn = staticmethod(lambda: {"ready": False, "reasons": ["uninitialized"]})
     _started_at = time.monotonic()
 
@@ -157,6 +165,7 @@ class _HealthHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         from framework.health import health_ready
+
         facts = type(self).facts_fn()
         facts = dict(facts)
         broker = facts.pop("broker", None)
@@ -207,7 +216,11 @@ class _HealthHandler(BaseHTTPRequestHandler):
             lines.append("# HELP job_success_rate_1d Success rate in the last day")
             lines.append("# TYPE job_success_rate_1d gauge")
             for name, job_runs in jobs.items():
-                recent = [r for r in job_runs if (now - datetime.fromisoformat(r["started_at"])).total_seconds() < 86400]
+                recent = [
+                    r
+                    for r in job_runs
+                    if (now - datetime.fromisoformat(r["started_at"])).total_seconds() < 86400
+                ]
                 if recent:
                     rate = sum(1 for r in recent if r["success"]) / len(recent)
                     lines.append(f'job_success_rate_1d{{job="{name}"}} {rate:.4f}')
@@ -223,17 +236,17 @@ class _HealthHandler(BaseHTTPRequestHandler):
             if eq:
                 lines.append("# HELP equity_latest Latest equity")
                 lines.append("# TYPE equity_latest gauge")
-                lines.append(f'equity_latest {eq.get("equity", 0)}')
+                lines.append(f"equity_latest {eq.get('equity', 0)}")
 
                 lines.append("# HELP buying_power_latest Latest buying power")
                 lines.append("# TYPE buying_power_latest gauge")
-                lines.append(f'buying_power_latest {eq.get("buying_power", 0)}')
+                lines.append(f"buying_power_latest {eq.get('buying_power', 0)}")
 
             rs = risk_state_get()
             halted = 1 if rs and rs.get("halted") else 0
             lines.append("# HELP killswitch_halted Is the killswitch halted")
             lines.append("# TYPE killswitch_halted gauge")
-            lines.append(f'killswitch_halted {halted}')
+            lines.append(f"killswitch_halted {halted}")
 
             body = ("\n".join(lines) + "\n").encode("utf-8")
             self.send_response(200)
@@ -269,6 +282,7 @@ def _start_dashboard_server(port: int = 8503):
     def run_dashboard():
         try:
             from dashboard.server import app
+
             config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
             server = uvicorn.Server(config)
             asyncio.run(server.serve())
@@ -280,6 +294,7 @@ def _start_dashboard_server(port: int = 8503):
 
 
 # ── Bot ───────────────────────────────────────────────────────────────────
+
 
 class TradingBot:
     def __init__(self, token: str):
@@ -316,6 +331,7 @@ class TradingBot:
         self.strategy_configs = load_strategy_configs()
         try:
             from framework.core.registry import StrategyRegistry
+
             StrategyRegistry(self.strategy_configs).sync_lifecycle()
         except Exception as exc:
             logger.warning("lifecycle sync from configs failed: %s", exc)
@@ -323,6 +339,7 @@ class TradingBot:
     def _health_facts(self) -> dict:
         """Facts for ``health_ready`` — used by the HTTP handler."""
         from framework.risk.equity import latest_equity
+
         lock_held = bool(getattr(self, "_instance_lock", None) and self._instance_lock._fh)
         last_eq = last_scan = None
         clock_ok = False
@@ -339,12 +356,14 @@ class TradingBot:
             last_eq = eq["ts"] if eq else None
             last_scan = scan_runs_latest_success()
             from earnings_edge.db import job_runs_latest
+
             skip_row = job_runs_latest("equity_snapshot")
             if skip_row and skip_row.get("stats_json") and "market closed" in skip_row["stats_json"]:
                 skip = True
         except Exception as e:
             logger.error("Job failed: %s", e)
         from earnings_edge.alpaca_mode import broker_label
+
         return {
             "lock_held": lock_held,
             "last_equity_ts": last_eq,
@@ -364,12 +383,13 @@ class TradingBot:
         # Catch up on anything that happened at the broker while we were down.
         application.create_task(self._reconcile())
         from dashboard.tg_auth import webapp_url
+
         url = webapp_url()
         if url:
             try:
                 await application.bot.set_chat_menu_button(
-                    menu_button=MenuButtonWebApp(
-                        text="Desk", web_app=WebAppInfo(url=url)))
+                    menu_button=MenuButtonWebApp(text="Desk", web_app=WebAppInfo(url=url))
+                )
             except Exception as exc:
                 logger.warning("Mini App menu button not set: %s", exc)
 
@@ -397,6 +417,7 @@ class TradingBot:
     async def _flush_alerts(self):
         """Push any DEDUPER outbox messages to the approval chat."""
         from framework.alerts import DEDUPER
+
         for msg in DEDUPER.drain():
             await self._push_risk_alert(msg)
 
@@ -404,9 +425,9 @@ class TradingBot:
         """Broker + DB facts shared by /status and /monitor."""
         from earnings_edge.bot_views import collect_desk_facts
         from framework.alerts import emit_broker_failure, emit_clock_failure
+
         client = create_client()
-        facts = collect_desk_facts(
-            get_clock=client.get_clock, get_positions=client.get_positions)
+        facts = collect_desk_facts(get_clock=client.get_clock, get_positions=client.get_positions)
         if facts.get("clock_exc") is not None:
             emit_clock_failure(facts["clock_exc"])
         if facts.get("positions_exc") is not None:
@@ -501,7 +522,7 @@ class TradingBot:
             else:
                 start = 0
                 while start < len(para):
-                    chunks.append(para[start:start + limit])
+                    chunks.append(para[start : start + limit])
                     start += limit
         if buf:
             chunks.append(buf)
@@ -522,6 +543,7 @@ class TradingBot:
         # Do not track messages that carry the main ReplyKeyboardMarkup,
         # otherwise deleting them later will hide the user's keyboard.
         from telegram import ReplyKeyboardMarkup
+
         if not isinstance(reply_markup, ReplyKeyboardMarkup):
             if not hasattr(self, "_last_panel_ids"):
                 self._last_panel_ids = {}
@@ -542,13 +564,13 @@ class TradingBot:
 
     def _positions_panel_sync(self, banner: str | None = None):
         from earnings_edge.bot_views import build_positions_panel
+
         broker, err = None, None
         try:
             broker = create_client().get_positions()
         except Exception as exc:
             err = str(exc)[:120]
-        return build_positions_panel(
-            broker_positions=broker, broker_error=err, banner=banner)
+        return build_positions_panel(broker_positions=broker, broker_error=err, banner=banner)
 
     async def _refresh_positions_query(self, query, banner: str | None = None) -> None:
         text, rows = await asyncio.to_thread(self._positions_panel_sync, banner)
@@ -560,18 +582,22 @@ class TradingBot:
 
     async def _cmd_start(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_start
+
         await cmd_start(self, update, ctx)
 
     async def _cmd_help(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_help
+
         await cmd_help(self, update, ctx)
 
     async def _cmd_scanners(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_scanners
+
         await cmd_scanners(self, update, ctx)
 
     async def _cmd_subscriptions(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_subscriptions
+
         await cmd_subscriptions(self, update, ctx)
 
     # ── Signal subscriptions (/signals) + trade setups (/setups) ───────
@@ -579,12 +605,14 @@ class TradingBot:
     def _effective_modes_sync(self) -> dict:
         """strategy -> effective execution mode (TOML default + DB override)."""
         from framework.core.control import effective_execution_mode
+
         out = {}
         for name in SIGNAL_STRATEGIES:
             cfg = self.strategy_configs.get(name)
             toml = cfg.execution_mode if cfg else "approval"
             out[name] = effective_execution_mode(name, toml)
         from earnings_edge.alpaca_mode import force_approval_on_live
+
         if force_approval_on_live():
             for k, v in list(out.items()):
                 if v == "auto":
@@ -598,10 +626,12 @@ class TradingBot:
             mark = "✅" if on else "❌"
             cb = f"sig_off_{name}" if on else f"sig_on_{name}"
             mode_label = "⚡ auto" if modes.get(name) == "auto" else "👤 approval"
-            rows.append([
-                InlineKeyboardButton(f"{mark} {name}", callback_data=cb),
-                InlineKeyboardButton(mode_label, callback_data=f"sig_mode_{name}"),
-            ])
+            rows.append(
+                [
+                    InlineKeyboardButton(f"{mark} {name}", callback_data=cb),
+                    InlineKeyboardButton(mode_label, callback_data=f"sig_mode_{name}"),
+                ]
+            )
         return InlineKeyboardMarkup(rows)
 
     @staticmethod
@@ -619,16 +649,20 @@ class TradingBot:
 
     async def _cmd_signals(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_signals
+
         await cmd_signals(self, update, ctx)
 
     async def _cmd_setups(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_setups
+
         await cmd_setups(self, update, ctx)
 
     def _run_panel(self) -> tuple[str, InlineKeyboardMarkup]:
-        msg = ("🔄 <b>Run scanner</b>\n\n"
-               "Scans on demand, then builds and pushes signal cards "
-               "from that data. Tap a scanner — this message updates.\n\n")
+        msg = (
+            "🔄 <b>Run scanner</b>\n\n"
+            "Scans on demand, then builds and pushes signal cards "
+            "from that data. Tap a scanner — this message updates.\n\n"
+        )
         ikb = []
         for name, sc in self.scanners.items():
             msg += f"📈 {cards.bold(name)}\n\n"
@@ -637,6 +671,7 @@ class TradingBot:
 
     async def _cmd_run(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_run
+
         await cmd_run(self, update, ctx)
 
     # ── Callback handler ───────────────────────────────────────────────
@@ -665,7 +700,7 @@ class TradingBot:
         elif data.startswith("sig_on_") or data.startswith("sig_off_"):
             # plain text: strategy names contain underscores
             enable = data.startswith("sig_on_")
-            name = data[len("sig_on_"):] if enable else data[len("sig_off_"):]
+            name = data[len("sig_on_") :] if enable else data[len("sig_off_") :]
             try:
                 self.strategy_subs.set_subscribed(name, uid, enable)
             except KeyError:
@@ -686,7 +721,7 @@ class TradingBot:
             await self._stop_monitor(query.message.chat_id)
 
         elif data.startswith("sig_mode_"):
-            name = data[len("sig_mode_"):]
+            name = data[len("sig_mode_") :]
             if name not in SIGNAL_STRATEGIES:
                 await query.edit_message_text(f"Unknown strategy: {name}")
                 return
@@ -696,6 +731,7 @@ class TradingBot:
 
             def flip_mode():
                 from framework.core.control import effective_execution_mode, set_execution_mode
+
                 cfg = self.strategy_configs.get(name)
                 toml = cfg.execution_mode if cfg else "approval"
                 cur = effective_execution_mode(name, toml)
@@ -705,9 +741,11 @@ class TradingBot:
 
             cur, new = await asyncio.to_thread(flip_mode)
             modes = await asyncio.to_thread(self._effective_modes_sync)
-            note = ("⚡ bot now executes this strategy's proposals immediately "
-                    "(risk-gated) and notifies" if new == "auto" else
-                    "👤 proposals now require a human click on the card")
+            note = (
+                "⚡ bot now executes this strategy's proposals immediately (risk-gated) and notifies"
+                if new == "auto"
+                else "👤 proposals now require a human click on the card"
+            )
             await self._edit_panel(
                 query,
                 f"{self._signals_intro()}\n\n→ {name}: {cur} → {new} (GLOBAL). {note}",
@@ -716,16 +754,15 @@ class TradingBot:
 
         elif data == "setup_back":
             from earnings_edge.bot_views import SETUP_STRATEGIES, setup_menu_text
-            ikb = [[InlineKeyboardButton(name, callback_data=f"setup_{name}")]
-                   for name in SETUP_STRATEGIES]
-            await query.edit_message_text(
-                setup_menu_text(), reply_markup=InlineKeyboardMarkup(ikb))
+
+            ikb = [[InlineKeyboardButton(name, callback_data=f"setup_{name}")] for name in SETUP_STRATEGIES]
+            await query.edit_message_text(setup_menu_text(), reply_markup=InlineKeyboardMarkup(ikb))
 
         elif data.startswith("setup_"):
             from earnings_edge.bot_views import setup_card
-            name = data[len("setup_"):]
-            kb = InlineKeyboardMarkup(
-                [[InlineKeyboardButton("⬅️ All setups", callback_data="setup_back")]])
+
+            name = data[len("setup_") :]
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ All setups", callback_data="setup_back")]])
             await query.edit_message_text(setup_card(name), reply_markup=kb)
 
         elif data.startswith("st_on_") or data.startswith("st_off_"):
@@ -737,11 +774,15 @@ class TradingBot:
 
             def flip():
                 from framework.core.control import set_enabled
+
                 set_enabled(name, enable, by=str(uid))
+
             await asyncio.to_thread(flip)
-            note = (f"▶️ {name} resumed — proposals will include it again."
-                    if enable else
-                    f"⏸ {name} paused — no new proposals; open positions still exit.")
+            note = (
+                f"▶️ {name} resumed — proposals will include it again."
+                if enable
+                else f"⏸ {name} paused — no new proposals; open positions still exit."
+            )
             text, ikb = await asyncio.to_thread(self._strategies_panel_sync)
             await self._edit_panel(query, f"{note}\n\n{text}", InlineKeyboardMarkup(ikb))
 
@@ -755,13 +796,12 @@ class TradingBot:
             if not self._risk_authorized(uid):
                 await query.edit_message_text(auth_message())
                 return
-            pid = int(data[len("ex_close_"):])
+            pid = int(data[len("ex_close_") :])
             await self._decide_in_group(query, uid, "exit", pid, "exec")
 
         elif data.startswith("ex_skip_"):
-            pid = int(data[len("ex_skip_"):])
+            pid = int(data[len("ex_skip_") :])
             await self._decide_in_group(query, uid, "exit", pid, "skip")
-
 
         elif data.startswith("sub_"):
             name = data[4:]
@@ -782,10 +822,8 @@ class TradingBot:
             if name not in self.scanners:
                 await query.edit_message_text(f"❌ Unknown scanner: {name}")
                 return
-            again = InlineKeyboardMarkup(
-                [[InlineKeyboardButton("🔄 Run again", callback_data="desk_run")]])
-            pm = ProgressMessage(self.application.bot, query.message.chat_id,
-                                 f"Scanning {name}")
+            again = InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Run again", callback_data="desk_run")]])
+            pm = ProgressMessage(self.application.bot, query.message.chat_id, f"Scanning {name}")
             await pm.attach(query.message)
             try:
                 await pm.set_stage("fetching data + analysing (30–60 min on heavy days)")
@@ -796,16 +834,13 @@ class TradingBot:
                 await pm.finish(f"❌ {name} error: {exc}", reply_markup=again)
                 return
             if not result.get("success"):
-                await pm.finish(
-                    f"❌ {name} failed: {result.get('error', 'Unknown')}",
-                    reply_markup=again)
+                await pm.finish(f"❌ {name} failed: {result.get('error', 'Unknown')}", reply_markup=again)
                 return
             # Chain straight into signal building — a scan on its own is
             # not actionable, and manual runs used to show a raw report
             # dump here instead of the actual trade signals it produces.
             try:
-                market_open = bool(
-                    (await asyncio.to_thread(create_client().get_clock)).get("is_open"))
+                market_open = bool((await asyncio.to_thread(create_client().get_clock)).get("is_open"))
             except Exception:
                 market_open = False
             if not market_open:
@@ -814,23 +849,21 @@ class TradingBot:
                     "⏰ Market is closed — signal build only runs 09:30–16:00 ET "
                     "(quotes would be stale outside that window). Tap Run again "
                     "during market hours to turn this data into proposal cards.",
-                    reply_markup=again)
+                    reply_markup=again,
+                )
                 return
             await pm.set_stage("building signals from fresh scan data")
             try:
                 await self._propose_and_push()
             except Exception as exc:
                 logger.exception("manual signal build after %s failed", name)
-                await pm.finish(
-                    f"⚠️ {name} scan complete, but signal build failed: {exc}",
-                    reply_markup=again)
+                await pm.finish(f"⚠️ {name} scan complete, but signal build failed: {exc}", reply_markup=again)
                 return
             from earnings_edge import trade_approval
+
             funnel = funnel_line(trade_approval.LAST_FUNNEL)
             tail = f"\n{funnel}" if funnel else ""
-            await pm.finish(
-                f"✅ {name} scan complete — signals built and pushed.{tail}",
-                reply_markup=again)
+            await pm.finish(f"✅ {name} scan complete — signals built and pushed.{tail}", reply_markup=again)
 
     # ── Keyboard handler ───────────────────────────────────────────────
 
@@ -859,7 +892,8 @@ class TradingBot:
         elif text == "🖥 Open desk":
             ikb = _desk_webapp_markup()
             if ikb:
-                await self._send_panel(update,
+                await self._send_panel(
+                    update,
                     "Open the web desk from this button (reply-keyboard Mini Apps "
                     "do not get a login token on this client):",
                     reply_markup=ikb,
@@ -880,9 +914,13 @@ class TradingBot:
             await self._cmd_picks(update, ctx)
         elif text == "📐 Designer":
             # Just show usage since designer needs args
-            await self._send_panel(update, "Usage: /designer <ticker> <legs...>\nExample: /designer AAPL buy call 190 2026-10-16 1 5.0 0.3")
+            await self._send_panel(
+                update,
+                "Usage: /designer <ticker> <legs...>\nExample: /designer AAPL buy call 190 2026-10-16 1 5.0 0.3",
+            )
         elif text == "🚪 Close Keyboard":
-            await self._send_panel(update,
+            await self._send_panel(
+                update,
                 "⌨️ Keyboard closed. /start to bring it back.",
                 reply_markup=ReplyKeyboardRemove(),
             )
@@ -898,14 +936,22 @@ class TradingBot:
         used both as a standalone single-card keyboard and, via _grouped_kb,
         as one row inside a batched multi-ticker message."""
         if kind == "entry":
-            return InlineKeyboardMarkup([[
-                InlineKeyboardButton("✅ Execute", callback_data=f"pt_exec_{row['id']}"),
-                InlineKeyboardButton("❌ Skip", callback_data=f"pt_skip_{row['id']}"),
-            ]])
-        return InlineKeyboardMarkup([[
-            InlineKeyboardButton("🔒 Close now", callback_data=f"ex_close_{row['id']}"),
-            InlineKeyboardButton("⏰ Snooze", callback_data=f"ex_skip_{row['id']}"),
-        ]])
+            return InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton("✅ Execute", callback_data=f"pt_exec_{row['id']}"),
+                        InlineKeyboardButton("❌ Skip", callback_data=f"pt_skip_{row['id']}"),
+                    ]
+                ]
+            )
+        return InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("🔒 Close now", callback_data=f"ex_close_{row['id']}"),
+                    InlineKeyboardButton("⏰ Snooze", callback_data=f"ex_skip_{row['id']}"),
+                ]
+            ]
+        )
 
     @staticmethod
     def _grouped_kb(rows: list[dict], kind: str) -> InlineKeyboardMarkup:
@@ -917,8 +963,14 @@ class TradingBot:
         exec_prefix, skip_prefix = ("pt_exec_", "pt_skip_") if kind == "entry" else ("ex_close_", "ex_skip_")
         exec_emoji, skip_emoji = ("✅", "❌") if kind == "entry" else ("🔒", "⏰")
         kb_rows = [
-            [InlineKeyboardButton(f"{exec_emoji} {row['ticker']}", callback_data=f"{exec_prefix}{row['id']}"),
-             InlineKeyboardButton(f"{skip_emoji} {row['ticker']}", callback_data=f"{skip_prefix}{row['id']}")]
+            [
+                InlineKeyboardButton(
+                    f"{exec_emoji} {row['ticker']}", callback_data=f"{exec_prefix}{row['id']}"
+                ),
+                InlineKeyboardButton(
+                    f"{skip_emoji} {row['ticker']}", callback_data=f"{skip_prefix}{row['id']}"
+                ),
+            ]
             for row in rows
         ]
         if len(rows) > 1:
@@ -945,7 +997,7 @@ class TradingBot:
                 cd = btn.callback_data or ""
                 for prefix in prefixes:
                     if cd.startswith(prefix):
-                        tail = cd[len(prefix):]
+                        tail = cd[len(prefix) :]
                         if tail.isdigit():
                             ids.add(int(tail))
         return sorted(ids)
@@ -965,16 +1017,19 @@ class TradingBot:
                 row = srows[0]
                 try:
                     await self.application.bot.send_message(
-                        chat_id=uid, text=row["card_text"],
-                        reply_markup=self._row_kb(row, kind), parse_mode=HTML)
+                        chat_id=uid,
+                        text=row["card_text"],
+                        reply_markup=self._row_kb(row, kind),
+                        parse_mode=HTML,
+                    )
                 except Exception as exc:
                     logger.error("%s card push to %d failed: %s", kind, uid, exc)
             else:
                 text = cards.group_message(strategy, srows, kind)
                 try:
                     await self.application.bot.send_message(
-                        chat_id=uid, text=text,
-                        reply_markup=self._grouped_kb(srows, kind), parse_mode=HTML)
+                        chat_id=uid, text=text, reply_markup=self._grouped_kb(srows, kind), parse_mode=HTML
+                    )
                 except Exception as exc:
                     logger.error("%s batch push to %d failed: %s", kind, uid, exc)
 
@@ -989,7 +1044,9 @@ class TradingBot:
         override = self._approval_override()
         universe = self._approval_chats()
         if not universe:
-            logger.warning("trade proposals: no approval chats (no subscribers, TELEGRAM_APPROVAL_CHAT_ID unset)")
+            logger.warning(
+                "trade proposals: no approval chats (no subscribers, TELEGRAM_APPROVAL_CHAT_ID unset)"
+            )
             return
         # Never build/push proposals when the US market is closed: quotes in
         # the scan frame are stale after hours and any confirm would submit
@@ -1002,6 +1059,7 @@ class TradingBot:
         except Exception as exc:
             logger.error("trade proposals: clock check failed (%s) — skipping build", exc)
             from framework.alerts import emit_clock_failure
+
             emit_clock_failure(exc)
             await self._flush_alerts()
             return
@@ -1011,6 +1069,7 @@ class TradingBot:
             logger.exception("proposal build failed: %s", exc)
             return
         from earnings_edge import trade_approval
+
         funnel = funnel_line(trade_approval.LAST_FUNNEL)
         if not rows:
             logger.info("no trade proposals today")
@@ -1022,36 +1081,49 @@ class TradingBot:
         # lifecycle all apply), then push a notification. 'approval' rows go
         # out as cards for a human click, as before.
         modes = await asyncio.to_thread(self._effective_modes_sync)
-        approval_rows, auto_rows = partition_by_mode(
-            rows, lambda s: modes.get(s, "approval"))
+        approval_rows, auto_rows = partition_by_mode(rows, lambda s: modes.get(s, "approval"))
         auto_notices = []
         if auto_rows:
             from earnings_edge.trade_approval import execute_proposal
+
             for row in auto_rows:
                 try:
-                    res = await asyncio.to_thread(
-                        execute_proposal, self.approval_store, row["id"])
+                    res = await asyncio.to_thread(execute_proposal, self.approval_store, row["id"])
                 except Exception as exc:
                     logger.exception("auto execution of proposal %d failed", row["id"])
                     res = {"ok": False, "error": f"exception: {exc}"}
                 if res.get("ok"):
-                    text = (f"⚡ AUTO-EXECUTED\n{row['card_text']}\n\n"
-                            f"→ order {cards.esc(res.get('order_id'))} · status {cards.esc(res.get('status'))}"
-                            f" · avg {cards.esc(res.get('filled_avg_price'))}")
+                    text = (
+                        f"⚡ AUTO-EXECUTED\n{row['card_text']}\n\n"
+                        f"→ order {cards.esc(res.get('order_id'))} · status {cards.esc(res.get('status'))}"
+                        f" · avg {cards.esc(res.get('filled_avg_price'))}"
+                    )
                 else:
-                    text = (f"⚠️ AUTO {cards.esc(row['strategy'])} — execution failed/vetoed\n"
-                            f"{row['card_text']}\n\n→ {cards.esc(res.get('error'))}")
+                    text = (
+                        f"⚠️ AUTO {cards.esc(row['strategy'])} — execution failed/vetoed\n"
+                        f"{row['card_text']}\n\n→ {cards.esc(res.get('error'))}"
+                    )
                 auto_notices.append({"strategy": row["strategy"], "text": text})
-            logger.info("auto mode: executed %d proposal(s): %s",
-                        len(auto_rows),
-                        {r["strategy"]: r["id"] for r in auto_rows})
+            logger.info(
+                "auto mode: executed %d proposal(s): %s",
+                len(auto_rows),
+                {r["strategy"]: r["id"] for r in auto_rows},
+            )
         routed = route_proposals(
-            approval_rows, universe=universe, subs=self.strategy_subs, override_chat=override,
+            approval_rows,
+            universe=universe,
+            subs=self.strategy_subs,
+            override_chat=override,
         )
         notice_routed = route_proposals(
-            auto_notices, universe=universe, subs=self.strategy_subs, override_chat=override,
+            auto_notices,
+            universe=universe,
+            subs=self.strategy_subs,
+            override_chat=override,
         )
-        not_pushed = sorted({r["strategy"] for r in approval_rows} - {r["strategy"] for rs in routed.values() for r in rs})
+        not_pushed = sorted(
+            {r["strategy"] for r in approval_rows} - {r["strategy"] for rs in routed.values() for r in rs}
+        )
         if not_pushed:
             logger.info("proposals built but not pushed (no subscribers): %s", not_pushed)
         for uid, urows in notice_routed.items():
@@ -1093,14 +1165,17 @@ class TradingBot:
 
     async def _equity_snapshot(self):
         from earnings_edge.jobs import equity_snapshot_job
+
         await equity_snapshot_job(self)
 
     async def _reconcile(self):
         from earnings_edge.jobs import reconcile_job
+
         await reconcile_job(self)
 
     async def _guard_eval(self):
         from earnings_edge.jobs import guard_eval_job
+
         await guard_eval_job(self)
 
     async def _push_risk_alert(self, text: str):
@@ -1124,11 +1199,12 @@ class TradingBot:
     @staticmethod
     def _decide_exit(proposal_id: int, close: bool, uid: int) -> dict:
         from framework.positions.manager import ExitManager
-        return ExitManager(create_client()).decide_exit(
-            proposal_id, close, decided_by=uid)
+
+        return ExitManager(create_client()).decide_exit(proposal_id, close, decided_by=uid)
 
     async def _exit_eval(self):
         from earnings_edge.jobs import exit_eval_job
+
         await exit_eval_job(self)
 
     def _exit_eval_sync(self):
@@ -1189,7 +1265,9 @@ class TradingBot:
         # (chain_cache populates this hourly) rather than re-running a scan.
         earnings = [
             EarningsCandidate(ticker=t, timing=timing or "Unknown", earnings_date=target, source="db")
-            for t, timing in await asyncio.to_thread(snapshots_earnings_on_date, earnings_date=target.isoformat())
+            for t, timing in await asyncio.to_thread(
+                snapshots_earnings_on_date, earnings_date=target.isoformat()
+            )
         ]
 
         # Build candidates for ff_ladder
@@ -1231,8 +1309,7 @@ class TradingBot:
             logger.info("FF/ARB: no ladder candidates today")
             return
 
-        rows = await asyncio.to_thread(
-            build_ff_proposals, self.approval_store, all_candidates)
+        rows = await asyncio.to_thread(build_ff_proposals, self.approval_store, all_candidates)
         if not rows:
             logger.info("FF/ARB: %d candidates, all already pending", len(all_candidates))
             return
@@ -1252,6 +1329,7 @@ class TradingBot:
         except Exception as exc:
             logger.error("FF proposals: clock check failed (%s) — aborting", exc)
             from framework.alerts import emit_clock_failure
+
             emit_clock_failure(exc)
             await self._flush_alerts()
             return
@@ -1263,8 +1341,7 @@ class TradingBot:
         if not candidates:
             logger.info("FF: no ladder candidates today")
             return
-        rows = await asyncio.to_thread(
-            build_ff_proposals, self.approval_store, candidates)
+        rows = await asyncio.to_thread(build_ff_proposals, self.approval_store, candidates)
         if not rows:
             logger.info("FF: %d candidates, all already pending", len(candidates))
             return
@@ -1275,30 +1352,40 @@ class TradingBot:
             notices = []
             armed = 0
             for row in rows:
-                res = await asyncio.to_thread(
-                    execute_proposal, self.approval_store, row["id"])
+                res = await asyncio.to_thread(execute_proposal, self.approval_store, row["id"])
                 if res.get("ok"):
                     armed += 1
-                    notices.append({
-                        "strategy": "ff_ladder",
-                        "text": (f"⚡ AUTO-ARMED\n{row['card_text']}\n\n"
-                                 f"→ ladder #{cards.esc(res.get('ladder_id'))} armed — "
-                                 f"steps 14:00–15:45 ET"),
-                    })
+                    notices.append(
+                        {
+                            "strategy": "ff_ladder",
+                            "text": (
+                                f"⚡ AUTO-ARMED\n{row['card_text']}\n\n"
+                                f"→ ladder #{cards.esc(res.get('ladder_id'))} armed — "
+                                f"steps 14:00–15:45 ET"
+                            ),
+                        }
+                    )
                 else:
-                    notices.append({
-                        "strategy": "ff_ladder",
-                        "text": (f"⚠️ AUTO ff_ladder — arm failed/vetoed\n"
-                                 f"{row['card_text']}\n\n→ {cards.esc(res.get('error'))}"),
-                    })
+                    notices.append(
+                        {
+                            "strategy": "ff_ladder",
+                            "text": (
+                                f"⚠️ AUTO ff_ladder — arm failed/vetoed\n"
+                                f"{row['card_text']}\n\n→ {cards.esc(res.get('error'))}"
+                            ),
+                        }
+                    )
             logger.info("FF auto mode: armed %d/%d proposals", armed, len(rows))
             routed = route_proposals(
-                notices, universe=chats, subs=self.strategy_subs,
-                override_chat=self._approval_override())
+                notices, universe=chats, subs=self.strategy_subs, override_chat=self._approval_override()
+            )
             for uid, urows in routed.items():
                 body = "\n\n".join(n["text"] for n in urows)
-                text = (body if len(urows) == 1 else
-                        f"{cards.header(cards.AUTO_EMOJI, f'ff_ladder — {len(urows)} auto')}\n\n{body}")
+                text = (
+                    body
+                    if len(urows) == 1
+                    else f"{cards.header(cards.AUTO_EMOJI, f'ff_ladder — {len(urows)} auto')}\n\n{body}"
+                )
                 try:
                     await self.application.bot.send_message(chat_id=uid, text=text, parse_mode=HTML)
                 except Exception as exc:
@@ -1306,8 +1393,8 @@ class TradingBot:
             return
         # same opt-out routing as scan-chained proposals (/signals)
         routed = route_proposals(
-            rows, universe=chats, subs=self.strategy_subs,
-            override_chat=self._approval_override())
+            rows, universe=chats, subs=self.strategy_subs, override_chat=self._approval_override()
+        )
         if not routed:
             logger.info("FF: %d proposals, zero recipients after /signals opt-outs", len(rows))
             return
@@ -1323,6 +1410,7 @@ class TradingBot:
         except Exception as exc:
             logger.error("FF step: clock check failed (%s) — skipping step", exc)
             from framework.alerts import emit_clock_failure
+
             emit_clock_failure(exc)
             await self._flush_alerts()
             return
@@ -1336,8 +1424,10 @@ class TradingBot:
             return
         routed = route_proposals(
             [{"strategy": "ff_ladder", "text": ev} for ev in events],
-            universe=self._approval_chats(), subs=self.strategy_subs,
-            override_chat=self._approval_override())
+            universe=self._approval_chats(),
+            subs=self.strategy_subs,
+            override_chat=self._approval_override(),
+        )
         for uid, urows in routed.items():
             for row in urows:
                 try:
@@ -1372,20 +1462,18 @@ class TradingBot:
     async def _entry_exec_outcome(self, pid: int, uid: int) -> tuple[str, str]:
         row = self.approval_store.get(pid)
         ticker = row["ticker"] if row else str(pid)
-        result = await asyncio.to_thread(
-            execute_proposal, self.approval_store, pid, decided_by=uid)
+        result = await asyncio.to_thread(execute_proposal, self.approval_store, pid, decided_by=uid)
         if result.get("ok"):
             if result.get("ladder_id") is not None:
-                footer = (f"✅ FF ladder #{result['ladder_id']} armed — "
-                          f"steps 14:00–15:45 ET")
+                footer = f"✅ FF ladder #{result['ladder_id']} armed — steps 14:00–15:45 ET"
             else:
-                footer = (f"✅ Executed — order {result['order_id']} "
-                          f"({result['status']})")
+                footer = f"✅ Executed — order {result['order_id']} ({result['status']})"
         else:
             detail = result.get("skip_detail") or ""
             base = result.get("error") or "bridge rejected"
-            footer = (f"⚠️ NOT executed: {base}\n⛔ {cards.esc(detail)}"
-                      if detail else f"⚠️ NOT executed: {base}")
+            footer = (
+                f"⚠️ NOT executed: {base}\n⛔ {cards.esc(detail)}" if detail else f"⚠️ NOT executed: {base}"
+            )
         return ticker, footer
 
     async def _entry_skip_outcome(self, pid: int, uid: int) -> tuple[str, str]:
@@ -1405,15 +1493,20 @@ class TradingBot:
         if result.get("ok"):
             footer = f"🔒 Exit #{pid} filled @ {result.get('filled_avg_price')}"
         else:
-            footer = f"⚠️ Exit #{pid}: {result.get('error') or result.get('order_state') or result.get('detail')}"
+            footer = (
+                f"⚠️ Exit #{pid}: {result.get('error') or result.get('order_state') or result.get('detail')}"
+            )
         return ticker, footer
 
     async def _exit_snooze_outcome(self, pid: int, uid: int) -> tuple[str, str]:
         row = self._exit_row(pid)
         ticker = row["ticker"] if row else str(pid)
         result = await asyncio.to_thread(self._decide_exit, pid, False, uid)
-        footer = (f"⏰ Exit #{pid} snoozed until tomorrow." if result.get("ok")
-                 else f"⚠️ Exit #{pid}: {result.get('error')}")
+        footer = (
+            f"⏰ Exit #{pid} snoozed until tomorrow."
+            if result.get("ok")
+            else f"⚠️ Exit #{pid}: {result.get('error')}"
+        )
         return ticker, footer
 
     async def _decide_in_group(self, query, uid: int, kind: str, pid: int, action: str) -> None:
@@ -1435,26 +1528,28 @@ class TradingBot:
             await self._edit_card_keep(query, f"⏳ {verb} #{pid}…")
 
         if kind == "entry":
-            ticker, footer = await (self._entry_exec_outcome(pid, uid) if action == "exec"
-                                    else self._entry_skip_outcome(pid, uid))
+            ticker, footer = await (
+                self._entry_exec_outcome(pid, uid) if action == "exec" else self._entry_skip_outcome(pid, uid)
+            )
             fetch = self.approval_store.get
         else:
-            ticker, footer = await (self._exit_close_outcome(pid, uid) if action == "exec"
-                                    else self._exit_snooze_outcome(pid, uid))
+            ticker, footer = await (
+                self._exit_close_outcome(pid, uid)
+                if action == "exec"
+                else self._exit_snooze_outcome(pid, uid)
+            )
             fetch = self._exit_row
 
         if not grouped:
             await self._edit_card_keep(query, footer)
             return
 
-        remaining = [r for rid in ids if rid != pid
-                    and (r := fetch(rid)) and r["status"] == "pending"]
+        remaining = [r for rid in ids if rid != pid and (r := fetch(rid)) and r["status"] == "pending"]
         outcome_line = f"{cards.esc(ticker)}: {cards.esc(footer)}"
         if not remaining:
             base = (query.message.text or "").split("\n\n→ ")[0]
             try:
-                await query.edit_message_text(
-                    f"{base}\n\n→ {outcome_line}\nAll decided.", parse_mode=HTML)
+                await query.edit_message_text(f"{base}\n\n→ {outcome_line}\nAll decided.", parse_mode=HTML)
             except Exception as exc:
                 logger.error("group finish edit failed: %s", exc)
             return
@@ -1462,7 +1557,8 @@ class TradingBot:
         text = f"{cards.group_message(strategy, remaining, kind)}\n\n→ {outcome_line}"
         try:
             await query.edit_message_text(
-                text, reply_markup=self._grouped_kb(remaining, kind), parse_mode=HTML)
+                text, reply_markup=self._grouped_kb(remaining, kind), parse_mode=HTML
+            )
         except Exception as exc:
             logger.error("group rebuild edit failed: %s", exc)
 
@@ -1483,8 +1579,7 @@ class TradingBot:
             lines.append(f"{cards.esc(ticker)}: {cards.esc(footer)}")
         base = (query.message.text or "").split("\n\n→ ")[0]
         try:
-            await query.edit_message_text(
-                f"{base}\n\n→ Batch decided:\n" + "\n".join(lines), parse_mode=HTML)
+            await query.edit_message_text(f"{base}\n\n→ Batch decided:\n" + "\n".join(lines), parse_mode=HTML)
         except Exception as exc:
             logger.error("group bulk edit failed: %s", exc)
 
@@ -1501,22 +1596,28 @@ class TradingBot:
             await query.edit_message_text(auth_message())
             return
         if data.startswith("bk_xs_"):
-            symbol = data[len("bk_xs_"):]
-            kb = InlineKeyboardMarkup([[
-                InlineKeyboardButton("✅ Confirm close", callback_data=f"bk_oks_{symbol}"),
-                InlineKeyboardButton("❌ Cancel", callback_data="bk_nop"),
-            ]])
-            await self._edit_panel(
-                query, f"Close {symbol} at the broker?", kb)
+            symbol = data[len("bk_xs_") :]
+            kb = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton("✅ Confirm close", callback_data=f"bk_oks_{symbol}"),
+                        InlineKeyboardButton("❌ Cancel", callback_data="bk_nop"),
+                    ]
+                ]
+            )
+            await self._edit_panel(query, f"Close {symbol} at the broker?", kb)
             return
         if data.startswith("bk_xg_"):
-            gid = data[len("bk_xg_"):]
-            kb = InlineKeyboardMarkup([[
-                InlineKeyboardButton("✅ Confirm close group", callback_data=f"bk_okg_{gid}"),
-                InlineKeyboardButton("❌ Cancel", callback_data="bk_nop"),
-            ]])
-            await self._edit_panel(
-                query, f"Close group {gid[:12]}… at the broker?", kb)
+            gid = data[len("bk_xg_") :]
+            kb = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton("✅ Confirm close group", callback_data=f"bk_okg_{gid}"),
+                        InlineKeyboardButton("❌ Cancel", callback_data="bk_nop"),
+                    ]
+                ]
+            )
+            await self._edit_panel(query, f"Close group {gid[:12]}… at the broker?", kb)
             return
         if data == "bk_nop":
             await self._refresh_positions_query(query, "Cancelled.")
@@ -1526,26 +1627,32 @@ class TradingBot:
 
         def act():
             from framework.positions import book_actions as ba
+
             client = create_client()
             if data.startswith("bk_oks_"):
-                return "close", data[len("bk_oks_"):], ba.close_symbol(
-                    client, data[len("bk_oks_"):], by=f"telegram:{uid}")
+                return (
+                    "close",
+                    data[len("bk_oks_") :],
+                    ba.close_symbol(client, data[len("bk_oks_") :], by=f"telegram:{uid}"),
+                )
             if data.startswith("bk_okg_"):
-                return "close_group", data[len("bk_okg_"):], ba.close_group_at_broker(
-                    client, data[len("bk_okg_"):], by=f"telegram:{uid}")
+                return (
+                    "close_group",
+                    data[len("bk_okg_") :],
+                    ba.close_group_at_broker(client, data[len("bk_okg_") :], by=f"telegram:{uid}"),
+                )
             if data.startswith("bk_ad_"):
-                symbol = data[len("bk_ad_"):]
+                symbol = data[len("bk_ad_") :]
                 pos = ba.find_broker_pos(client.get_positions(), symbol)
                 if not pos:
                     return "adopt", symbol, {"ok": False, "error": "symbol not at broker"}
                 return "adopt", symbol, ba.adopt_orphan(pos, by=f"telegram:{uid}")
             if data.startswith("bk_ig_"):
-                symbol = data[len("bk_ig_"):]
+                symbol = data[len("bk_ig_") :]
                 return "ignore", symbol, ba.ignore_orphan(symbol, by=f"telegram:{uid}")
             if data.startswith("bk_ml_"):
-                gid = data[len("bk_ml_"):]
-                return "mark_closed", gid, ba.mark_missing_closed(
-                    gid, by=f"telegram:{uid}")
+                gid = data[len("bk_ml_") :]
+                return "mark_closed", gid, ba.mark_missing_closed(gid, by=f"telegram:{uid}")
             return "unknown", "", {"ok": False, "error": "unknown book action"}
 
         kind, target, result = await asyncio.to_thread(act)
@@ -1569,32 +1676,35 @@ class TradingBot:
             lines = []
             for row in pending:
                 result = await asyncio.to_thread(
-                    execute_proposal, self.approval_store, row["id"], decided_by=uid)
+                    execute_proposal, self.approval_store, row["id"], decided_by=uid
+                )
                 if result.get("ok"):
-                    lines.append(f"✅ #{row['id']} {row['ticker']} {row['side']} — "
-                                 f"order {result['order_id']} ({result['status']})")
+                    lines.append(
+                        f"✅ #{row['id']} {row['ticker']} {row['side']} — "
+                        f"order {result['order_id']} ({result['status']})"
+                    )
                 else:
-                    lines.append(f"⚠️ #{row['id']} {row['ticker']} {row['side']} — "
-                                 f"{result.get('error')}")
+                    lines.append(f"⚠️ #{row['id']} {row['ticker']} {row['side']} — {result.get('error')}")
             try:
-                await query.edit_message_text(
-                    f"{base}\n\n→ " + "\n".join(lines))
+                await query.edit_message_text(f"{base}\n\n→ " + "\n".join(lines))
             except Exception as exc:
                 logger.error("pt_exec_all edit failed: %s", exc)
         elif data == "pt_exec_grp":
             await self._decide_group_bulk(query, uid, "entry")
         elif data.startswith("pt_exec_"):
-            pid = int(data[len("pt_exec_"):])
+            pid = int(data[len("pt_exec_") :])
             await self._decide_in_group(query, uid, "entry", pid, "exec")
         elif data.startswith("pt_skip_"):
-            pid = int(data[len("pt_skip_"):])
+            pid = int(data[len("pt_skip_") :])
             await self._decide_in_group(query, uid, "entry", pid, "skip")
         elif data.startswith(("ff_arm_", "ff_skip_")):
             # Legacy arm-cards from before FF ladders moved onto the standard
             # proposal store — the in-memory candidate map no longer exists.
             await self._edit_card_keep(
-                query, "⚠️ stale card — FF ladders now arrive as standard "
-                       "Execute/Skip proposals in the 13:45 ET batch.")
+                query,
+                "⚠️ stale card — FF ladders now arrive as standard "
+                "Execute/Skip proposals in the 13:45 ET batch.",
+            )
 
     # ── Risk/lifecycle sync helpers ──────────────────────────────────────
     # Pure DB-facing work shared by the slash commands and the /settings
@@ -1602,39 +1712,51 @@ class TradingBot:
 
     def _halt_sync(self, by: str) -> None:
         from framework.risk.killswitch import KillSwitch
+
         KillSwitch().trip("manual halt via bot", by)
 
     def _resume_sync(self, by: str) -> None:
         from framework.risk.killswitch import KillSwitch
+
         KillSwitch().resume(by)
 
     def _risk_status_sync(self) -> str:
         from framework.execution.lifecycle import LifecycleManager
         from framework.risk.equity import latest_equity
         from framework.risk.killswitch import KillSwitch
+
         ks = KillSwitch().status()
         eq = latest_equity()
         states = LifecycleManager().all_states()
         lines = ["<b>Risk status</b>"]
         if ks.get("halted"):
-            lines.append(f"🛑 <b>HALTED:</b> {cards.esc(ks.get('reason'))} (by {cards.esc(ks.get('tripped_by'))})")
+            lines.append(
+                f"🛑 <b>HALTED:</b> {cards.esc(ks.get('reason'))} (by {cards.esc(ks.get('tripped_by'))})"
+            )
         else:
             lines.append("🟢 <b>Kill switch:</b> armed (not halted)")
         if eq:
-            lines.append(f"💰 <b>Equity:</b> ${eq['equity']:,.0f} | <b>BP:</b> ${eq['buying_power']:,.0f} "
-                         f"(as of {eq['ts'][:16]})")
+            lines.append(
+                f"💰 <b>Equity:</b> ${eq['equity']:,.0f} | <b>BP:</b> ${eq['buying_power']:,.0f} "
+                f"(as of {eq['ts'][:16]})"
+            )
         else:
             lines.append("💰 <b>No equity snapshots yet</b>")
         if states:
-            lines.append("📊 <b>Lifecycle:</b> " + ", ".join(f"<code>{cards.esc(k)}</code>={v}" for k, v in states.items()))
+            lines.append(
+                "📊 <b>Lifecycle:</b> "
+                + ", ".join(f"<code>{cards.esc(k)}</code>={v}" for k, v in states.items())
+            )
         return "\n".join(lines)
 
     def _lifecycle_state_sync(self, name: str) -> str:
         from framework.execution.lifecycle import LifecycleManager
+
         return LifecycleManager().state(name)
 
     def _lifecycle_step_sync(self, name: str, promote: bool, by: str) -> tuple[str, str]:
         from framework.execution.lifecycle import LIFECYCLES, LifecycleManager
+
         lm = LifecycleManager()
         cur = lm.state(name)
         idx = LIFECYCLES.index(cur) + (1 if promote else -1)
@@ -1645,28 +1767,34 @@ class TradingBot:
     def _lifecycle_menu_data_sync(self) -> tuple[list[str], dict]:
         from framework.core.registry import get_registry
         from framework.execution.lifecycle import LifecycleManager
+
         registry = get_registry()
         states = LifecycleManager().all_states()
         return sorted(set(registry.configs) | set(states)), states
 
     async def _cmd_halt(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_halt
+
         await cmd_halt(self, update, ctx)
 
     async def _cmd_resume(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_resume
+
         await cmd_resume(self, update, ctx)
 
     async def _cmd_risk(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_risk
+
         await cmd_risk(self, update, ctx)
 
     async def _cmd_promote(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_promote
+
         await cmd_promote(self, update, ctx)
 
     async def _cmd_demote(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_demote
+
         await cmd_demote(self, update, ctx)
 
     async def _cmd_set_lifecycle(self, update: Update, promote: bool):
@@ -1677,9 +1805,10 @@ class TradingBot:
         if len(args) != 2:
             await update.message.reply_text("Usage: /promote <strategy> | /demote <strategy>")
             return
-        cur, new = await asyncio.to_thread(
-            self._lifecycle_step_sync, args[1], promote, "telegram")
-        await update.message.reply_text(f"📊 <code>{cards.esc(args[1])}</code>: {cur} → {new}", parse_mode=HTML)
+        cur, new = await asyncio.to_thread(self._lifecycle_step_sync, args[1], promote, "telegram")
+        await update.message.reply_text(
+            f"📊 <code>{cards.esc(args[1])}</code>: {cur} → {new}", parse_mode=HTML
+        )
 
     # ── Settings menu ─────────────────────────────────────────────────
     # Consolidates the risk/admin controls (halt, resume, risk status,
@@ -1688,25 +1817,32 @@ class TradingBot:
 
     @staticmethod
     def _settings_kb() -> InlineKeyboardMarkup:
-        return InlineKeyboardMarkup([
-            [InlineKeyboardButton("🛡 Risk Status", callback_data="set_risk")],
-            [InlineKeyboardButton("🛑 Halt Trading", callback_data="set_halt"),
-             InlineKeyboardButton("✅ Resume Trading", callback_data="set_resume")],
-            [InlineKeyboardButton("📊 Strategy Lifecycle", callback_data="set_lifecycle")],
-            [InlineKeyboardButton("🔄 Restart Bot", callback_data="set_restart")],
-            [InlineKeyboardButton("🏠 Back to Main Menu", callback_data="set_home")],
-        ])
+        return InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("🛡 Risk Status", callback_data="set_risk")],
+                [
+                    InlineKeyboardButton("🛑 Halt Trading", callback_data="set_halt"),
+                    InlineKeyboardButton("✅ Resume Trading", callback_data="set_resume"),
+                ],
+                [InlineKeyboardButton("📊 Strategy Lifecycle", callback_data="set_lifecycle")],
+                [InlineKeyboardButton("🔄 Restart Bot", callback_data="set_restart")],
+                [InlineKeyboardButton("🏠 Back to Main Menu", callback_data="set_home")],
+            ]
+        )
 
     async def _cmd_settings(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_settings
+
         await cmd_settings(self, update, ctx)
 
     @staticmethod
     def _lifecycle_kb(names: list[str], states: dict) -> InlineKeyboardMarkup:
         rows = [
             [InlineKeyboardButton(f"{name} ({states.get(name, 'paper')})", callback_data="sig_noop")]
-            + [InlineKeyboardButton("⬆️ Promote", callback_data=f"set_promote_{name}"),
-               InlineKeyboardButton("⬇️ Demote", callback_data=f"set_demote_{name}")]
+            + [
+                InlineKeyboardButton("⬆️ Promote", callback_data=f"set_promote_{name}"),
+                InlineKeyboardButton("⬇️ Demote", callback_data=f"set_demote_{name}"),
+            ]
             for name in names
         ]
         rows.append([InlineKeyboardButton("⬅️ Back to Settings", callback_data="set_back")])
@@ -1719,8 +1855,9 @@ class TradingBot:
 
     async def _handle_settings_callback(self, query, uid: int, data: str) -> None:
         if data == "set_back":
-            await query.edit_message_text("🛠 <b>Settings</b>", parse_mode=HTML,
-                                           reply_markup=self._settings_kb())
+            await query.edit_message_text(
+                "🛠 <b>Settings</b>", parse_mode=HTML, reply_markup=self._settings_kb()
+            )
             return
         if data == "set_home":
             # The persistent reply keyboard is a separate UI element from
@@ -1732,7 +1869,8 @@ class TradingBot:
         if data == "set_risk":
             text = await asyncio.to_thread(self._risk_status_sync)
             kb = InlineKeyboardMarkup(
-                [[InlineKeyboardButton("⬅️ Back to Settings", callback_data="set_back")]])
+                [[InlineKeyboardButton("⬅️ Back to Settings", callback_data="set_back")]]
+            )
             await query.edit_message_text(text, reply_markup=kb)  # no parse_mode: see _cmd_risk
             return
         if data in ("set_halt", "set_resume"):
@@ -1747,8 +1885,8 @@ class TradingBot:
                 await asyncio.to_thread(self._resume_sync, f"telegram:{uid}")
                 note = "✅ Kill switch released — order submission re-enabled."
             await query.edit_message_text(
-                f"{note}\n\n🛠 <b>Settings</b>", parse_mode=HTML,
-                reply_markup=self._settings_kb())
+                f"{note}\n\n🛠 <b>Settings</b>", parse_mode=HTML, reply_markup=self._settings_kb()
+            )
             return
         if data == "set_lifecycle":
             text, kb = await self._lifecycle_menu_text_kb()
@@ -1759,21 +1897,28 @@ class TradingBot:
                 await query.edit_message_text(auth_message())
                 return
             promote = data.startswith("set_promote_")
-            name = data[len("set_promote_"):] if promote else data[len("set_demote_"):]
+            name = data[len("set_promote_") :] if promote else data[len("set_demote_") :]
             if promote:
                 cur = await asyncio.to_thread(self._lifecycle_state_sync, name)
                 if cur == "probation":
-                    kb = InlineKeyboardMarkup([[
-                        InlineKeyboardButton("✅ Type-confirm LIVE", callback_data=f"set_live_{name}"),
-                        InlineKeyboardButton("❌ Cancel", callback_data="set_lifecycle"),
-                    ]])
+                    kb = InlineKeyboardMarkup(
+                        [
+                            [
+                                InlineKeyboardButton(
+                                    "✅ Type-confirm LIVE", callback_data=f"set_live_{name}"
+                                ),
+                                InlineKeyboardButton("❌ Cancel", callback_data="set_lifecycle"),
+                            ]
+                        ]
+                    )
                     await query.edit_message_text(
                         f"⚠️ Promote {cards.esc(name)} from probation to <b>LIVE</b>?\n"
                         "This allows real (or paper-live) execution. Tap confirm.",
-                        parse_mode=HTML, reply_markup=kb)
+                        parse_mode=HTML,
+                        reply_markup=kb,
+                    )
                     return
-            cur, new = await asyncio.to_thread(
-                self._lifecycle_step_sync, name, promote, f"telegram:{uid}")
+            cur, new = await asyncio.to_thread(self._lifecycle_step_sync, name, promote, f"telegram:{uid}")
             text, kb = await self._lifecycle_menu_text_kb()
             text = f"📊 {cards.esc(name)}: {cards.esc(cur)} → {cards.esc(new)}\n\n{text}"
             await query.edit_message_text(text, parse_mode=HTML, reply_markup=kb)
@@ -1782,9 +1927,8 @@ class TradingBot:
             if not self._risk_authorized(uid):
                 await query.edit_message_text(auth_message())
                 return
-            name = data[len("set_live_"):]
-            cur, new = await asyncio.to_thread(
-                self._lifecycle_step_sync, name, True, f"telegram:{uid}")
+            name = data[len("set_live_") :]
+            cur, new = await asyncio.to_thread(self._lifecycle_step_sync, name, True, f"telegram:{uid}")
             text, kb = await self._lifecycle_menu_text_kb()
             text = f"📊 {cards.esc(name)}: {cards.esc(cur)} → {cards.esc(new)}\n\n{text}"
             await query.edit_message_text(text, parse_mode=HTML, reply_markup=kb)
@@ -1793,22 +1937,28 @@ class TradingBot:
             if not self._risk_authorized(uid):
                 await query.edit_message_text(auth_message())
                 return
-            kb = InlineKeyboardMarkup([[
-                InlineKeyboardButton("✅ Confirm restart", callback_data="set_restart_confirm"),
-                InlineKeyboardButton("❌ Cancel", callback_data="set_back"),
-            ]])
+            kb = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton("✅ Confirm restart", callback_data="set_restart_confirm"),
+                        InlineKeyboardButton("❌ Cancel", callback_data="set_back"),
+                    ]
+                ]
+            )
             await query.edit_message_text(
                 "⚠️ Restart the bot now?\n"
                 "Picks up any deployed code changes. Back online in ~10-15s; "
                 "live /monitor sessions and in-flight scans will be interrupted.",
-                reply_markup=kb)
+                reply_markup=kb,
+            )
             return
         if data == "set_restart_confirm":
             if not self._risk_authorized(uid):
                 await query.edit_message_text(auth_message())
                 return
             await query.edit_message_text(
-                "🔄 Restarting — back online in ~10-15s (picking up any code changes)…")
+                "🔄 Restarting — back online in ~10-15s (picking up any code changes)…"
+            )
             logger.warning("Bot restart requested via Telegram settings (uid=%s)", uid)
             await self._restart_bot()
             return
@@ -1825,8 +1975,7 @@ class TradingBot:
         non-zero code is the one choice that works under both.
         """
         try:
-            await asyncio.wait_for(
-                asyncio.to_thread(self.scheduler.shutdown, wait=False), timeout=3.0)
+            await asyncio.wait_for(asyncio.to_thread(self.scheduler.shutdown, wait=False), timeout=3.0)
         except Exception as exc:
             logger.warning("scheduler shutdown before restart: %s", exc)
         os._exit(1)
@@ -1855,6 +2004,7 @@ class TradingBot:
 
     async def _cmd_monitor(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_monitor
+
         await cmd_monitor(self, update, ctx)
 
     async def _stop_monitor(self, chat_id: int) -> None:
@@ -1869,6 +2019,7 @@ class TradingBot:
     def _monitor_text_sync(self, tick: int) -> str:
         from earnings_edge import trade_approval
         from earnings_edge.bot_views import desk_view_kwargs, monitor_view, pending_exits
+
         facts = self._desk_facts_sync()
         return monitor_view(
             tick=tick,
@@ -1876,14 +2027,14 @@ class TradingBot:
             pending_exits=len(pending_exits()),
             next_events=self._next_events_sync(),
             funnel=funnel_line(trade_approval.LAST_FUNNEL),
-            **desk_view_kwargs(facts))
+            **desk_view_kwargs(facts),
+        )
 
     async def _monitor_loop(self, chat_id: int) -> None:
         """Self-updating ops panel: every 30s, capped at 15 min."""
         msg = None
         text = ""
-        kb = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("⏹ Stop monitor", callback_data="mon_stop")]])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("⏹ Stop monitor", callback_data="mon_stop")]])
         try:
             for tick in range(30):
                 try:
@@ -1892,8 +2043,7 @@ class TradingBot:
                 except Exception as exc:
                     text = f"📡 monitor error: {exc}"
                 if msg is None:
-                    msg = await self.application.bot.send_message(
-                        chat_id=chat_id, text=text, reply_markup=kb)
+                    msg = await self.application.bot.send_message(chat_id=chat_id, text=text, reply_markup=kb)
                 else:
                     try:
                         await msg.edit_text(text, reply_markup=kb)
@@ -1917,11 +2067,13 @@ class TradingBot:
 
     async def _cmd_status(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_status
+
         await cmd_status(self, update, ctx)
 
     def _status_text_sync(self) -> str:
         from earnings_edge import trade_approval
         from earnings_edge.bot_views import desk_view_kwargs, pending_exits, status_view
+
         facts = self._desk_facts_sync()
         return status_view(
             pending_proposals=len(self.approval_store.list_pending()),
@@ -1933,8 +2085,7 @@ class TradingBot:
 
     @staticmethod
     def _desk_refresh_kb(which: str) -> InlineKeyboardMarkup:
-        return InlineKeyboardMarkup(
-            [[InlineKeyboardButton("🔄 Refresh", callback_data=f"desk_{which}")]])
+        return InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh", callback_data=f"desk_{which}")]])
 
     async def _handle_desk_refresh(self, query, uid: int, data: str) -> None:
         if data == "desk_st":
@@ -1943,8 +2094,15 @@ class TradingBot:
             await self._edit_panel(query, text, self._desk_refresh_kb("st"), parse_mode=HTML)
         elif data == "desk_jb":
             from earnings_edge.rich_msg import edit_rich_html, jobs_rich_view
+
             html = await asyncio.to_thread(jobs_rich_view)
-            success = await edit_rich_html(self.application.bot, query.message.chat_id, query.message.message_id, html, reply_markup=self._desk_refresh_kb("jb"))
+            success = await edit_rich_html(
+                self.application.bot,
+                query.message.chat_id,
+                query.message.message_id,
+                html,
+                reply_markup=self._desk_refresh_kb("jb"),
+            )
             if not success:
                 text = await asyncio.to_thread(self._jobs_text_sync)
                 await self._edit_panel(query, text, self._desk_refresh_kb("jb"), parse_mode=HTML)
@@ -1952,15 +2110,29 @@ class TradingBot:
             await self._refresh_pending_query(query)
         elif data == "desk_or":
             from earnings_edge.rich_msg import edit_rich_html, orders_rich_view
+
             html = await asyncio.to_thread(orders_rich_view)
-            success = await edit_rich_html(self.application.bot, query.message.chat_id, query.message.message_id, html, reply_markup=self._desk_refresh_kb("or"))
+            success = await edit_rich_html(
+                self.application.bot,
+                query.message.chat_id,
+                query.message.message_id,
+                html,
+                reply_markup=self._desk_refresh_kb("or"),
+            )
             if not success:
                 text = await asyncio.to_thread(self._orders_text_sync)
                 await self._edit_panel(query, text, self._desk_refresh_kb("or"), parse_mode=HTML)
         elif data == "desk_eq":
             from earnings_edge.rich_msg import edit_rich_html, equity_rich_view
+
             html = await asyncio.to_thread(equity_rich_view)
-            success = await edit_rich_html(self.application.bot, query.message.chat_id, query.message.message_id, html, reply_markup=self._desk_refresh_kb("eq"))
+            success = await edit_rich_html(
+                self.application.bot,
+                query.message.chat_id,
+                query.message.message_id,
+                html,
+                reply_markup=self._desk_refresh_kb("eq"),
+            )
             if not success:
                 text = await asyncio.to_thread(self._equity_text_sync)
                 await self._edit_panel(query, text, self._desk_refresh_kb("eq"), parse_mode=HTML)
@@ -1972,53 +2144,69 @@ class TradingBot:
 
     async def _cmd_positions(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_positions
+
         await cmd_positions(self, update, ctx)
 
     def _orders_text_sync(self) -> str:
         from earnings_edge.bot_views import orders_view
+
         return orders_view()
 
     async def _cmd_orders(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_orders
+
         await cmd_orders(self, update, ctx)
 
     def _jobs_text_sync(self) -> str:
         from earnings_edge.bot_views import jobs_view
+
         return jobs_view()
 
     async def _cmd_jobs(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_jobs
+
         await cmd_jobs(self, update, ctx)
 
     def _equity_text_sync(self) -> str:
         from earnings_edge.bot_views import equity_view
+
         return equity_view()
 
     async def _cmd_equity(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_equity
+
         await cmd_equity(self, update, ctx)
 
     def _strategies_panel_sync(self):
         from earnings_edge.bot_views import strategies_view
+
         text, buttons = strategies_view()
-        ikb = [[InlineKeyboardButton(
-            ("⏸ Pause " if b["enabled"] else "▶️ Resume ") + b["name"],
-            callback_data=("st_off_" if b["enabled"] else "st_on_") + b["name"],
-        )] for b in buttons]
+        ikb = [
+            [
+                InlineKeyboardButton(
+                    ("⏸ Pause " if b["enabled"] else "▶️ Resume ") + b["name"],
+                    callback_data=("st_off_" if b["enabled"] else "st_on_") + b["name"],
+                )
+            ]
+            for b in buttons
+        ]
         return text, ikb
 
     async def _cmd_strategies(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_strategies
+
         await cmd_strategies(self, update, ctx)
 
     async def _cmd_exits(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_exits
+
         await cmd_exits(self, update, ctx)
 
     def _strategy_enabled(self, name: str) -> bool:
         """Effective on/off for a strategy: TOML flag + operator override."""
         from framework.core.control import effective_enabled
         from framework.core.registry import get_registry
+
         return effective_enabled(name, get_registry().is_enabled(name))
 
     def _pending_panel_sync(self, banner: str | None = None):
@@ -2067,8 +2255,8 @@ class TradingBot:
         assignments = _filter_events(raw_assigns)
 
         inbox = assemble_inbox(
-            entries=entries, exits=exits, orphans=orphans,
-            assignments=assignments, jobs=jobs)
+            entries=entries, exits=exits, orphans=orphans, assignments=assignments, jobs=jobs
+        )
         text = render_inbox(inbox)
         if banner:
             text = f"{cards.esc(banner)}\n\n{text}"
@@ -2086,13 +2274,13 @@ class TradingBot:
             return
         banner = "🔄 Refreshed."
         if data.startswith("in_ex_"):
-            _, banner = await self._entry_exec_outcome(int(data[len("in_ex_"):]), uid)
+            _, banner = await self._entry_exec_outcome(int(data[len("in_ex_") :]), uid)
         elif data.startswith("in_sk_"):
-            _, banner = await self._entry_skip_outcome(int(data[len("in_sk_"):]), uid)
+            _, banner = await self._entry_skip_outcome(int(data[len("in_sk_") :]), uid)
         elif data.startswith("in_cl_"):
-            _, banner = await self._exit_close_outcome(int(data[len("in_cl_"):]), uid)
+            _, banner = await self._exit_close_outcome(int(data[len("in_cl_") :]), uid)
         elif data.startswith("in_sn_"):
-            _, banner = await self._exit_snooze_outcome(int(data[len("in_sn_"):]), uid)
+            _, banner = await self._exit_snooze_outcome(int(data[len("in_sn_") :]), uid)
         elif data.startswith("in_ad_") or data.startswith("in_ig_") or data.startswith("in_xs_"):
             from earnings_edge.bot_views import book_action_banner
             from framework.positions import book_actions as ba
@@ -2100,18 +2288,16 @@ class TradingBot:
             def act():
                 client = create_client()
                 if data.startswith("in_ad_"):
-                    symbol = data[len("in_ad_"):]
+                    symbol = data[len("in_ad_") :]
                     pos = ba.find_broker_pos(client.get_positions(), symbol)
                     if not pos:
                         return "adopt", symbol, {"ok": False, "error": "symbol not at broker"}
                     return "adopt", symbol, ba.adopt_orphan(pos, by=f"telegram:{uid}")
                 if data.startswith("in_ig_"):
-                    symbol = data[len("in_ig_"):]
-                    return "ignore", symbol, ba.ignore_orphan(
-                        symbol, by=f"telegram:{uid}")
-                symbol = data[len("in_xs_"):]
-                return "close", symbol, ba.close_symbol(
-                    client, symbol, by=f"telegram:{uid}")
+                    symbol = data[len("in_ig_") :]
+                    return "ignore", symbol, ba.ignore_orphan(symbol, by=f"telegram:{uid}")
+                symbol = data[len("in_xs_") :]
+                return "close", symbol, ba.close_symbol(client, symbol, by=f"telegram:{uid}")
 
             kind, target, result = await asyncio.to_thread(act)
             banner = book_action_banner(kind, result, target)
@@ -2119,10 +2305,12 @@ class TradingBot:
 
     async def _cmd_pending(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_pending
+
         await cmd_pending(self, update, ctx)
 
     async def _cmd_propose(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_propose
+
         await cmd_propose(self, update, ctx)
 
     async def _send_rich_table_message(self, chat_id: int, as_of: str, picks: dict, format_picks_df) -> bool:
@@ -2156,6 +2344,7 @@ class TradingBot:
                     html += f"<p><i>... and {len(formatted_df) - 50} more rows.</i></p>\n"
 
         from earnings_edge.rich_msg import send_rich_html
+
         return await send_rich_html(self.application.bot, chat_id, html)
 
     async def _cmd_picks(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -2166,46 +2355,109 @@ class TradingBot:
         from earnings_edge.picks import generate_picks
 
         def format_picks_df(name: str, df: pd.DataFrame) -> pd.DataFrame:
-            if df.empty: return df
+            if df.empty:
+                return df
             res = df.copy()
-            def fmt_dt(d): return str(d)[5:10] if not pd.isna(d) else ""
-            def fmt_f(v): return f"{v:.1f}" if not pd.isna(v) else ""
-            def fmt_i(v): return f"{v:.0f}" if not pd.isna(v) else ""
+
+            def fmt_dt(d):
+                return str(d)[5:10] if not pd.isna(d) else ""
+
+            def fmt_f(v):
+                return f"{v:.1f}" if not pd.isna(v) else ""
+
+            def fmt_i(v):
+                return f"{v:.0f}" if not pd.isna(v) else ""
 
             if name == "earnings":
                 if "implied_vs_avg_realized" in res.columns and res["implied_vs_avg_realized"].notna().any():
                     res = res.sort_values("implied_vs_avg_realized", ascending=False)
                 elif "implied_move" in res.columns:
                     res = res.sort_values("implied_move", ascending=False)
-                cols = [c for c in ["ticker", "announcement_date", "announcement_time", "implied_move", "implied_vs_avg_realized", "historical_events_count"] if c in res.columns]
-                res = res[cols].rename(columns={"ticker": "tckr", "announcement_date": "date", "announcement_time": "tm", "implied_move": "impl%", "implied_vs_avg_realized": "im_v_rl", "historical_events_count": "hist"})
-                if "date" in res.columns: res["date"] = res["date"].apply(fmt_dt)
-                if "impl%" in res.columns: res["impl%"] = res["impl%"].apply(fmt_f)
-                if "im_v_rl" in res.columns: res["im_v_rl"] = res["im_v_rl"].apply(fmt_f)
-                if "hist" in res.columns: res["hist"] = res["hist"].apply(fmt_i)
+                cols = [
+                    c
+                    for c in [
+                        "ticker",
+                        "announcement_date",
+                        "announcement_time",
+                        "implied_move",
+                        "implied_vs_avg_realized",
+                        "historical_events_count",
+                    ]
+                    if c in res.columns
+                ]
+                res = res[cols].rename(
+                    columns={
+                        "ticker": "tckr",
+                        "announcement_date": "date",
+                        "announcement_time": "tm",
+                        "implied_move": "impl%",
+                        "implied_vs_avg_realized": "im_v_rl",
+                        "historical_events_count": "hist",
+                    }
+                )
+                if "date" in res.columns:
+                    res["date"] = res["date"].apply(fmt_dt)
+                if "impl%" in res.columns:
+                    res["impl%"] = res["impl%"].apply(fmt_f)
+                if "im_v_rl" in res.columns:
+                    res["im_v_rl"] = res["im_v_rl"].apply(fmt_f)
+                if "hist" in res.columns:
+                    res["hist"] = res["hist"].apply(fmt_i)
             elif name == "momentum_skew":
-                cols = [c for c in ["ticker", "direction", "skew_zscore", "cs_momentum", "next_earnings_date"] if c in res.columns]
-                res = res[cols].rename(columns={"ticker": "tckr", "direction": "dir", "skew_zscore": "zscr", "cs_momentum": "mom", "next_earnings_date": "date"})
-                if "zscr" in res.columns: res["zscr"] = res["zscr"].apply(fmt_f)
-                if "mom" in res.columns: res["mom"] = res["mom"].apply(fmt_i)
-                if "date" in res.columns: res["date"] = res["date"].apply(fmt_dt)
+                cols = [
+                    c
+                    for c in ["ticker", "direction", "skew_zscore", "cs_momentum", "next_earnings_date"]
+                    if c in res.columns
+                ]
+                res = res[cols].rename(
+                    columns={
+                        "ticker": "tckr",
+                        "direction": "dir",
+                        "skew_zscore": "zscr",
+                        "cs_momentum": "mom",
+                        "next_earnings_date": "date",
+                    }
+                )
+                if "zscr" in res.columns:
+                    res["zscr"] = res["zscr"].apply(fmt_f)
+                if "mom" in res.columns:
+                    res["mom"] = res["mom"].apply(fmt_i)
+                if "date" in res.columns:
+                    res["date"] = res["date"].apply(fmt_dt)
             elif name == "forward_factor":
-                if "forward_factor" in res.columns: res = res.sort_values("forward_factor", ascending=False)
+                if "forward_factor" in res.columns:
+                    res = res.sort_values("forward_factor", ascending=False)
                 cols = [c for c in ["ticker", "next_earnings_date", "forward_factor"] if c in res.columns]
-                res = res[cols].rename(columns={"ticker": "tckr", "next_earnings_date": "date", "forward_factor": "fwd_fct"})
-                if "fwd_fct" in res.columns: res["fwd_fct"] = res["fwd_fct"].apply(fmt_f)
-                if "date" in res.columns: res["date"] = res["date"].apply(fmt_dt)
+                res = res[cols].rename(
+                    columns={"ticker": "tckr", "next_earnings_date": "date", "forward_factor": "fwd_fct"}
+                )
+                if "fwd_fct" in res.columns:
+                    res["fwd_fct"] = res["fwd_fct"].apply(fmt_f)
+                if "date" in res.columns:
+                    res["date"] = res["date"].apply(fmt_dt)
             elif name == "vrp":
-                iv_col = "iv_pctl_1y" if "iv_pctl_1y" in res.columns and res["iv_pctl_1y"].notna().any() else "iv_rv"
+                iv_col = (
+                    "iv_pctl_1y"
+                    if "iv_pctl_1y" in res.columns and res["iv_pctl_1y"].notna().any()
+                    else "iv_rv"
+                )
                 ret_cols = [c for c in res.columns if "return" in c or "win_rate" in c]
                 ret_cols = [c for c in ret_cols if res[c].notna().any()][:2]
                 cols = [c for c in ["ticker", iv_col, "next_earnings_date"] + ret_cols if c in res.columns]
-                rename_map = {"ticker": "tckr", "iv_pctl_1y": "iv_pct", "iv_rv": "iv_rv", "next_earnings_date": "date"}
-                for c in ret_cols: rename_map[c] = "".join([w[0] for w in c.split("_")[:2]]) + "_" + c.split("_")[-1]
+                rename_map = {
+                    "ticker": "tckr",
+                    "iv_pctl_1y": "iv_pct",
+                    "iv_rv": "iv_rv",
+                    "next_earnings_date": "date",
+                }
+                for c in ret_cols:
+                    rename_map[c] = "".join([w[0] for w in c.split("_")[:2]]) + "_" + c.split("_")[-1]
                 res = res[cols].rename(columns=rename_map)
                 for c in res.columns:
-                    if c not in ["tckr", "date"]: res[c] = res[c].apply(fmt_f)
-                if "date" in res.columns: res["date"] = res["date"].apply(fmt_dt)
+                    if c not in ["tckr", "date"]:
+                        res[c] = res[c].apply(fmt_f)
+                if "date" in res.columns:
+                    res["date"] = res["date"].apply(fmt_dt)
             return res
 
         latest_str = snapshots_max_scan_date()
@@ -2241,11 +2493,13 @@ class TradingBot:
 
     async def _cmd_designer(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if not ctx.args or len(ctx.args) < 2:
-            await update.message.reply_text("Usage: /designer <ticker> <legs...>\nExample: /designer AAPL buy call 190 2026-10-16 1 5.0 0.3")
+            await update.message.reply_text(
+                "Usage: /designer <ticker> <legs...>\nExample: /designer AAPL buy call 190 2026-10-16 1 5.0 0.3"
+            )
             return
 
         ticker = ctx.args[0].upper()
-        raw_legs = [a.strip('"\'') for a in ctx.args[1:]]
+        raw_legs = [a.strip("\"'") for a in ctx.args[1:]]
 
         # In case legs are passed as a single string wrapped in quotes due to CLI testing habits
         if len(raw_legs) == 1:
@@ -2257,6 +2511,7 @@ class TradingBot:
 
         try:
             from earnings_edge.alpaca_trading import create_client
+
             client = create_client()
             px = client.get_stock_latest_trade(ticker)
             if px is None:
@@ -2271,58 +2526,62 @@ class TradingBot:
         i = 0
         try:
             from earnings_edge.alpaca_trading import create_client
+
             client = create_client()
 
             while i < len(raw_legs):
-                if raw_legs[i].lower() not in ('buy', 'sell'):
+                if raw_legs[i].lower() not in ("buy", "sell"):
                     raise ValueError(f"Expected buy/sell but got {raw_legs[i]}")
 
                 # Find the start of the next leg
                 j = i + 1
-                while j < len(raw_legs) and raw_legs[j].lower() not in ('buy', 'sell'):
+                while j < len(raw_legs) and raw_legs[j].lower() not in ("buy", "sell"):
                     j += 1
 
                 leg_len = j - i
                 if leg_len not in (4, 5, 7):
-                    raise ValueError(f"Invalid leg length {leg_len}. Must be 4 (auto), 5 (w/ qty), or 7 (w/ price & iv) parts.")
+                    raise ValueError(
+                        f"Invalid leg length {leg_len}. Must be 4 (auto), 5 (w/ qty), or 7 (w/ price & iv) parts."
+                    )
 
                 action = raw_legs[i].lower()
-                kind = raw_legs[i+1].lower()
-                strike = float(raw_legs[i+2])
-                expiry = datetime.strptime(raw_legs[i+3], "%Y-%m-%d").date()
+                kind = raw_legs[i + 1].lower()
+                strike = float(raw_legs[i + 2])
+                expiry = datetime.strptime(raw_legs[i + 3], "%Y-%m-%d").date()
 
                 if leg_len == 7:
-                    qty = int(raw_legs[i+4])
-                    price = float(raw_legs[i+5])
-                    iv = float(raw_legs[i+6])
+                    qty = int(raw_legs[i + 4])
+                    price = float(raw_legs[i + 5])
+                    iv = float(raw_legs[i + 6])
                 else:
-                    qty = int(raw_legs[i+4]) if leg_len == 5 else 1
+                    qty = int(raw_legs[i + 4]) if leg_len == 5 else 1
                     c = client.find_option_contract(ticker, kind, strike, expiry)
                     if not c:
                         raise ValueError(f"Could not find contract {ticker} {strike} {kind} {expiry}")
 
-                    snap_res = client.get_option_snapshots_bulk(c['symbol'])
-                    snap = snap_res.get(c['symbol'], {})
-                    iv = snap.get('impliedVolatility')
-                    quote = snap.get('latestQuote', {})
-                    ap, bp = quote.get('ap', 0), quote.get('bp', 0)
+                    snap_res = client.get_option_snapshots_bulk(c["symbol"])
+                    snap = snap_res.get(c["symbol"], {})
+                    iv = snap.get("impliedVolatility")
+                    quote = snap.get("latestQuote", {})
+                    ap, bp = quote.get("ap", 0), quote.get("bp", 0)
                     if ap and bp:
                         price = (ap + bp) / 2
                     else:
-                        price = snap.get('latestTrade', {}).get('p') or 0.0
+                        price = snap.get("latestTrade", {}).get("p") or 0.0
                     if not iv:
                         # Alpaca's data tier carries no greeks: solve IV from
                         # the mid instead of assuming a flat 30%.
                         from datetime import date as _date
 
                         from earnings_edge.option_math import implied_volatility
+
                         T = max((expiry - _date.today()).days, 1) / 365.0
-                        iv = (implied_volatility(price, spot, strike, T, 0.045, kind)
-                              if price > 0 else None)
+                        iv = implied_volatility(price, spot, strike, T, 0.045, kind) if price > 0 else None
                         if not iv or iv != iv:  # None or NaN
                             raise ValueError(
                                 f"Could not solve IV for {ticker} {strike} {kind} {expiry} "
-                                f"(no greeks from broker, unusable quote)")
+                                f"(no greeks from broker, unusable quote)"
+                            )
 
                 legs.append(Leg(action, kind, strike, expiry, qty, price, iv))
                 i = j
@@ -2341,9 +2600,9 @@ class TradingBot:
         msg += f"Max Profit: {summary.get('max_profit', '?')}\n"
         msg += f"Max Loss: {summary.get('max_loss', '?')}\n"
         msg += f"Breakevens: {', '.join(map(str, summary.get('breakevens', [])))}\n"
-        win_rate = summary.get('win_rate')
+        win_rate = summary.get("win_rate")
         if win_rate is not None:
-            msg += f"Win Rate: {win_rate*100:.2f}%\n"
+            msg += f"Win Rate: {win_rate * 100:.2f}%\n"
 
         if greeks:
             msg += "\n<b>Greeks</b>\n"
@@ -2365,9 +2624,11 @@ class TradingBot:
             # they hit the 900s dispatch timeout.
             result = await asyncio.to_thread(sc.scan)
             from framework.scan_retry import should_chain_proposals, should_retry_scan
+
             if should_retry_scan(result):
                 logger.error("Scanner %s failed or empty: %s", scanner_name, result.get("error"))
                 from framework.alerts import DEDUPER
+
                 DEDUPER.emit("scan_fail", f"scan {scanner_name} failed: {result.get('error')}")
                 await self._flush_alerts()
                 self._schedule_one_scan_retry(scanner_name)
@@ -2379,17 +2640,22 @@ class TradingBot:
                 await self._propose_and_push()
         except Exception:
             logger.exception("Scheduled run error for %s", scanner_name)
+
     def _schedule_one_scan_retry(self, scanner_name: str) -> dict:
         """Exactly one 12-minute follow-up; does not stack."""
         from framework.scan_retry import record_retry
+
         rec = record_retry()
         try:
             if self.scheduler.get_job("scan_retry"):
                 return rec
             when = datetime.fromisoformat(rec["next_run"])
             self.scheduler.add_job(
-                self._run_sync, "date", run_date=when,
-                args=[scanner_name], id="scan_retry",
+                self._run_sync,
+                "date",
+                run_date=when,
+                args=[scanner_name],
+                id="scan_retry",
             )
         except Exception as exc:
             logger.warning("could not schedule scan retry: %s", exc)
@@ -2412,9 +2678,14 @@ class TradingBot:
                 cron_str = et_schedules.get(name, "0 14 * * mon-fri")
                 trigger = CronTrigger.from_crontab(cron_str, timezone=tz)
                 self.scheduler.add_job(
-                    self._run_sync, trigger=trigger, args=[name],
-                    id=f"scanner_{name}", name=f"Run {name}",
-                    max_instances=1, coalesce=True, misfire_grace_time=300
+                    self._run_sync,
+                    trigger=trigger,
+                    args=[name],
+                    id=f"scanner_{name}",
+                    name=f"Run {name}",
+                    max_instances=1,
+                    coalesce=True,
+                    misfire_grace_time=300,
                 )
                 logger.info("Scheduled %s: %s (ET TZ)", name, cron_str)
             except Exception as exc:
@@ -2427,14 +2698,20 @@ class TradingBot:
             self.scheduler.add_job(
                 self._ff_propose_sync,
                 trigger=CronTrigger.from_crontab(et_schedules["ff_ladder_propose"], timezone=tz),
-                id="ff_ladder_propose", name="FF ladder proposals",
-                max_instances=1, coalesce=True, misfire_grace_time=120
+                id="ff_ladder_propose",
+                name="FF ladder proposals",
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=120,
             )
             self.scheduler.add_job(
                 self._ff_step_sync,
                 trigger=CronTrigger.from_crontab(et_schedules["ff_ladder_step"], timezone=tz),
-                id="ff_ladder_step", name="FF ladder step",
-                max_instances=1, coalesce=True, misfire_grace_time=120
+                id="ff_ladder_step",
+                name="FF ladder step",
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=120,
             )
             logger.info("Scheduled FF ladder: proposals 13:45 ET, steps 14:00-15:45 ET")
         except Exception as exc:
@@ -2445,57 +2722,84 @@ class TradingBot:
             self.scheduler.add_job(
                 self._equity_snapshot_sync,
                 trigger=CronTrigger.from_crontab(et_schedules["equity_snapshot"], timezone=tz),
-                id="equity_snapshot", name="Equity snapshot + loss check",
-                max_instances=1, coalesce=True, misfire_grace_time=120
+                id="equity_snapshot",
+                name="Equity snapshot + loss check",
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=120,
             )
             self.scheduler.add_job(
                 self._reconcile_sync,
                 trigger=CronTrigger.from_crontab(et_schedules["reconcile"], timezone=tz),
-                id="reconcile", name="Broker reconciliation",
-                max_instances=1, coalesce=True, misfire_grace_time=120
+                id="reconcile",
+                name="Broker reconciliation",
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=120,
             )
             self.scheduler.add_job(
                 self._guard_eval_sync,
                 trigger=CronTrigger.from_crontab(et_schedules["assignment_guard"], timezone=tz),
-                id="assignment_guard", name="Assignment guard eval",
-                max_instances=1, coalesce=True, misfire_grace_time=120
+                id="assignment_guard",
+                name="Assignment guard eval",
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=120,
             )
             self.scheduler.add_job(
                 self._exit_eval_sync,
                 trigger=CronTrigger.from_crontab(et_schedules["exit_eval"], timezone=tz),
-                id="exit_eval", name="Exit rule evaluation",
-                max_instances=1, coalesce=True, misfire_grace_time=120
+                id="exit_eval",
+                name="Exit rule evaluation",
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=120,
             )
             self.scheduler.add_job(
                 self._backup_sync,
                 trigger=CronTrigger.from_crontab(et_schedules["db_backup"], timezone=tz),
-                id="db_backup", name="SQLite backup",
-                max_instances=1, coalesce=True, misfire_grace_time=120
+                id="db_backup",
+                name="SQLite backup",
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=120,
             )
             self.scheduler.add_job(
                 self._db_health_sync,
                 trigger=CronTrigger.from_crontab(et_schedules["db_health_check"], timezone=tz),
-                id="db_health_check", name="SQLite integrity check",
-                max_instances=1, coalesce=True, misfire_grace_time=120
+                id="db_health_check",
+                name="SQLite integrity check",
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=120,
             )
             self.scheduler.add_job(
                 self._picks_sync,
                 trigger=CronTrigger.from_crontab(et_schedules["daily_picks"], timezone=tz),
-                id="daily_picks", name="Daily picks pipeline",
-                max_instances=1, coalesce=True, misfire_grace_time=120
+                id="daily_picks",
+                name="Daily picks pipeline",
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=120,
             )
             self.scheduler.add_job(
                 self._chain_cache_sync,
                 trigger=CronTrigger.from_crontab(et_schedules["chain_cache"], timezone=tz),
-                id="chain_cache", name="Hourly Alpaca chain cache",
-                max_instances=1, coalesce=True, misfire_grace_time=120
+                id="chain_cache",
+                name="Hourly Alpaca chain cache",
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=120,
             )
-            logger.info("Scheduled framework jobs: equity */15, reconcile */30, guard 15:45 ET, exits */15, backup 00:15 ET, chain cache hourly")
+            logger.info(
+                "Scheduled framework jobs: equity */15, reconcile */30, guard 15:45 ET, exits */15, backup 00:15 ET, chain cache hourly"
+            )
         except Exception as exc:
             logger.error("Failed to schedule framework jobs: %s", exc)
 
     def _backup_sync(self):
         from earnings_edge.jobs import db_backup_job
+
         db_backup_job()
 
     def _db_health_sync(self):
@@ -2503,6 +2807,7 @@ class TradingBot:
 
     async def _db_health_check(self):
         from earnings_edge.jobs import db_health_check_job
+
         await db_health_check_job(self)
 
     def _picks_sync(self):
@@ -2513,10 +2818,12 @@ class TradingBot:
 
     async def _chain_cache(self):
         from earnings_edge.jobs import chain_cache_job
+
         await chain_cache_job(self)
 
     async def _picks_pipeline(self):
         from earnings_edge.jobs import picks_pipeline_job
+
         await picks_pipeline_job(self)
 
     # ── Main entry ─────────────────────────────────────────────────────
@@ -2531,12 +2838,7 @@ class TradingBot:
         if not operators_configured():
             logger.warning("TELEGRAM_APPROVAL_CHAT_ID unset — execute/halt/close/promote/restart disabled")
         _HealthHandler.facts_fn = self._health_facts
-        self.application = (
-            Application.builder()
-            .token(self.token)
-            .post_init(self._capture_loop)
-            .build()
-        )
+        self.application = Application.builder().token(self.token).post_init(self._capture_loop).build()
 
         self.application.add_handler(CommandHandler("start", self._cmd_start))
         self.application.add_handler(CommandHandler("help", self._cmd_help))
@@ -2564,9 +2866,7 @@ class TradingBot:
         self.application.add_handler(CommandHandler("picks", self._cmd_picks))
         self.application.add_handler(CommandHandler("designer", self._cmd_designer))
         self.application.add_handler(CallbackQueryHandler(self._handle_callback))
-        self.application.add_handler(
-            MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_keyboard)
-        )
+        self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_keyboard))
 
         self._setup_scheduler()
         self._scheduler_thread = threading.Thread(target=self.scheduler.start, daemon=True)
@@ -2584,6 +2884,8 @@ class TradingBot:
             if self.scheduler.running:
                 self.scheduler.shutdown(wait=True)
             logger.info("Bot shut down.")
+
+
 def sd_notify(state: str) -> None:
     """Send state to systemd via NOTIFY_SOCKET."""
     socket_path = os.environ.get("NOTIFY_SOCKET")
@@ -2594,6 +2896,7 @@ def sd_notify(state: str) -> None:
 
     try:
         import socket
+
         with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sock:
             sock.sendto(state.encode("utf-8"), socket_path)
     except Exception as exc:

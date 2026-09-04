@@ -32,6 +32,7 @@ ET = timezone(timedelta(hours=-4), name="EDT")  # fixed EDT; close enough for th
 
 # ── OCC symbol helpers (pure string ops) ─────────────────────────────
 
+
 def occ_symbol(ticker: str, expiry: date, strike: float, option_type: str = "call") -> str:
     """Build the 21-char OCC option symbol (matches alpaca_bridge convention)."""
     root = ticker.upper()
@@ -54,6 +55,7 @@ def occ_parse(symbol: str) -> dict:
 
 # ── Target price math ────────────────────────────────────────────────
 
+
 def required_near_iv(
     sigma_fwd: float,
     T1: float,
@@ -69,7 +71,7 @@ def required_near_iv(
     if T1 <= 0 or tau < 0 or tau > T1 or sigma_fwd <= 0 or hist_rms_move <= 0:
         return None
     target_event_move = (1.0 + premium) * hist_rms_move
-    total_var = target_event_move ** 2 + sigma_fwd ** 2 * (T1 - tau)
+    total_var = target_event_move**2 + sigma_fwd**2 * (T1 - tau)
     sigma1_sq = total_var / T1
     if sigma1_sq <= 0:
         return None
@@ -106,14 +108,15 @@ def forward_iv(iv_near: float, T1: float, iv_far: float, T2: float) -> float | N
     """Event-free forward vol between T1 and T2 (variance decomposition)."""
     if T2 <= T1 or iv_near <= 0 or iv_far <= 0:
         return None
-    var = iv_far ** 2 * T2 - iv_near ** 2 * T1
+    var = iv_far**2 * T2 - iv_near**2 * T1
     if var <= 0:
         return None
     return math.sqrt(var / (T2 - T1))
 
 
-def combo_debit(near_bid: float, near_ask: float, far_bid: float, far_ask: float,
-                executable: bool = False) -> float | None:
+def combo_debit(
+    near_bid: float, near_ask: float, far_bid: float, far_ask: float, executable: bool = False
+) -> float | None:
     """Calendar debit from leg quotes.
 
     executable=False -> combo mid (far_mid - near_mid), for display/distance.
@@ -130,6 +133,7 @@ def combo_debit(near_bid: float, near_ask: float, far_bid: float, far_ask: float
 
 # ── Distance filter ──────────────────────────────────────────────────
 
+
 def within_fill_range(mid_debit: float, cap_debit: float, f: float = 0.15) -> bool:
     """Track a candidate only if the current mid is within f of the cap price.
 
@@ -144,12 +148,13 @@ def within_fill_range(mid_debit: float, cap_debit: float, f: float = 0.15) -> bo
 
 # ── Limit ladder ─────────────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class LadderSpec:
     """Price ladder: start cheap at the high-premium target, concede to the cap."""
 
-    start_premium: float = 0.25   # cheapest target (richest required near leg)
-    floor_premium: float = 0.20   # hard cap price (minimum acceptable premium)
+    start_premium: float = 0.25  # cheapest target (richest required near leg)
+    floor_premium: float = 0.20  # hard cap price (minimum acceptable premium)
     start_et: time = time(14, 0)  # first rung 14:00 ET
     step_minutes: int = 15
     tick: float = 0.01

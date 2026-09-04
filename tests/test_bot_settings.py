@@ -6,6 +6,7 @@ that only implements _fw() (a framework DB connection factory) — the real
 TradingBot.__init__ touches the default framework DB path and a Telegram
 token, which isn't needed to exercise this pure/DB logic.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -72,8 +73,7 @@ def test_lifecycle_menu_data_includes_stepped_strategy(bot):
 def test_settings_kb_has_expected_actions():
     kb = TradingBot._settings_kb()
     flat = [b.callback_data for row in kb.inline_keyboard for b in row]
-    assert flat == ["set_risk", "set_halt", "set_resume", "set_lifecycle",
-                    "set_restart", "set_home"]
+    assert flat == ["set_risk", "set_halt", "set_resume", "set_lifecycle", "set_restart", "set_home"]
 
 
 def test_lifecycle_kb_has_promote_demote_per_strategy_and_back_row():
