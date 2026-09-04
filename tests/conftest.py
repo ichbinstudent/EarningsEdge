@@ -180,3 +180,67 @@ def network_guard(monkeypatch):
         alpaca_trading.AlpacaTradingClient, "__init__", _guarded_init
     )
     yield
+
+@pytest.fixture
+def seeded_db(tmp_db_path):
+    """Seed the temporary database with representative rows for views to read."""
+    from sqlalchemy import text
+    from earnings_edge.db import engine as db_engine
+    
+    engine = db_engine.get_engine()
+    with engine.begin() as conn:
+        conn.execute(text(
+            "INSERT INTO snapshots (ticker, earnings_date, scan_date, timing) "
+            "VALUES ('AAPL', '2026-10-15', '2026-09-04', 'Post Market')"
+        ))
+        
+        conn.execute(text(
+            "INSERT INTO live_calendar_candidates (ticker, earnings_date, scan_timestamp, passed) "
+            "VALUES ('AAPL', '2026-10-15', '2026-09-04T08:00:00.000', 1)"
+        ))
+        
+        conn.execute(text(
+            "INSERT INTO trade_events (symbol, strategy, event_type, price, detail, ts) "
+            "VALUES ('AAPL260918C00250000', 'momentum', 'buy_to_open', 150.5, 'Bought 100 shares <foo>', '2026-09-04T08:00:00.123')"
+        ))
+        
+        conn.execute(text(
+            "INSERT INTO job_runs (job_name, started_at, success, stats_json, error) "
+            "VALUES ('sync', '2026-09-04T08:00:00.000', 1, '{\"a\": 1, \"b\": 2}', '')"
+        ))
+        
+        conn.execute(text(
+            "INSERT INTO equity_snapshots (ts, equity, buying_power, portfolio_value) "
+            "VALUES ('2026-09-03T16:00:00.000', 9950.0, 5000.0, 9950.0)"
+        ))
+
+        conn.execute(text(
+            "INSERT INTO strategy_state (name, enabled) "
+            "VALUES ('momentum', 1)"
+        ))
+
+        conn.execute(text(
+            "INSERT INTO exit_proposals (group_id, strategy, ticker, rule, status, created_at) "
+            "VALUES ('group1', 'momentum', 'AAPL', 'stop_loss', 'pending', '2026-09-04T08:00:00.000')"
+        ))
+
+        conn.execute(text(
+            "INSERT INTO ff_ladders (ticker, status, candidate_json) "
+            "VALUES ('AAPL', 'armed', '{}')"
+        ))
+
+        conn.execute(text(
+            "INSERT INTO managed_positions (symbol, strategy, group_id, qty, status, opened_at) "
+            "VALUES ('AAPL260918C00250000', 'momentum', 'group1', 1.0, 'open', '2026-09-04T08:00:00.000')"
+        ))
+
+        conn.execute(text(
+            "INSERT INTO pending_trades (strategy, ticker, side, status, created_at, trade_json, card_text) "
+            "VALUES ('momentum', 'AAPL', 'long', 'pending', '2026-09-04T08:00:00.000', '{}', 'some text')"
+        ))
+
+        conn.execute(text(
+            "INSERT INTO scan_runs (scanner_name, scan_timestamp, trigger_type) "
+            "VALUES ('daily_scan', '2026-09-04T08:00:00.000', 'cron')"
+        ))
+    return tmp_db_path

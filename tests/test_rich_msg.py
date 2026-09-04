@@ -112,11 +112,7 @@ def test_edit_rich_html_failure(mock_httpx):
 
 # --- Tests for rich views ---
 
-@patch("earnings_edge.db.trade_events_list")
-def test_orders_rich_view(mock_events):
-    mock_events.return_value = [
-        {"ts": "2026-09-04T08:00:00.123", "event_type": "buy_to_open", "strategy": "momentum", "symbol": "AAPL", "price": 150.5, "detail": "Bought 100 shares <foo>"}
-    ]
+def test_orders_rich_view(seeded_db):
     html = orders_rich_view()
     assert "<h3>ORDERS</h3>" in html
     assert "<table bordered striped compact>" in html
@@ -133,20 +129,18 @@ def test_orders_rich_view(mock_events):
     assert "&lt;foo&gt;" in html  # HTML escaping
 
 
-@patch("earnings_edge.db.trade_events_list")
-def test_orders_rich_view_empty(mock_events):
-    mock_events.return_value = []
+def test_orders_rich_view_empty(seeded_db):
+    from earnings_edge.db.engine import get_engine
+    from sqlalchemy import text
+    with get_engine().begin() as conn:
+        conn.execute(text("DELETE FROM trade_events"))
     html = orders_rich_view()
     assert "<h3>ORDERS</h3>" in html
     assert "<i>No trade events yet.</i>" in html
     assert "<table>" not in html
 
 
-@patch("earnings_edge.db.job_runs_list")
-def test_jobs_rich_view(mock_jobs):
-    mock_jobs.return_value = [
-        {"success": True, "job_name": "sync", "started_at": "2026-09-04T08:00:00.000", "stats_json": '{"a": 1, "b": 2}', "error": ""}
-    ]
+def test_jobs_rich_view(seeded_db):
     html = jobs_rich_view()
     assert "<h3>JOB RUNS</h3>" in html
     assert "<table bordered striped compact>" in html
@@ -156,9 +150,11 @@ def test_jobs_rich_view(mock_jobs):
     assert "a=1 b=2" in html
 
 
-@patch("earnings_edge.db.job_runs_list")
-def test_jobs_rich_view_empty(mock_jobs):
-    mock_jobs.return_value = []
+def test_jobs_rich_view_empty(seeded_db):
+    from earnings_edge.db.engine import get_engine
+    from sqlalchemy import text
+    with get_engine().begin() as conn:
+        conn.execute(text("DELETE FROM job_runs"))
     html = jobs_rich_view()
     assert "<h3>JOB RUNS</h3>" in html
     assert "<i>No job runs found.</i>" in html
@@ -167,12 +163,10 @@ def test_jobs_rich_view_empty(mock_jobs):
 @patch("framework.risk.equity.latest_equity")
 @patch("framework.risk.equity.day_start_equity")
 @patch("framework.risk.equity.daily_pnl")
-@patch("earnings_edge.db.equity_snapshots_daily_avg")
-def test_equity_rich_view(mock_hist, mock_pnl, mock_start, mock_latest):
+def test_equity_rich_view(mock_pnl, mock_start, mock_latest, seeded_db):
     mock_latest.return_value = {"equity": 10000.50, "buying_power": 5000.0, "ts": "2026-09-04"}
     mock_start.return_value = 9900.0
     mock_pnl.return_value = 100.50
-    mock_hist.return_value = [{"d": "2026-09-03", "e": 9950.0}]
 
     html = equity_rich_view()
     assert "<h3>EQUITY</h3>" in html
@@ -186,7 +180,7 @@ def test_equity_rich_view(mock_hist, mock_pnl, mock_start, mock_latest):
 
 
 @patch("framework.risk.equity.latest_equity")
-def test_equity_rich_view_empty(mock_latest):
+def test_equity_rich_view_empty(mock_latest, seeded_db):
     mock_latest.return_value = None
     html = equity_rich_view()
     assert "<i>No equity data available.</i>" in html
@@ -195,13 +189,11 @@ def test_equity_rich_view_empty(mock_latest):
 @patch("framework.risk.equity.latest_equity")
 @patch("framework.risk.equity.day_start_equity")
 @patch("framework.risk.equity.daily_pnl")
-@patch("earnings_edge.db.equity_snapshots_daily_avg")
-def test_equity_rich_view_no_day_start(mock_hist, mock_pnl, mock_start, mock_latest):
+def test_equity_rich_view_no_day_start(mock_pnl, mock_start, mock_latest, seeded_db):
     """day_start_equity()/daily_pnl() can be None outside market hours (live 09-04)."""
     mock_latest.return_value = {"equity": 10000.50, "buying_power": 5000.0, "ts": "2026-09-04"}
     mock_start.return_value = None
     mock_pnl.return_value = None
-    mock_hist.return_value = [{"d": "2026-09-03", "e": 9950.0}]
     html = equity_rich_view()
     assert "Day-start" not in html
     assert "$10,000.50" in html
