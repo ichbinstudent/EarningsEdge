@@ -11,7 +11,7 @@ from __future__ import annotations
 import html
 import json
 from datetime import date, datetime, timezone
-from typing import Optional
+from typing import Optional, Any
 
 from earnings_edge.db import (
     adopted_positions_symbols,
@@ -164,7 +164,7 @@ def desk_view_kwargs(facts: dict) -> dict:
 
 
 def collect_desk_facts(*,
-                       get_clock=None, get_positions=None) -> dict:
+                       get_clock: Any=None, get_positions: Any=None) -> dict:
     """Broker + DB facts for /status and the live /monitor.
 
     ``clock_exc`` / ``positions_exc`` stay on the dict so the bot can emit
@@ -195,9 +195,9 @@ def collect_desk_facts(*,
         last_recon = job_runs_latest("reconcile", success=1)
         if last_recon and last_recon.get("stats_json"):
             try:
-                recon = json.loads(last_recon["stats_json"]).get("summary")
+                recon = json.loads(last_recon["stats_json"] or "{}").get("summary")
             except Exception:
-                recon = last_recon["stats_json"][:80]
+                recon = (last_recon["stats_json"] or "")[:80]
     except Exception:
         recon = None
 
@@ -364,7 +364,7 @@ def positions_view(broker_positions: Optional[list] = None,
     return "\n".join(lines).rstrip()
 
 
-def _render_items(items) -> list[str]:
+def _render_items(items: Any) -> list[str]:
     lines = []
     for it in items:
         tag = f"[{it.strategy}] " if it.strategy else ""
@@ -420,7 +420,7 @@ def positions_keyboard_for(broker_positions: Optional[list]) -> list[list]:
     return positions_keyboard(book)
 
 
-def positions_keyboard(book) -> list[list]:
+def positions_keyboard(book: Any) -> list[list]:
     """Inline button rows for a classified Book (callback_data ≤ 64 bytes)."""
     from telegram import InlineKeyboardButton
     rows = []
@@ -534,7 +534,7 @@ def equity_view(days: int = 7) -> str:
 
 # ── /strategies ─────────────────────────────────────────────────────────
 
-def strategies_view(registry=None) -> tuple[str, list[dict]]:
+def strategies_view(registry: Any=None) -> tuple[str, list[dict]]:
     """Per-strategy status lines + button specs for the toggle keyboard.
 
     Returns (text, buttons) where buttons = [{"name", "enabled"}] in display
@@ -581,7 +581,7 @@ def strategies_view(registry=None) -> tuple[str, list[dict]]:
 
 # ── /exits ──────────────────────────────────────────────────────────────
 
-def pending_exits() -> list[dict]:
+def pending_exits() -> list[Any]:
     return exit_proposals_list_pending()
 
 
