@@ -4,7 +4,8 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
+Type=notify
+WatchdogSec=300
 User=david
 Group=david
 WorkingDirectory=/home/david/EarningsEdgeDetection

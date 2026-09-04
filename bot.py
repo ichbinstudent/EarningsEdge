@@ -126,6 +126,9 @@ class _HealthHandler(BaseHTTPRequestHandler):
     _started_at = time.monotonic()
 
     def do_GET(self):
+        if self.path == "/metrics":
+            self._handle_metrics()
+            return
         if self.path != "/health":
             self.send_response(404)
             self.end_headers()
@@ -144,6 +147,84 @@ class _HealthHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.end_headers()
         self.wfile.write(body)
+
+    def _handle_metrics(self):
+        try:
+            import sys
+            from datetime import datetime, timezone
+            from earnings_edge.db.repositories import (
+                job_runs_list,
+                equity_snapshots_latest,
+                risk_state_get
+            )
+            
+            lines = []
+            lines.append("# HELP process_up Process uptime")
+            lines.append("# TYPE process_up gauge")
+            lines.append("process_up 1")
+            
+            lines.append("# HELP python_version Python version")
+            lines.append("# TYPE python_version gauge")
+            v = sys.version_info
+            lines.append(f'python_version{{version="{v.major}.{v.minor}.{v.micro}"}} 1')
+
+            runs = job_runs_list(limit=500)
+            jobs = {}
+            for r in runs:
+                name = r["job_name"]
+                jobs.setdefault(name, []).append(r)
+                
+            now = datetime.now(timezone.utc)
+            
+            lines.append("# HELP job_last_success_timestamp Last successful run timestamp")
+            lines.append("# TYPE job_last_success_timestamp gauge")
+            for name, job_runs in jobs.items():
+                successes = [r for r in job_runs if r["success"]]
+                if successes:
+                    ts = datetime.fromisoformat(successes[0]["started_at"]).timestamp()
+                    lines.append(f'job_last_success_timestamp{{job="{name}"}} {ts}')
+                    
+            lines.append("# HELP job_success_rate_1d Success rate in the last day")
+            lines.append("# TYPE job_success_rate_1d gauge")
+            for name, job_runs in jobs.items():
+                recent = [r for r in job_runs if (now - datetime.fromisoformat(r["started_at"])).total_seconds() < 86400]
+                if recent:
+                    rate = sum(1 for r in recent if r["success"]) / len(recent)
+                    lines.append(f'job_success_rate_1d{{job="{name}"}} {rate:.4f}')
+
+            lines.append("# HELP job_last_run_age_seconds Age of the last run in seconds")
+            lines.append("# TYPE job_last_run_age_seconds gauge")
+            for name, job_runs in jobs.items():
+                if job_runs:
+                    age = (now - datetime.fromisoformat(job_runs[0]["started_at"])).total_seconds()
+                    lines.append(f'job_last_run_age_seconds{{job="{name}"}} {age:.1f}')
+
+            eq = equity_snapshots_latest()
+            if eq:
+                lines.append("# HELP equity_latest Latest equity")
+                lines.append("# TYPE equity_latest gauge")
+                lines.append(f'equity_latest {eq.get("equity", 0)}')
+                
+                lines.append("# HELP buying_power_latest Latest buying power")
+                lines.append("# TYPE buying_power_latest gauge")
+                lines.append(f'buying_power_latest {eq.get("buying_power", 0)}')
+
+            rs = risk_state_get()
+            halted = 1 if rs and rs.get("halted") else 0
+            lines.append("# HELP killswitch_halted Is the killswitch halted")
+            lines.append("# TYPE killswitch_halted gauge")
+            lines.append(f'killswitch_halted {halted}')
+
+            body = ("\n".join(lines) + "\n").encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(body)
+        except Exception as exc:
+            logger.error("Metrics failed: %s", exc)
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write(str(exc).encode("utf-8"))
 
     def log_message(self, *args):
         pass  # suppress request logging
@@ -346,7 +427,7 @@ class TradingBot:
     def _register(self, scanner: BaseScanner):
         self.scanners[scanner.name] = scanner
         self.subscribers.setdefault(scanner.name, set())
-        logger.info("Registered scanner: %s (schedule: %s)", scanner.name, scanner.schedule)
+        logger.info("Registered scanner: %s", scanner.name)
 
     def _load_subscribers(self):
         if os.path.exists(self.subscribers_file):
@@ -530,7 +611,7 @@ class TradingBot:
                "from that data. Tap a scanner — this message updates.\n\n")
         ikb = []
         for name, sc in self.scanners.items():
-            msg += f"📈 {cards.bold(name)}\n  ⏰ {cards.esc(sc.get_schedule_description())}\n\n"
+            msg += f"📈 {cards.bold(name)}\n\n"
             ikb.append([InlineKeyboardButton(f"🚀 Run {name}", callback_data=f"run_{name}")])
         return msg, InlineKeyboardMarkup(ikb)
 
@@ -2494,6 +2575,38 @@ class TradingBot:
             if self.scheduler.running:
                 self.scheduler.shutdown(wait=True)
             logger.info("Bot shut down.")
+def sd_notify(state: str) -> None:
+    """Send state to systemd via NOTIFY_SOCKET."""
+    socket_path = os.environ.get("NOTIFY_SOCKET")
+    if not socket_path:
+        return
+    if socket_path.startswith("@"):
+        socket_path = "\0" + socket_path[1:]
+    
+    try:
+        import socket
+        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sock:
+            sock.sendto(state.encode("utf-8"), socket_path)
+    except Exception as exc:
+        logger.warning("Failed to notify systemd: %s", exc)
+
+
+def _watchdog_loop():
+    if not os.environ.get("NOTIFY_SOCKET"):
+        return
+    
+    watchdog_usec = os.environ.get("WATCHDOG_USEC")
+    if watchdog_usec:
+        try:
+            interval = int(watchdog_usec) / 1_000_000 / 2
+        except ValueError:
+            interval = 150.0
+    else:
+        interval = 150.0
+
+    while True:
+        time.sleep(interval)
+        sd_notify("WATCHDOG=1")
 
 
 def main():
@@ -2501,6 +2614,11 @@ def main():
     if not token:
         logger.error("TELEGRAM_BOT_TOKEN not set in .env")
         sys.exit(1)
+        
+    t = threading.Thread(target=_watchdog_loop, daemon=True, name="systemd-watchdog")
+    t.start()
+    sd_notify("READY=1")
+    
     bot = TradingBot(token)
     bot.run()
 
