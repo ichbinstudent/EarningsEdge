@@ -6,8 +6,6 @@ Wants=network-online.target
 [Service]
 Type=notify
 WatchdogSec=300
-User=david
-Group=david
 WorkingDirectory=/home/david/EarningsEdgeDetection
 ExecStart=/home/david/EarningsEdgeDetection/.venv/bin/python3.12 bot.py
 Restart=on-failure
