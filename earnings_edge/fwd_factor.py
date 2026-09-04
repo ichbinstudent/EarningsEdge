@@ -22,9 +22,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
-from typing import Optional
 
-from .option_math import black_scholes_price, implied_volatility
+from .option_math import black_scholes_price
 
 RISK_FREE_RATE = 0.045  # match polygon_backfill convention
 
@@ -61,7 +60,7 @@ def required_near_iv(
     tau: float,
     hist_rms_move: float,
     premium: float,
-) -> Optional[float]:
+) -> float | None:
     """Near-leg IV at which the implied event move is exactly (1+premium) x hist RMS.
 
     sigma_fwd, T1, tau in years/annualized units; hist_rms_move as a fraction
@@ -87,7 +86,7 @@ def target_debit(
     hist_rms_move: float,
     premium: float,
     r: float = RISK_FREE_RATE,
-) -> Optional[float]:
+) -> float | None:
     """Max calendar debit consistent with >= premium event richness.
 
     far_price: current far-leg price (mid for display, ask for executable).
@@ -103,7 +102,7 @@ def target_debit(
     return far_price - near_star
 
 
-def forward_iv(iv_near: float, T1: float, iv_far: float, T2: float) -> Optional[float]:
+def forward_iv(iv_near: float, T1: float, iv_far: float, T2: float) -> float | None:
     """Event-free forward vol between T1 and T2 (variance decomposition)."""
     if T2 <= T1 or iv_near <= 0 or iv_far <= 0:
         return None
@@ -114,7 +113,7 @@ def forward_iv(iv_near: float, T1: float, iv_far: float, T2: float) -> Optional[
 
 
 def combo_debit(near_bid: float, near_ask: float, far_bid: float, far_ask: float,
-                executable: bool = False) -> Optional[float]:
+                executable: bool = False) -> float | None:
     """Calendar debit from leg quotes.
 
     executable=False -> combo mid (far_mid - near_mid), for display/distance.
@@ -156,7 +155,7 @@ class LadderSpec:
     tick: float = 0.01
     last_rung_et: time = time(15, 45)  # final reprice; order works till close
 
-    def rung_index(self, now: datetime) -> Optional[int]:
+    def rung_index(self, now: datetime) -> int | None:
         """Rung number for *now* (0-based), None if outside the ladder window."""
         now_et = now.astimezone(ET)
         start = datetime.combine(now_et.date(), self.start_et, tzinfo=ET)
@@ -171,7 +170,7 @@ class LadderSpec:
         """Limit price at *rung*: start + rung*tick, never above the cap."""
         return round(min(debit_start + rung * self.tick, debit_cap), 2)
 
-    def current_limit(self, now: datetime, debit_start: float, debit_cap: float) -> Optional[float]:
+    def current_limit(self, now: datetime, debit_start: float, debit_cap: float) -> float | None:
         """Convenience: limit price for the current time, or None outside window."""
         rung = self.rung_index(now)
         if rung is None:

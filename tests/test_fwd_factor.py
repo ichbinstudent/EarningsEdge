@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime
 
 import pytest
 
@@ -17,7 +17,6 @@ from earnings_edge.fwd_factor import (
     target_debit,
     within_fill_range,
 )
-
 
 # ── OCC helpers ------------------------------------------------------------
 

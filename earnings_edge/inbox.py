@@ -7,8 +7,7 @@ operator sees them die.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from earnings_edge import cards
 
@@ -16,7 +15,7 @@ KINDS = ("entry", "exit", "orphan", "assignment", "job")
 DEFAULT_TTL_HOURS = 8.0
 
 
-def _parse_ts(raw) -> Optional[datetime]:
+def _parse_ts(raw) -> datetime | None:
     if raw is None:
         return None
     if isinstance(raw, datetime):
@@ -27,7 +26,7 @@ def _parse_ts(raw) -> Optional[datetime]:
         except ValueError:
             return None
     if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=timezone.utc)
+        ts = ts.replace(tzinfo=UTC)
     return ts
 
 
@@ -36,7 +35,7 @@ class InboxItem:
     kind: str
     item_id: str
     ticker: str
-    created_at: Optional[str] = None
+    created_at: str | None = None
     expired: bool = False
     detail: str = ""
     strategy: str = ""
@@ -78,13 +77,13 @@ def assemble_inbox(
     orphans: list[dict] | None = None,
     assignments: list[dict] | None = None,
     jobs: list[dict] | None = None,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
     ttl_hours: float = DEFAULT_TTL_HOURS,
 ) -> Inbox:
     """Build one inbox. ``now`` is injectable for tests."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     if now.tzinfo is None:
-        now = now.replace(tzinfo=timezone.utc)
+        now = now.replace(tzinfo=UTC)
     cutoff = now - timedelta(hours=ttl_hours)
     inbox = Inbox()
 

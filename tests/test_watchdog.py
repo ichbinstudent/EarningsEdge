@@ -1,7 +1,7 @@
-import os
-import pytest
-from unittest.mock import patch, MagicMock
-from bot import sd_notify, _watchdog_loop
+from unittest.mock import MagicMock, patch
+
+from bot import _watchdog_loop, sd_notify
+
 
 def test_sd_notify_no_socket(monkeypatch):
     monkeypatch.delenv("NOTIFY_SOCKET", raising=False)

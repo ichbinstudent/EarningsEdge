@@ -1,28 +1,27 @@
 """Tests for Alpaca trading client & strategy bridge."""
 from __future__ import annotations
 
-import pytest
-from datetime import date, datetime
-from unittest.mock import MagicMock, patch, PropertyMock
+from datetime import date
+from unittest.mock import MagicMock, patch
 
-from earnings_edge.alpaca_trading import (
-    AlpacaTradingClient,
-    AlpacaError,
-    AlpacaAuthError,
-    AlpacaNotFoundError,
-    OrderResult,
-    PositionManager,
-    create_client,
-)
+import pytest
+
 from earnings_edge.alpaca_bridge import (
-    StrategyBridge,
-    BridgeConfig,
-    run_auto_trade,
     BEST_STRATEGIES,
     MAX_PCT_PER_TRADE,
+    BridgeConfig,
+    StrategyBridge,
+    run_auto_trade,
+)
+from earnings_edge.alpaca_trading import (
+    AlpacaAuthError,
+    AlpacaError,
+    AlpacaNotFoundError,
+    AlpacaTradingClient,
+    OrderResult,
+    PositionManager,
 )
 from earnings_edge.trading_types import Trade
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -463,7 +462,7 @@ def test_run_auto_trade_dry_run(mock_client):
     """
     with patch("earnings_edge.alpaca_bridge.create_client", return_value=mock_client):
         summary = run_auto_trade()
-    # Sum 
+    # Sum
     assert "timestamp" in summary
     assert "buying_power" in summary
     assert "strategies" in summary

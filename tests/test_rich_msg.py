@@ -1,18 +1,17 @@
 import asyncio
-import json
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+import pytest
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from bot import TradingBot
 from earnings_edge.rich_msg import (
-    send_rich_html,
     edit_rich_html,
-    orders_rich_view,
-    jobs_rich_view,
     equity_rich_view,
+    jobs_rich_view,
+    orders_rich_view,
+    send_rich_html,
 )
 
 
@@ -130,8 +129,9 @@ def test_orders_rich_view(seeded_db):
 
 
 def test_orders_rich_view_empty(seeded_db):
-    from earnings_edge.db.engine import get_engine
     from sqlalchemy import text
+
+    from earnings_edge.db.engine import get_engine
     with get_engine().begin() as conn:
         conn.execute(text("DELETE FROM trade_events"))
     html = orders_rich_view()
@@ -151,8 +151,9 @@ def test_jobs_rich_view(seeded_db):
 
 
 def test_jobs_rich_view_empty(seeded_db):
-    from earnings_edge.db.engine import get_engine
     from sqlalchemy import text
+
+    from earnings_edge.db.engine import get_engine
     with get_engine().begin() as conn:
         conn.execute(text("DELETE FROM job_runs"))
     html = jobs_rich_view()

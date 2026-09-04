@@ -16,19 +16,17 @@ effective mode is ``auto`` (TOML + operator override) AND the bot's
 ``ALPACA_LIVE_ALLOW_AUTO=1``.
 """
 from __future__ import annotations
-from framework.risk.killswitch import record_event
 
 import json
 import logging
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from earnings_edge import cards, live_signals
 from earnings_edge.alpaca_bridge import (
     BridgeConfig,
     StrategyBridge,
-    _resolve_strategy,
     preflight_combo,
 )
 from earnings_edge.alpaca_trading import create_client
@@ -44,6 +42,7 @@ from earnings_edge.db import (
     proposal_funnel_insert,
 )
 from earnings_edge.trading_types import DataBundle, Trade
+from framework.risk.killswitch import record_event
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +164,7 @@ def trade_from_json(s: str) -> Trade:
 class PendingTradeStore:
     """SQLite-backed pending-proposal store (lives in earnings_ml.db, WAL)."""
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: str | None = None):
         self._db_path = Path(db_path) if db_path else None
         self._ensure_engine()
 
@@ -175,12 +174,12 @@ class PendingTradeStore:
         else:
             get_engine()
 
-    def add(self, trade: Trade, card_text: str) -> Optional[int]:
+    def add(self, trade: Trade, card_text: str) -> int | None:
         """Insert a proposal; returns id, or None if an identical proposal is
         already pending (same strategy+ticker+side — no double-asking)."""
         self._ensure_engine()
         return pending_trades_insert(
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
             strategy=trade.strategy,
             ticker=trade.ticker,
             side=trade.side,
@@ -193,7 +192,7 @@ class PendingTradeStore:
         self._ensure_engine()
         pending_trades_update_card(proposal_id, card_text)
 
-    def get(self, proposal_id: int) -> Optional[dict]:
+    def get(self, proposal_id: int) -> dict | None:
         self._ensure_engine()
         return pending_trades_get(proposal_id)
 
@@ -206,9 +205,9 @@ class PendingTradeStore:
         proposal_id: int,
         status: str,
         *,
-        order_json: Optional[dict] = None,
-        note: Optional[str] = None,
-        decided_by: Optional[int] = None,
+        order_json: dict | None = None,
+        note: str | None = None,
+        decided_by: int | None = None,
     ) -> None:
         self._ensure_engine()
         pending_trades_mark_decided(
@@ -240,19 +239,20 @@ def _render_card(trade: Trade, legs: list[dict], proposal_id: str = "?") -> str:
 
     # Wire up position designer to show max loss / max profit
     try:
-        import math
         import datetime
+        import math
+
         from earnings_edge.designer import Leg, analyze
 
         designer_legs = []
         is_credit = trade.side in {"SHORT_STRADDLE", "SHORT_STRANGLE", "IRON_CONDOR"}
         target_premium = -float(trade.entry_price or 0.0) if is_credit else float(trade.entry_price or 0.0)
-        
+
         assigned = False
         for l in legs:
             action = l["side"]
             ratio = int(l.get("ratio_qty", 1))
-            
+
             price = 0.0
             if not assigned and ratio > 0:
                 sq = ratio if action == "buy" else -ratio
@@ -267,7 +267,7 @@ def _render_card(trade: Trade, legs: list[dict], proposal_id: str = "?") -> str:
             except (TypeError, ValueError):
                 # exc-policy: narrowed to datetime.fromisoformat errors
                 exp = trade.earnings_date
-                
+
             designer_legs.append(Leg(
                 action=action,
                 kind=l.get("option_type", "call"),
@@ -277,26 +277,26 @@ def _render_card(trade: Trade, legs: list[dict], proposal_id: str = "?") -> str:
                 price=price,
                 iv=0.30
             ))
-            
+
         S = float((trade.features or {}).get("price") or designer_legs[0].strike)
         if S == 0.0:
             S = 100.0
-            
+
         summary = analyze(designer_legs, S=S)
         mp = summary["max_profit"]
         ml = summary["max_loss"]
-        
+
         profit_str = "Unlimited" if math.isinf(mp) else f"${mp:.0f}"
         loss_str = "Unlimited" if math.isinf(ml) or math.isinf(-ml) else f"${abs(ml):.0f}"
         meta.append(f"Max Profit: {profit_str} | Max Loss: {loss_str}")
-        
+
     except Exception as e:
-        
+
         # exc-policy: keep broad, ensure visibility
-        
-        
+
+
         record_event('silent_failure', f'trade_approval: {e}')
-        
+
         logger.error('trade_approval broad exception', exc_info=True)
         logger.warning("designer analyze failed in proposal build: %s", e)
 
@@ -304,7 +304,7 @@ def _render_card(trade: Trade, legs: list[dict], proposal_id: str = "?") -> str:
         body.append(cards.esc(" | ".join(meta)))
     if trade.notes:
         body.append(f"note: {cards.esc(trade.notes[:120])}")
-        
+
     try:
         cmd_parts = [f"/designer {trade.ticker}"]
         for l in designer_legs:
@@ -318,7 +318,7 @@ def _render_card(trade: Trade, legs: list[dict], proposal_id: str = "?") -> str:
         record_event('silent_failure', f'trade_approval: {exc}')
         logger.error('trade_approval broad exception', exc_info=True)
         pass
-        
+
     footer = cards.esc(f"Expires in {PROPOSAL_TTL_HOURS:.0f}h — confirm to execute.")
     return cards.card_frame(cards.ENTRY_EMOJI, f"Trade Proposal #{proposal_id} — {trade.strategy}",
                             subtitle, body, footer)
@@ -362,7 +362,7 @@ def ff_candidate_to_trade(cand) -> Trade:
     return Trade(
         ticker=cand.ticker,
         earnings_date=date.fromisoformat(cand.earnings_date),
-        scan_date=datetime.now(timezone.utc).date(),
+        scan_date=datetime.now(UTC).date(),
         strategy=getattr(cand, "strategy_override", None) or FF_LADDER,
         side="CALENDAR",
         entry_price=cand.mid_debit,
@@ -388,7 +388,7 @@ def _render_ff_card(cand, proposal_id: str = "?") -> str:
         cards.esc(f"mid debit {cand.mid_debit:.2f} | ladder {cand.d_start:.2f} → cap {cand.d_cap:.2f}"),
         cards.esc(f"σ_fwd {cand.sigma_fwd:.1%} | hist RMS {cand.hist_rms_move:.1%} | τ {cand.tau_days}d"),
     ]
-    
+
     try:
         # Extrapolate option kind (call/put) from OCC symbol
         near_kind = "put" if cand.near_symbol[-9] == "P" else "call"
@@ -401,7 +401,7 @@ def _render_ff_card(cand, proposal_id: str = "?") -> str:
         record_event('silent_failure', f'trade_approval: {exc}')
         logger.error('trade_approval broad exception', exc_info=True)
         pass
-        
+
     footer = ("Confirm = arm limit ladder 14:00→15:45 ET, tick up every 15 min.\n"
               "Expires 15:45 ET today.")
     return cards.card_frame(cards.FF_EMOJI, f"Trade Proposal #{proposal_id} — {FF_LADDER}",
@@ -438,11 +438,11 @@ def build_ff_proposals(
     return proposals
 
 
-def _persist_funnel(store: "PendingTradeStore", strategies: list[str], counts: dict, total: int) -> None:
+def _persist_funnel(store: PendingTradeStore, strategies: list[str], counts: dict, total: int) -> None:
     try:
         store._ensure_engine()
         proposal_funnel_insert(
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
             strategies=json.dumps(strategies),
             counts=json.dumps(counts),
             proposals_total=total,
@@ -457,11 +457,11 @@ def _persist_funnel(store: "PendingTradeStore", strategies: list[str], counts: d
 def build_proposals(
     store: PendingTradeStore,
     *,
-    strategies: Optional[list[str]] = None,
+    strategies: list[str] | None = None,
     max_proposals: int = 5,
-    db_path: Optional[str] = None,
-    bridge: Optional[StrategyBridge] = None,
-    bundle: Optional[DataBundle] = None,
+    db_path: str | None = None,
+    bridge: StrategyBridge | None = None,
+    bundle: DataBundle | None = None,
     trade_source=None,
 ) -> list[dict]:
     """Run live signal mappings, filter TAKE trades locally, persist top-N.
@@ -487,9 +487,9 @@ def build_proposals(
     # Operator runtime overrides (strategy_state.enabled, set via the bot)
     # apply on top of the TOML flags.
     try:
+        from earnings_edge.db.engine import configure
         from framework.core.control import filter_enabled
         from framework.core.registry import get_registry
-        from earnings_edge.db.engine import configure
         registry = get_registry()
         if store._db_path:
             configure(store._db_path)
@@ -608,7 +608,7 @@ def build_proposals(
             break
     global LAST_FUNNEL
     LAST_FUNNEL = {
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "candidates": len(candidates),
         "proposals": len(proposals),
         "strategies": funnel,
@@ -625,7 +625,7 @@ def build_proposals(
 # Execution (only ever triggered by explicit confirmation)
 # ---------------------------------------------------------------------------
 
-def _market_closed() -> Optional[str]:
+def _market_closed() -> str | None:
     """None when the US market is open, else a human-readable refusal.
 
     Guards the click-time submission path: a stale card confirmed after the
@@ -648,9 +648,9 @@ def _execute_ff(
     trade: Trade,
     row: dict,
     *,
-    decided_by: Optional[int] = None,
+    decided_by: int | None = None,
     ff_runner=None,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
 ) -> dict:
     """Arm an FF ladder from a persisted proposal. Same confirm path as every
     other strategy; the ladder then walks 14:00–15:45 ET on the step cron.
@@ -659,13 +659,13 @@ def _execute_ff(
     import pytz
 
     eastern = pytz.timezone("US/Eastern")
-    now_utc = now or datetime.now(timezone.utc)
+    now_utc = now or datetime.now(UTC)
     if now_utc.tzinfo is None:
-        now_utc = now_utc.replace(tzinfo=timezone.utc)
+        now_utc = now_utc.replace(tzinfo=UTC)
     now_et = now_utc.astimezone(eastern)
     created = datetime.fromisoformat(row["created_at"])
     if created.tzinfo is None:
-        created = created.replace(tzinfo=timezone.utc)
+        created = created.replace(tzinfo=UTC)
     created_et = created.astimezone(eastern)
     if created_et.date() != now_et.date():
         store.mark(proposal_id, "expired",
@@ -701,10 +701,10 @@ def execute_proposal(
     store: PendingTradeStore,
     proposal_id: int,
     *,
-    bridge: Optional[StrategyBridge] = None,
-    decided_by: Optional[int] = None,
+    bridge: StrategyBridge | None = None,
+    decided_by: int | None = None,
     ff_runner=None,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
 ) -> dict:
     """Execute one pending proposal after operator confirmation.
 
@@ -719,10 +719,10 @@ def execute_proposal(
 
     created = datetime.fromisoformat(row["created_at"])
     if created.tzinfo is None:
-        created = created.replace(tzinfo=timezone.utc)
-    now_utc = now or datetime.now(timezone.utc)
+        created = created.replace(tzinfo=UTC)
+    now_utc = now or datetime.now(UTC)
     if now_utc.tzinfo is None:
-        now_utc = now_utc.replace(tzinfo=timezone.utc)
+        now_utc = now_utc.replace(tzinfo=UTC)
 
     trade = trade_from_json(row["trade_json"])
     if trade.strategy in (FF_LADDER, "forward_factor_arb"):
@@ -746,10 +746,10 @@ def execute_proposal(
     if bridge is None:
         # Risk-gated bridge: kill switch, portfolio caps, lifecycle state all
         # apply even though this path is human-approved.
+        from earnings_edge.db.engine import configure
         from framework.core.registry import get_registry
         from framework.execution.lifecycle import LifecycleManager
         from framework.risk.manager import RiskManager
-        from earnings_edge.db.engine import configure
         if store._db_path:
             configure(store._db_path)
         try:
@@ -763,7 +763,8 @@ def execute_proposal(
             resolver = None
             sizer_resolver = None
         from earnings_edge.alpaca_bridge import (
-            LIVE_FILL_POLL_ATTEMPTS, LIVE_FILL_POLL_SECS,
+            LIVE_FILL_POLL_ATTEMPTS,
+            LIVE_FILL_POLL_SECS,
         )
         bridge = StrategyBridge(
             client=create_client(), config=BridgeConfig(),
@@ -822,7 +823,7 @@ def execute_proposal(
     return {"ok": True, **order}
 
 
-def reject_proposal(store: PendingTradeStore, proposal_id: int, *, decided_by: Optional[int] = None) -> dict:
+def reject_proposal(store: PendingTradeStore, proposal_id: int, *, decided_by: int | None = None) -> dict:
     row = store.get(proposal_id)
     if row is None:
         return {"ok": False, "error": f"proposal #{proposal_id} not found"}

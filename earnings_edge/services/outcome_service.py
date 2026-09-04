@@ -13,8 +13,8 @@ Also tracks stock-move outcomes for :class:`live_calendar_candidates` and
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta, timezone
-from typing import Any, Optional
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 from earnings_edge.collectors.polygon import PolygonClient
 from earnings_edge.db import (
@@ -45,8 +45,8 @@ class OutcomeService:
 
     def __init__(
         self,
-        polygon_client: Optional[PolygonClient] = None,
-        db_path: Optional[Any] = None,
+        polygon_client: PolygonClient | None = None,
+        db_path: Any | None = None,
     ) -> None:
         self._db_path = db_path
         self._polygon = polygon_client or PolygonClient()
@@ -57,8 +57,8 @@ class OutcomeService:
         self,
         ticker: str,
         earnings_date_str: str,
-        timing: Optional[str] = None,
-    ) -> Optional[dict[str, Any]]:
+        timing: str | None = None,
+    ) -> dict[str, Any] | None:
         """Compute the actual earnings-move outcome for *ticker*.
 
         Looks at the close the day before earnings (pre) and the close on/after
@@ -131,15 +131,15 @@ class OutcomeService:
     # -- internals --------------------------------------------------------
 
     @staticmethod
-    def _is_amc(timing: Optional[str]) -> bool:
+    def _is_amc(timing: str | None) -> bool:
         return bool(timing) and "post" in str(timing).lower()
 
     @staticmethod
     def outcome_from_bars(
         bars: list[dict[str, Any]],
         ed: date,
-        timing: Optional[str] = None,
-    ) -> Optional[dict[str, Any]]:
+        timing: str | None = None,
+    ) -> dict[str, Any] | None:
         """Pure bar→outcome transformation (no network, no DB).
 
         *bars* is a list of Polygon agg dicts with at least ``c`` (close),
@@ -152,9 +152,9 @@ class OutcomeService:
         if len(bars) < 2:
             return None
 
-        pre_bar: Optional[dict[str, Any]] = None
-        post_bar: Optional[dict[str, Any]] = None
-        earnings_bar: Optional[dict[str, Any]] = None
+        pre_bar: dict[str, Any] | None = None
+        post_bar: dict[str, Any] | None = None
+        earnings_bar: dict[str, Any] | None = None
         amc = OutcomeService._is_amc(timing)
 
         for i, bar in enumerate(bars):
@@ -209,7 +209,7 @@ class OutcomeService:
             "actual_move_pct": round(actual_move_pct, 4),
             "actual_move_direction": direction,
             "max_intraday_range_pct": round(max_range_pct, 4),
-            "outcome_fetched_at": datetime.now(timezone.utc).isoformat(),
+            "outcome_fetched_at": datetime.now(UTC).isoformat(),
         }
 
     # -- live_calendar_candidates outcomes ---------------------------------

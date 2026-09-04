@@ -7,12 +7,14 @@ from __future__ import annotations
 import os
 from dataclasses import asdict
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable
 
 from earnings_edge.bot_views import book_action_banner, pending_exits
 from earnings_edge.db import (
+    adopted_positions_symbols,
     job_runs_failed,
     pending_trades_brief,
+    risk_state_get,
     table_exists,
     trade_events_list,
 )
@@ -21,8 +23,6 @@ from earnings_edge.inbox import assemble_inbox
 from framework.execution.managed import open_groups
 from framework.positions.book import classify_book
 from framework.risk.killswitch import KillSwitch
-
-from earnings_edge.db import adopted_positions_symbols, risk_state_get
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -61,7 +61,7 @@ def _item(it) -> dict:
     return d
 
 
-def load_desk(*, get_positions: Optional[Callable] = None) -> dict:
+def load_desk(*, get_positions: Callable | None = None) -> dict:
     """Book + inbox + kill switch for the Mini App desk."""
     configure(db_path())
     broker, err = [], None
@@ -82,7 +82,7 @@ def load_desk(*, get_positions: Optional[Callable] = None) -> dict:
             if table_exists("trade_events") else []
         )
         jobs = job_runs_failed(10) if table_exists("job_runs") else []
-        
+
         # Filter out stale events that are no longer true
         broker_syms = {p.get("symbol") for p in broker if p.get("symbol")}
         managed_syms = {leg.symbol for g in open_groups() for leg in g.legs}
@@ -215,7 +215,7 @@ def run_desk_action(
     return {"ok": False, "banner": f"⚠️ unknown op {op}"}
 
 
-def _uid(by: str) -> Optional[int]:
+def _uid(by: str) -> int | None:
     try:
         if by.startswith("webapp:"):
             return int(by.split(":", 1)[1])

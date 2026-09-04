@@ -65,12 +65,11 @@ def _seed(conn, ticker, ed, has_options, usable_outcome):
 
 
 def test_repair_drive_raises_hist_coverage(tmp_db_path, monkeypatch):
+    import warm_hist_coverage as whc
     import yfinance
 
     import earnings_edge.fwd_factor_ladder as ffl
-    import warm_hist_coverage as whc
     from earnings_edge.coverage import hist_move_coverage, repair_candidates
-    import sqlite3
 
     monkeypatch.setattr(yfinance, "Ticker", _FakeTicker)
     monkeypatch.setattr(ffl, "_lse_bars_client", lambda: _FakeLSE())

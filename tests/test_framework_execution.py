@@ -6,15 +6,17 @@ from datetime import date
 from unittest.mock import MagicMock
 
 import pytest
+from sqlalchemy import text
 
+from earnings_edge.db import engine as db_engine
 from framework.execution.lifecycle import LifecycleManager
 from framework.execution.managed import open_positions, record_open_positions
 from framework.execution.order_manager import (
-    LimitWalkPolicy, MidPricePolicy, OrderManager,
+    LimitWalkPolicy,
+    MidPricePolicy,
+    OrderManager,
 )
 from framework.execution.reconcile import Reconciler
-from sqlalchemy import text
-from earnings_edge.db import engine as db_engine
 
 
 @pytest.fixture
@@ -185,8 +187,12 @@ def test_reconcile_broker_failure_does_not_close_anything(conn):
 
 def test_backfill_exit_by_and_local_mark(tmp_path):
     from datetime import date
+
     from framework.execution.managed import (
-        backfill_exit_by, mark_group_closed, open_groups, record_open_positions,
+        backfill_exit_by,
+        mark_group_closed,
+        open_groups,
+        record_open_positions,
     )
     db_engine.configure(tmp_path / "bf.db")
 

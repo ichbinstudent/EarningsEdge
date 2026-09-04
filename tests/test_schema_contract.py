@@ -1,21 +1,19 @@
-import pytest
-from earnings_edge import bot_views
-from earnings_edge import rich_msg
-from earnings_edge.db import engine as db_engine
+from earnings_edge import bot_views, rich_msg
+
 
 class TrackingDict(dict):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.accessed_keys = set()
-    
+
     def __getitem__(self, key):
         self.accessed_keys.add(key)
         return super().__getitem__(key)
-        
+
     def get(self, key, default=None):
         self.accessed_keys.add(key)
         return super().get(key, default)
-    
+
     def items(self):
         for k in self.keys():
             self.accessed_keys.add(k)

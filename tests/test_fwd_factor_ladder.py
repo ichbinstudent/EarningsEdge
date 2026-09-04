@@ -136,7 +136,7 @@ def test_pick_pair_tenor_selects_within_window():
     for d in (10, 32, 58, 61, 95):
         sym = occ_symbol("TEST", TODAY + timedelta(days=d), SPOT)
         chain[sym] = {"bid": 1, "ask": 1}
-    
+
     # closest to 45 in [30, 60] -> 45 wins (already in FakeAlpaca chain)
     t1, t2 = _pick_pair_tenor(chain, SPOT, TODAY)
     assert t1["expiry"] == TODAY + timedelta(days=45)
@@ -398,6 +398,7 @@ def test_expired_ladder_books_fill_if_order_filled(conn):
 def test_conn_factory_fresh_connections(conn, tmp_path):
     """Session-per-op: stepping from another thread must not raise."""
     import threading
+
     from earnings_edge.db import engine as db_engine
     db = tmp_path / "t.db"
     db_engine.configure(db)

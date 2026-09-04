@@ -1,7 +1,11 @@
-from datetime import date
 import unittest
+from datetime import date
 
-from earnings_edge.bot_scanner import LiveCalendarQuote, build_calendar_model_feature_row, format_model_prediction
+from earnings_edge.bot_scanner import (
+    LiveCalendarQuote,
+    build_calendar_model_feature_row,
+    format_model_prediction,
+)
 from earnings_edge.calendar_filter import score_calendar_trade
 from earnings_edge.models import TickerReport, ValidationMetrics
 

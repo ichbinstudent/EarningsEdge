@@ -10,7 +10,6 @@ the paper lifecycle.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from earnings_edge.db import strategy_state_get, strategy_state_list, strategy_state_upsert
 

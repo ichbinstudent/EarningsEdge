@@ -2,8 +2,8 @@
 """CLI entrypoint for generating top plays (picks) from earnings_ml.db."""
 import argparse
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 from earnings_edge.db import configure, snapshots_max_scan_date
 from earnings_edge.picks import generate_picks

@@ -13,9 +13,8 @@ import os
 import sys
 import threading
 import time
-from datetime import datetime, timedelta, timezone
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Dict, Optional, Set
+from datetime import UTC, datetime, timedelta
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from dotenv import load_dotenv
 
@@ -26,29 +25,42 @@ load_dotenv()
 # Ensure project root on sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import pytz
+from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.triggers.cron import CronTrigger
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    MenuButtonWebApp,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+    Update,
+    WebAppInfo,
+)
+from telegram.constants import ParseMode
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
+
 from earnings_edge import cards
+from earnings_edge.alpaca_trading import create_client
 from earnings_edge.base import BaseScanner
 from earnings_edge.bot_live import ProgressMessage
 from earnings_edge.bot_scanner import EarningsCalendarScanner
-from earnings_edge.ops_auth import auth_message, is_operator, operator_chat_ids, operators_configured
-from earnings_edge.trade_approval import (
-    PendingTradeStore,
-    build_ff_proposals,
-    build_proposals,
-    execute_proposal,
-    reject_proposal,
-)
-from earnings_edge.alpaca_trading import create_client
 from earnings_edge.collectors.earnings_calendar import EarningsCalendarCollector
 from earnings_edge.db import (
     exit_proposals_get,
-    managed_positions_list,
-    persist_picks,
     scan_runs_latest_success,
     snapshots_max_scan_date,
 )
 from earnings_edge.earnings import scan_dates
 from earnings_edge.fwd_factor_ladder import LadderRunner, build_candidate
+from earnings_edge.ops_auth import auth_message, is_operator, operator_chat_ids, operators_configured
 from earnings_edge.subscriptions import (
     SIGNAL_STRATEGIES,
     StrategySubscriptions,
@@ -56,21 +68,15 @@ from earnings_edge.subscriptions import (
     partition_by_mode,
     route_proposals,
 )
+from earnings_edge.trade_approval import (
+    PendingTradeStore,
+    build_ff_proposals,
+    build_proposals,
+    execute_proposal,
+    reject_proposal,
+)
 from framework.core.config import load_strategy_configs
 from framework.ops import InstanceLock, install_secret_redaction
-
-import pytz
-from apscheduler.schedulers.blocking import BlockingScheduler
-from apscheduler.triggers.cron import CronTrigger
-from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup,
-    MenuButtonWebApp, ReplyKeyboardMarkup, ReplyKeyboardRemove, WebAppInfo,
-)
-from telegram.constants import ParseMode
-from telegram.ext import (
-    Application, CallbackQueryHandler, CommandHandler,
-    ContextTypes, MessageHandler, filters,
-)
 
 HTML = ParseMode.HTML
 
@@ -125,7 +131,7 @@ def _main_reply_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
 
-def _desk_webapp_markup() -> Optional[InlineKeyboardMarkup]:
+def _desk_webapp_markup() -> InlineKeyboardMarkup | None:
     from dashboard.tg_auth import webapp_url
     url = webapp_url()
     if not url:
@@ -168,18 +174,15 @@ class _HealthHandler(BaseHTTPRequestHandler):
     def _handle_metrics(self):
         try:
             import sys
-            from datetime import datetime, timezone
-            from earnings_edge.db.repositories import (
-                job_runs_list,
-                equity_snapshots_latest,
-                risk_state_get
-            )
-            
+            from datetime import datetime
+
+            from earnings_edge.db.repositories import equity_snapshots_latest, job_runs_list, risk_state_get
+
             lines = []
             lines.append("# HELP process_up Process uptime")
             lines.append("# TYPE process_up gauge")
             lines.append("process_up 1")
-            
+
             lines.append("# HELP python_version Python version")
             lines.append("# TYPE python_version gauge")
             v = sys.version_info
@@ -190,9 +193,9 @@ class _HealthHandler(BaseHTTPRequestHandler):
             for r in runs:
                 name = r["job_name"]
                 jobs.setdefault(name, []).append(r)
-                
-            now = datetime.now(timezone.utc)
-            
+
+            now = datetime.now(UTC)
+
             lines.append("# HELP job_last_success_timestamp Last successful run timestamp")
             lines.append("# TYPE job_last_success_timestamp gauge")
             for name, job_runs in jobs.items():
@@ -200,7 +203,7 @@ class _HealthHandler(BaseHTTPRequestHandler):
                 if successes:
                     ts = datetime.fromisoformat(successes[0]["started_at"]).timestamp()
                     lines.append(f'job_last_success_timestamp{{job="{name}"}} {ts}')
-                    
+
             lines.append("# HELP job_success_rate_1d Success rate in the last day")
             lines.append("# TYPE job_success_rate_1d gauge")
             for name, job_runs in jobs.items():
@@ -221,7 +224,7 @@ class _HealthHandler(BaseHTTPRequestHandler):
                 lines.append("# HELP equity_latest Latest equity")
                 lines.append("# TYPE equity_latest gauge")
                 lines.append(f'equity_latest {eq.get("equity", 0)}')
-                
+
                 lines.append("# HELP buying_power_latest Latest buying power")
                 lines.append("# TYPE buying_power_latest gauge")
                 lines.append(f'buying_power_latest {eq.get("buying_power", 0)}')
@@ -259,9 +262,10 @@ def _start_health_server(port: int = 8502):
 
 def _start_dashboard_server(port: int = 8503):
     """Run the mini app dashboard (uvicorn) in a daemon thread."""
-    import uvicorn
     import asyncio
-    
+
+    import uvicorn
+
     def run_dashboard():
         try:
             from dashboard.server import app
@@ -281,8 +285,8 @@ class TradingBot:
     def __init__(self, token: str):
         self.token = token
         self.subscribers_file = os.path.join(os.path.dirname(__file__), "data", "subscribers.json")
-        self.scanners: Dict[str, BaseScanner] = {}
-        self.subscribers: Dict[str, Set[int]] = {}
+        self.scanners: dict[str, BaseScanner] = {}
+        self.subscribers: dict[str, set[int]] = {}
         self.application = None
         self._instance_lock = None
         self._monitors: dict[int, asyncio.Task] = {}  # chat_id -> live monitor task
@@ -318,7 +322,6 @@ class TradingBot:
 
     def _health_facts(self) -> dict:
         """Facts for ``health_ready`` — used by the HTTP handler."""
-        from framework.core.calendar import get_calendar
         from framework.risk.equity import latest_equity
         lock_held = bool(getattr(self, "_instance_lock", None) and self._instance_lock._fh)
         last_eq = last_scan = None
@@ -410,7 +413,7 @@ class TradingBot:
             emit_broker_failure(facts["positions_exc"])
         return facts
 
-    def _approval_override(self) -> Optional[int]:
+    def _approval_override(self) -> int | None:
         """TELEGRAM_APPROVAL_CHAT_ID override chat, if configured."""
         env = os.environ.get("TELEGRAM_APPROVAL_CHAT_ID", "").strip()
         if env:
@@ -420,7 +423,7 @@ class TradingBot:
                 logger.warning("TELEGRAM_APPROVAL_CHAT_ID %r is not an int, ignoring", env)
         return None
 
-    def _approval_chats(self) -> Set[int]:
+    def _approval_chats(self) -> set[int]:
         """Who receives trade proposals/signal notifications.
 
         If the operator allow-list is configured it is the only destination.
@@ -433,7 +436,7 @@ class TradingBot:
         override = self._approval_override()
         if override is not None:
             return {override}
-        chats: Set[int] = set()
+        chats: set[int] = set()
         for uids in self.subscribers.values():
             chats |= uids
         chats |= self.strategy_subs.known_users()
@@ -515,7 +518,7 @@ class TradingBot:
                 logger.debug("Could not delete old panel %s: %s", old_id, e)
 
         msg = await update.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
-        
+
         # Do not track messages that carry the main ReplyKeyboardMarkup,
         # otherwise deleting them later will hide the user's keyboard.
         from telegram import ReplyKeyboardMarkup
@@ -537,7 +540,7 @@ class TradingBot:
         except Exception as exc:
             logger.error("panel send failed: %s", exc)
 
-    def _positions_panel_sync(self, banner: Optional[str] = None):
+    def _positions_panel_sync(self, banner: str | None = None):
         from earnings_edge.bot_views import build_positions_panel
         broker, err = None, None
         try:
@@ -547,7 +550,7 @@ class TradingBot:
         return build_positions_panel(
             broker_positions=broker, broker_error=err, banner=banner)
 
-    async def _refresh_positions_query(self, query, banner: Optional[str] = None) -> None:
+    async def _refresh_positions_query(self, query, banner: str | None = None) -> None:
         text, rows = await asyncio.to_thread(self._positions_panel_sync, banner)
         await self._flush_alerts()
         markup = InlineKeyboardMarkup(rows) if rows else None
@@ -692,8 +695,7 @@ class TradingBot:
                 return
 
             def flip_mode():
-                from framework.core.control import (
-                    effective_execution_mode, set_execution_mode)
+                from framework.core.control import effective_execution_mode, set_execution_mode
                 cfg = self.strategy_configs.get(name)
                 toml = cfg.execution_mode if cfg else "approval"
                 cur = effective_execution_mode(name, toml)
@@ -857,7 +859,7 @@ class TradingBot:
         elif text == "🖥 Open desk":
             ikb = _desk_webapp_markup()
             if ikb:
-                await self._send_panel(update, 
+                await self._send_panel(update,
                     "Open the web desk from this button (reply-keyboard Mini Apps "
                     "do not get a login token on this client):",
                     reply_markup=ikb,
@@ -880,7 +882,7 @@ class TradingBot:
             # Just show usage since designer needs args
             await self._send_panel(update, "Usage: /designer <ticker> <legs...>\nExample: /designer AAPL buy call 190 2026-10-16 1 5.0 0.3")
         elif text == "🚪 Close Keyboard":
-            await self._send_panel(update, 
+            await self._send_panel(update,
                 "⌨️ Keyboard closed. /start to bring it back.",
                 reply_markup=ReplyKeyboardRemove(),
             )
@@ -1174,16 +1176,15 @@ class TradingBot:
         keyboard, and confirming runs execute_proposal() which arms the
         ladder instead of submitting a combo order.
         """
-        from earnings_edge.trade_approval import build_ff_proposals
-        from earnings_edge.fwd_factor_ladder import build_candidate as build_ff_candidate
+        from earnings_edge.db import snapshots_arb_universe, snapshots_earnings_on_date
         from earnings_edge.forward_factor_arb import build_candidate as build_arb_candidate
-        from earnings_edge.db import snapshots_earnings_on_date, snapshots_arb_universe
+        from earnings_edge.fwd_factor_ladder import build_candidate as build_ff_candidate
         from earnings_edge.models import EarningsCandidate
 
         alpaca = create_client()
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(UTC).date()
         target = today + timedelta(days=1)
-        
+
         # Pull earnings for the target day from already-collected snapshots
         # (chain_cache populates this hourly) rather than re-running a scan.
         earnings = [
@@ -1202,7 +1203,7 @@ class TradingBot:
                         ff_candidates.append(c)
                 except Exception as exc:
                     logger.info("FF: candidate %s failed: %s", cand.ticker, exc)
-                    
+
         ff_candidates.sort(key=lambda c: c.mid_debit / c.d_cap)
         ff_candidates = ff_candidates[:10]
 
@@ -1221,7 +1222,7 @@ class TradingBot:
                         arb_candidates.append(c)
                 except Exception as exc:
                     logger.info("ARB: candidate %s failed: %s", ticker, exc)
-                    
+
         arb_candidates.sort(key=lambda c: c.mid_debit / c.d_cap)
         arb_candidates = arb_candidates[:10]
 
@@ -1235,7 +1236,7 @@ class TradingBot:
         if not rows:
             logger.info("FF/ARB: %d candidates, all already pending", len(all_candidates))
             return
-        
+
         chats = self._approval_chats()
         if not chats:
             logger.warning("FF proposals: no approval chats")
@@ -1326,7 +1327,7 @@ class TradingBot:
             await self._flush_alerts()
             return
         try:
-            await asyncio.to_thread(self.ff.step, datetime.now(timezone.utc))
+            await asyncio.to_thread(self.ff.step, datetime.now(UTC))
         except Exception as exc:
             logger.exception("FF ladder step failed: %s", exc)
             return
@@ -1394,7 +1395,7 @@ class TradingBot:
         footer = "❌ Skipped." if result.get("ok") else f"⚠️ {result.get('error')}"
         return ticker, footer
 
-    def _exit_row(self, proposal_id: int) -> Optional[dict]:
+    def _exit_row(self, proposal_id: int) -> dict | None:
         return exit_proposals_get(proposal_id)
 
     async def _exit_close_outcome(self, pid: int, uid: int) -> tuple[str, str]:
@@ -1941,7 +1942,7 @@ class TradingBot:
             await self._flush_alerts()
             await self._edit_panel(query, text, self._desk_refresh_kb("st"), parse_mode=HTML)
         elif data == "desk_jb":
-            from earnings_edge.rich_msg import jobs_rich_view, edit_rich_html
+            from earnings_edge.rich_msg import edit_rich_html, jobs_rich_view
             html = await asyncio.to_thread(jobs_rich_view)
             success = await edit_rich_html(self.application.bot, query.message.chat_id, query.message.message_id, html, reply_markup=self._desk_refresh_kb("jb"))
             if not success:
@@ -1950,14 +1951,14 @@ class TradingBot:
         elif data == "desk_pd":
             await self._refresh_pending_query(query)
         elif data == "desk_or":
-            from earnings_edge.rich_msg import orders_rich_view, edit_rich_html
+            from earnings_edge.rich_msg import edit_rich_html, orders_rich_view
             html = await asyncio.to_thread(orders_rich_view)
             success = await edit_rich_html(self.application.bot, query.message.chat_id, query.message.message_id, html, reply_markup=self._desk_refresh_kb("or"))
             if not success:
                 text = await asyncio.to_thread(self._orders_text_sync)
                 await self._edit_panel(query, text, self._desk_refresh_kb("or"), parse_mode=HTML)
         elif data == "desk_eq":
-            from earnings_edge.rich_msg import equity_rich_view, edit_rich_html
+            from earnings_edge.rich_msg import edit_rich_html, equity_rich_view
             html = await asyncio.to_thread(equity_rich_view)
             success = await edit_rich_html(self.application.bot, query.message.chat_id, query.message.message_id, html, reply_markup=self._desk_refresh_kb("eq"))
             if not success:
@@ -2020,18 +2021,18 @@ class TradingBot:
         from framework.core.registry import get_registry
         return effective_enabled(name, get_registry().is_enabled(name))
 
-    def _pending_panel_sync(self, banner: Optional[str] = None):
-        from earnings_edge.inbox import assemble_inbox, inbox_keyboard, render_inbox
+    def _pending_panel_sync(self, banner: str | None = None):
+        from earnings_edge.alpaca_bridge import create_client
         from earnings_edge.bot_views import pending_exits
         from earnings_edge.db import job_runs_failed, trade_events_list
         from earnings_edge.db.repositories import adopted_positions_symbols
+        from earnings_edge.inbox import assemble_inbox, inbox_keyboard, render_inbox
         from framework.execution.managed import open_positions
-        from earnings_edge.alpaca_bridge import create_client
 
         entries = self.approval_store.list_pending()
         exits = pending_exits()
         jobs = job_runs_failed(10)
-        
+
         # Pull latest events
         raw_orphans = trade_events_list(event_type="orphan_found", limit=50)
         raw_assigns = trade_events_list(event_type="assignment_detected", limit=50)
@@ -2073,7 +2074,7 @@ class TradingBot:
             text = f"{cards.esc(banner)}\n\n{text}"
         return text, inbox_keyboard(inbox)
 
-    async def _refresh_pending_query(self, query, banner: Optional[str] = None) -> None:
+    async def _refresh_pending_query(self, query, banner: str | None = None) -> None:
         text, rows = await asyncio.to_thread(self._pending_panel_sync, banner)
         await self._edit_panel(query, text, InlineKeyboardMarkup(rows), parse_mode=HTML)
 
@@ -2125,8 +2126,7 @@ class TradingBot:
         await cmd_propose(self, update, ctx)
 
     async def _send_rich_table_message(self, chat_id: int, as_of: str, picks: dict, format_picks_df) -> bool:
-        import httpx
-        
+
         html = f"<h3>OQuants Picks (As of {as_of})</h3>\n"
         for name, df in picks.items():
             html += f"<h4>{name.upper()}</h4>\n"
@@ -2138,20 +2138,20 @@ class TradingBot:
             else:
                 formatted_df = format_picks_df(name, df)
                 display_df = formatted_df.head(50)  # Relaxed to 50 rows due to larger rich message limit
-                
+
                 html += "<table bordered striped compact>\n"
                 html += "<tr>"
                 for col in display_df.columns:
                     html += f"<th>{col}</th>"
                 html += "</tr>\n"
-                
+
                 for _, row in display_df.iterrows():
                     html += "<tr>"
                     for val in row:
                         html += f"<td>{val}</td>"
                     html += "</tr>\n"
                 html += "</table>\n"
-                
+
                 if len(formatted_df) > 50:
                     html += f"<p><i>... and {len(formatted_df) - 50} more rows.</i></p>\n"
 
@@ -2159,9 +2159,11 @@ class TradingBot:
         return await send_rich_html(self.application.bot, chat_id, html)
 
     async def _cmd_picks(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        import pandas as pd
-        from earnings_edge.picks import generate_picks
         from datetime import datetime
+
+        import pandas as pd
+
+        from earnings_edge.picks import generate_picks
 
         def format_picks_df(name: str, df: pd.DataFrame) -> pd.DataFrame:
             if df.empty: return df
@@ -2241,16 +2243,17 @@ class TradingBot:
         if not ctx.args or len(ctx.args) < 2:
             await update.message.reply_text("Usage: /designer <ticker> <legs...>\nExample: /designer AAPL buy call 190 2026-10-16 1 5.0 0.3")
             return
-        
+
         ticker = ctx.args[0].upper()
         raw_legs = [a.strip('"\'') for a in ctx.args[1:]]
-        
+
         # In case legs are passed as a single string wrapped in quotes due to CLI testing habits
         if len(raw_legs) == 1:
             raw_legs = raw_legs[0].split()
 
-        from earnings_edge.designer import Leg, analyze, rv_scenario
         from datetime import datetime
+
+        from earnings_edge.designer import Leg, analyze
 
         try:
             from earnings_edge.alpaca_trading import create_client
@@ -2311,6 +2314,7 @@ class TradingBot:
                         # Alpaca's data tier carries no greeks: solve IV from
                         # the mid instead of assuming a flat 30%.
                         from datetime import date as _date
+
                         from earnings_edge.option_math import implied_volatility
                         T = max((expiry - _date.today()).days, 1) / 365.0
                         iv = (implied_volatility(price, spot, strike, T, 0.045, kind)
@@ -2329,7 +2333,7 @@ class TradingBot:
         summary = analyze(legs, spot, 0.045)
         greeks = summary.get("greeks", {})
         structure = summary.get("structure", {})
-        
+
         msg = f"<b>Designer: {ticker}</b>\nSpot: ${spot:.2f}\n\n"
         msg += "<b>Structure</b>\n"
         msg += f"Direction: {structure.get('direction', '?')} | Risk: {structure.get('risk', '?')} | Vol Exposure: {structure.get('vol_exposure', '?')}\n"
@@ -2340,7 +2344,7 @@ class TradingBot:
         win_rate = summary.get('win_rate')
         if win_rate is not None:
             msg += f"Win Rate: {win_rate*100:.2f}%\n"
-        
+
         if greeks:
             msg += "\n<b>Greeks</b>\n"
             msg += f"Δ: {greeks.get('delta', 0):.2f} | Γ: {greeks.get('gamma', 0):.2f} | Θ: {greeks.get('theta', 0):.2f} | ν: {greeks.get('vega', 0):.2f}\n"
@@ -2373,7 +2377,7 @@ class TradingBot:
             if scanner_name == "Earnings Calendar" and datetime.now(pytz.utc).weekday() < 5:
                 logger.info("Chaining trade proposals after Earnings Calendar scan")
                 await self._propose_and_push()
-        except Exception as exc:
+        except Exception:
             logger.exception("Scheduled run error for %s", scanner_name)
     def _schedule_one_scan_retry(self, scanner_name: str) -> dict:
         """Exactly one 12-minute follow-up; does not stack."""
@@ -2396,7 +2400,7 @@ class TradingBot:
 
     def _setup_scheduler(self):
         tz = pytz.timezone("America/New_York")
-        
+
         # Centralized ET schedules
         # Scanners use a default 14:00 ET schedule if not otherwise specified here.
         # (Though we have one main scanner 'Earnings Calendar')
@@ -2587,7 +2591,7 @@ def sd_notify(state: str) -> None:
         return
     if socket_path.startswith("@"):
         socket_path = "\0" + socket_path[1:]
-    
+
     try:
         import socket
         with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sock:
@@ -2599,7 +2603,7 @@ def sd_notify(state: str) -> None:
 def _watchdog_loop():
     if not os.environ.get("NOTIFY_SOCKET"):
         return
-    
+
     watchdog_usec = os.environ.get("WATCHDOG_USEC")
     if watchdog_usec:
         try:
@@ -2619,11 +2623,11 @@ def main():
     if not token:
         logger.error("TELEGRAM_BOT_TOKEN not set in .env")
         sys.exit(1)
-        
+
     t = threading.Thread(target=_watchdog_loop, daemon=True, name="systemd-watchdog")
     t.start()
     sd_notify("READY=1")
-    
+
     bot = TradingBot(token)
     bot.run()
 

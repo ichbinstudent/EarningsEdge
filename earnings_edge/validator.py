@@ -1,17 +1,19 @@
 """Stock validation: apply the tiered filter chain and assign tiers."""
 
-import logging
-from datetime import date, datetime
-from typing import Optional
+from datetime import datetime
 
 from .analyzer import OptionsAnalyzer
 from .browser import MarketChameleonBrowser
 from .config import (
+    DEFAULT_IV_RV_NEAR_MISS,
+    DEFAULT_IV_RV_PASS,
+    MAX_ATM_DELTA,
+    MIN_EXPECTED_MOVE,
+    MIN_PRICE,
+    TERM_STRUCTURE_HARD_LIMIT,
     get_logger,
-    MIN_PRICE, MIN_EXPECTED_MOVE, MAX_ATM_DELTA,
-    TERM_STRUCTURE_HARD_LIMIT, DEFAULT_IV_RV_PASS, DEFAULT_IV_RV_NEAR_MISS,
 )
-from .models import EarningsCandidate, ValidationResult, ValidationMetrics
+from .models import EarningsCandidate, ValidationMetrics, ValidationResult
 
 logger = get_logger("validator")
 
@@ -198,7 +200,7 @@ class StockValidator:
     # -- helpers ----------------------------------------------------------
 
     @staticmethod
-    def _check_expected_move(raw, price, m: ValidationMetrics, provider, options_dates, ticker) -> Optional[ValidationResult]:
+    def _check_expected_move(raw, price, m: ValidationMetrics, provider, options_dates, ticker) -> ValidationResult | None:
         """Return a fail-result if expected move < $0.90, else None."""
         try:
             pct = float(str(raw).strip("%")) / 100 if isinstance(raw, str) else float(raw) / 100

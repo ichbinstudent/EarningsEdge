@@ -9,24 +9,25 @@ from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
+from sqlalchemy import text
+from test_fwd_factor_ladder import FakeAlpaca
 
 from earnings_edge.alpaca_bridge import BridgeConfig, StrategyBridge
-from earnings_edge.fwd_factor import ET, LadderSpec, occ_symbol
+from earnings_edge.db import configure
+from earnings_edge.db import engine as db_engine
+from earnings_edge.fwd_factor import ET, LadderSpec
 from earnings_edge.fwd_factor_ladder import LadderRunner, build_candidate
-from earnings_edge.trading_types import StrategyResult, Trade
 from earnings_edge.trade_approval import (
-    PendingTradeStore, build_proposals, execute_proposal,
+    PendingTradeStore,
+    build_proposals,
+    execute_proposal,
 )
+from earnings_edge.trading_types import StrategyResult, Trade
 from framework.core.config import StrategyConfig
 from framework.core.registry import StrategyRegistry
 from framework.execution.managed import open_positions
 from framework.risk.killswitch import KillSwitch
 from framework.risk.manager import RiskLimits, RiskManager
-from sqlalchemy import text
-from earnings_edge.db import configure, engine as db_engine
-
-from test_fwd_factor_ladder import FakeAlpaca, _bs  # noqa: E402
-
 
 # ── Registry -----------------------------------------------------------------
 

@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import html
 import json
-from datetime import date, datetime, timezone
-from typing import Optional, Any
+from datetime import UTC, datetime
+from typing import Any
 
 from earnings_edge.db import (
     adopted_positions_symbols,
@@ -24,23 +24,22 @@ from earnings_edge.db import (
     job_runs_list,
     scan_runs_latest_success,
     strategy_state_list,
-    table_exists,
     trade_events_list,
 )
 
 
-def _ts_short(ts: Optional[str]) -> str:
+def _ts_short(ts: str | None) -> str:
     return (ts or "")[:16].replace("T", " ")
 
 
-def _age(ts: Optional[str]) -> str:
+def _age(ts: str | None) -> str:
     if not ts:
         return "?"
     try:
         t = datetime.fromisoformat(ts)
         if t.tzinfo is None:
-            t = t.replace(tzinfo=timezone.utc)
-        mins = int((datetime.now(timezone.utc) - t).total_seconds() // 60)
+            t = t.replace(tzinfo=UTC)
+        mins = int((datetime.now(UTC) - t).total_seconds() // 60)
         if mins < 60:
             return f"{mins}m ago"
         return f"{mins // 60}h{mins % 60:02d} ago"
@@ -60,18 +59,18 @@ def _equity_curve(points: int = 16) -> str:
     return sparkline(vals)
 
 
-def status_view(*, market_open: Optional[bool] = None,
+def status_view(*, market_open: bool | None = None,
                 pending_proposals: int = 0, pending_exits: int = 0,
-                next_events: Optional[list] = None,
-                funnel: Optional[str] = None,
-                last_scan_ts: Optional[str] = None,
-                last_equity_ts: Optional[str] = None,
-                reconcile_summary: Optional[str] = None,
-                broker_ok: Optional[bool] = None,
-                broker_count: Optional[int] = None,
-                orphan_count: Optional[int] = None,
-                sha: Optional[str] = None,
-                started_at: Optional[str] = None) -> str:
+                next_events: list | None = None,
+                funnel: str | None = None,
+                last_scan_ts: str | None = None,
+                last_equity_ts: str | None = None,
+                reconcile_summary: str | None = None,
+                broker_ok: bool | None = None,
+                broker_count: int | None = None,
+                orphan_count: int | None = None,
+                sha: str | None = None,
+                started_at: str | None = None) -> str:
     from framework.execution.managed import open_groups
     from framework.risk.equity import daily_pnl, latest_equity
     from framework.risk.killswitch import KillSwitch
@@ -235,17 +234,17 @@ def collect_desk_facts(*,
 
 def monitor_view(*, tick: int,
                  pending_proposals: int = 0, pending_exits: int = 0,
-                 next_events: Optional[list] = None,
-                 funnel: Optional[str] = None,
-                 last_scan_ts: Optional[str] = None,
-                 last_equity_ts: Optional[str] = None,
-                 reconcile_summary: Optional[str] = None,
-                 broker_ok: Optional[bool] = None,
-                 broker_count: Optional[int] = None,
-                 orphan_count: Optional[int] = None,
-                 sha: Optional[str] = None,
-                 started_at: Optional[str] = None,
-                 market_open: Optional[bool] = None) -> str:
+                 next_events: list | None = None,
+                 funnel: str | None = None,
+                 last_scan_ts: str | None = None,
+                 last_equity_ts: str | None = None,
+                 reconcile_summary: str | None = None,
+                 broker_ok: bool | None = None,
+                 broker_count: int | None = None,
+                 orphan_count: int | None = None,
+                 sha: str | None = None,
+                 started_at: str | None = None,
+                 market_open: bool | None = None) -> str:
     """Compact ops panel rendered every 30s by the bot's monitor loop."""
     from earnings_edge.bot_live import spinner_frame
     from framework.execution.managed import open_groups
@@ -308,8 +307,8 @@ def _ignored_symbols() -> set[str]:
         return set()
 
 
-def positions_view(broker_positions: Optional[list] = None,
-                   broker_error: Optional[str] = None) -> str:
+def positions_view(broker_positions: list | None = None,
+                   broker_error: str | None = None) -> str:
     """Render the book. With ``broker_positions``, show managed / orphan /
     missing. Without, fall back to local groups only and say so."""
     from framework.execution.managed import open_groups
@@ -397,9 +396,9 @@ def book_action_banner(kind: str, result: dict, target: str = "") -> str:
     return "✅ Done."
 
 
-def build_positions_panel(broker_positions: Optional[list] = None,
-                          broker_error: Optional[str] = None,
-                          banner: Optional[str] = None) -> tuple[str, list]:
+def build_positions_panel(broker_positions: list | None = None,
+                          broker_error: str | None = None,
+                          banner: str | None = None) -> tuple[str, list]:
     """Book text + inline rows for one Telegram message that can be edited."""
     text = positions_view(broker_positions=broker_positions,
                           broker_error=broker_error)
@@ -409,7 +408,7 @@ def build_positions_panel(broker_positions: Optional[list] = None,
     return text, rows
 
 
-def positions_keyboard_for(broker_positions: Optional[list]) -> list[list]:
+def positions_keyboard_for(broker_positions: list | None) -> list[list]:
     from telegram import InlineKeyboardButton
     if broker_positions is None:
         return [[InlineKeyboardButton("🔄 Refresh", callback_data="bk_rf")]]
@@ -657,7 +656,7 @@ _SETUP_BODY = {
 }
 
 
-def _toml_exits(name: str, strategies_dir: Optional[str] = None) -> list[dict]:
+def _toml_exits(name: str, strategies_dir: str | None = None) -> list[dict]:
     """[[exits]] rules from strategies/<name>.toml; [] when unreadable."""
     import tomllib
     from pathlib import Path
@@ -671,7 +670,7 @@ def _toml_exits(name: str, strategies_dir: Optional[str] = None) -> list[dict]:
         return []
 
 
-def _toml_meta(name: str, strategies_dir: Optional[str] = None) -> str:
+def _toml_meta(name: str, strategies_dir: str | None = None) -> str:
     """One-line config summary: mode, lifecycle, sizer, limits from the TOML."""
     import tomllib
     from pathlib import Path
@@ -731,7 +730,7 @@ def setup_menu_text() -> str:
     )
 
 
-def setup_card(name: str, strategies_dir: Optional[str] = None) -> str:
+def setup_card(name: str, strategies_dir: str | None = None) -> str:
     """Plain-text setup card for one strategy (exits cited from its TOML)."""
     body = _SETUP_BODY.get(name)
     if body is None:

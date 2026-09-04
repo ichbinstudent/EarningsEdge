@@ -78,7 +78,9 @@ async def guard_eval_job(bot) -> None:
 
     from framework.jobs import run_job
     from framework.positions.guards import (
-        LegView, check_assignment_risk, occ_underlying,
+        LegView,
+        check_assignment_risk,
+        occ_underlying,
     )
 
     def work():

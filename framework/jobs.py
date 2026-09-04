@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from earnings_edge.db import job_runs_finish, job_runs_list, job_runs_start
 
@@ -20,7 +20,7 @@ logger = logging.getLogger("framework.jobs")
 def run_job(
     name: str,
     fn: Callable[[], Any],
-    stats: Optional[dict] = None,
+    stats: dict | None = None,
 ) -> Any:
     """Run ``fn`` under a job_runs audit row. Returns fn's result."""
     stats = stats if stats is not None else {}
@@ -43,6 +43,6 @@ def run_job(
     return result
 
 
-def recent_runs(name: Optional[str] = None, limit: int = 20) -> list[dict]:
+def recent_runs(name: str | None = None, limit: int = 20) -> list[dict]:
     """Recent job runs (dashboard/health)."""
     return job_runs_list(name=name, limit=limit)

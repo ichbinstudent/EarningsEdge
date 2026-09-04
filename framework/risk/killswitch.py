@@ -1,5 +1,5 @@
 from __future__ import annotations
-import sqlite3
+
 """Kill switch: persisted halt of all order submission.
 
 Tripped automatically by the risk manager (daily loss limit, repeated broker
@@ -11,8 +11,7 @@ restarts because it lives in the ``risk_state`` table.
 
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from earnings_edge.db import risk_events_insert, risk_state_get, risk_state_set_halted
 
@@ -20,7 +19,7 @@ logger = logging.getLogger("framework.risk.killswitch")
 
 
 def _utcnow() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class KillSwitch:
@@ -60,6 +59,6 @@ class KillSwitch:
 
 
 def record_event(event_type: str, detail: str,
-                 strategy: Optional[str] = None) -> None:
+                 strategy: str | None = None) -> None:
     """Append an audit row to ``risk_events``."""
     risk_events_insert(event_type, detail, strategy=strategy)

@@ -207,6 +207,7 @@ async def cmd_positions(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
 
 async def cmd_orders(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     import asyncio
+
     from earnings_edge.rich_msg import orders_rich_view, send_rich_html
 
     html = await asyncio.to_thread(orders_rich_view)
@@ -218,6 +219,7 @@ async def cmd_orders(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
 async def cmd_jobs(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     import asyncio
+
     from earnings_edge.rich_msg import jobs_rich_view, send_rich_html
 
     html = await asyncio.to_thread(jobs_rich_view)
@@ -229,6 +231,7 @@ async def cmd_jobs(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def cmd_equity(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     import asyncio
+
     from earnings_edge.rich_msg import equity_rich_view, send_rich_html
 
     html = await asyncio.to_thread(equity_rich_view)

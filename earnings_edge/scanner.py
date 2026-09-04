@@ -3,26 +3,26 @@ EarningsScanner — orchestrator that wires together data fetching,
 stock validation, and result collection.
 """
 
-import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date
-from typing import Optional
 
 import pytz
 from tqdm import tqdm
 
+from . import yfinance_patch
 from .analyzer import OptionsAnalyzer
 from .browser import MarketChameleonBrowser
 from .config import get_logger
 from .earnings import fetch_earnings, scan_dates
 from .iron_fly import calculate_iron_fly
 from .models import (
-    EarningsCandidate, IronFlyResult, NearMiss,
-    ScanResult, TickerReport, ValidationResult,
+    EarningsCandidate,
+    IronFlyResult,
+    NearMiss,
+    ScanResult,
+    TickerReport,
 )
 from .validator import StockValidator
-from . import yfinance_patch
 
 logger = get_logger("scanner")
 
@@ -79,7 +79,7 @@ class EarningsScanner:
 
     def scan_earnings(
         self,
-        input_date: Optional[str] = None,
+        input_date: str | None = None,
         workers: int = 0,
         use_finnhub: bool = False,
         use_dolthub: bool = False,

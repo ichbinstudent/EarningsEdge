@@ -8,55 +8,54 @@ shared engine). The legacy leading-sqlite3-connection form was removed
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timedelta, timezone
-from typing import Any, Optional, TypedDict, cast
-
+from datetime import UTC, date, datetime, timedelta
+from typing import Any, TypedDict, cast
 
 
 class TradeEventRow(TypedDict, total=True):
-    id: Optional[int]
+    id: int | None
     ts: str
     event_type: str
-    symbol: Optional[str]
-    strategy: Optional[str]
-    qty: Optional[float]
-    price: Optional[float]
-    detail: Optional[str]
+    symbol: str | None
+    strategy: str | None
+    qty: float | None
+    price: float | None
+    detail: str | None
 
 class JobRunRow(TypedDict, total=True):
-    id: Optional[int]
+    id: int | None
     job_name: str
     started_at: str
-    finished_at: Optional[str]
-    success: Optional[int]
-    stats_json: Optional[str]
-    error: Optional[str]
+    finished_at: str | None
+    success: int | None
+    stats_json: str | None
+    error: str | None
 
 class EquityDailyAvgRow(TypedDict, total=True):
     d: str
-    e: Optional[float]
+    e: float | None
 
 class StrategyStateRow(TypedDict, total=True):
-    name: Optional[str]
+    name: str | None
     lifecycle: str
-    updated_at: Optional[str]
-    updated_by: Optional[str]
-    enabled: Optional[int]
-    execution_mode: Optional[str]
+    updated_at: str | None
+    updated_by: str | None
+    enabled: int | None
+    execution_mode: str | None
 
 class ExitProposalRow(TypedDict, total=True):
-    id: Optional[int]
+    id: int | None
     created_at: str
     group_id: str
     strategy: str
     ticker: str
     rule: str
-    reason: Optional[str]
-    card_text: Optional[str]
+    reason: str | None
+    card_text: str | None
     status: str
-    snoozed_until: Optional[str]
-    decided_by: Optional[int]
-    decided_at: Optional[str]
+    snoozed_until: str | None
+    decided_by: int | None
+    decided_at: str | None
 
 import pandas as pd
 from sqlalchemy import func, select, text, update
@@ -82,8 +81,8 @@ from .models import (
     ProposalFunnel,
     RiskEvent,
     RiskState,
-    ScanRun,
     ScannerScanOutput,
+    ScanRun,
     Snapshot,
     StrategyState,
     TradeEvent,
@@ -297,7 +296,7 @@ def fetch_chain_for_ticker(ticker: str, scan_date: str) -> list[dict]:
     )
 
 
-def fetch_chain_for_ticker_date(date: str) -> list:  # noqa: ARG001
+def fetch_chain_for_ticker_date(date: str) -> list:
     """Return all options_chain rows with expiry on or after ``date``."""
     return []  # placeholder — kept for type-checker parity with other fetch funcs
 
@@ -353,7 +352,7 @@ def persist_picks(picks: dict, as_of: Any=None) -> int:
     return getattr(result, "rowcount", 0) or 0
 
 
-def load_picks(pick_date: str, strategy: Optional[str] = None) -> pd.DataFrame:
+def load_picks(pick_date: str, strategy: str | None = None) -> pd.DataFrame:
     """Read persisted picks for one date (optionally one strategy)."""
     sql = "SELECT * FROM picks WHERE pick_date = :pick_date"
     params: dict = {"pick_date": pick_date}
@@ -435,7 +434,7 @@ def snapshots_optionable_universe(max_tickers: int) -> list[str]:
     return out
 
 
-def snapshots_arb_universe(max_tickers: int = 200, today: Optional[str] = None) -> list[str]:
+def snapshots_arb_universe(max_tickers: int = 200, today: str | None = None) -> list[str]:
     """Optionable, liquid names: has_options=1, earnings_date >= today
     (the snapshot row is CURRENT, not tied to a specific event date),
     ordered by avg_volume_30d desc. Distinct tickers."""
@@ -452,7 +451,7 @@ def snapshots_arb_universe(max_tickers: int = 200, today: Optional[str] = None) 
     return [r["ticker"] for r in rows if r["ticker"]]
 
 
-def snapshots_next_earnings_date(ticker: str, today: Optional[str] = None) -> Optional[str]:
+def snapshots_next_earnings_date(ticker: str, today: str | None = None) -> str | None:
     """Get the next earnings date for a ticker."""
     today_str = today or date.today().isoformat()
     rows = _fetchall(
@@ -587,8 +586,8 @@ def pending_trades_insert(
     side: str,
     trade_json: str,
     card_text: str,
-    model_score: Optional[float] = None,
-) -> Optional[int]:
+    model_score: float | None = None,
+) -> int | None:
     """Insert a pending proposal; None if strategy+ticker+side is already pending."""
     with session_scope() as s:
         dup = s.execute(
@@ -626,7 +625,7 @@ def pending_trades_update_card(proposal_id: int, card_text: str) -> None:
         )
 
 
-def pending_trades_get(proposal_id: int) -> Optional[dict]:
+def pending_trades_get(proposal_id: int) -> dict | None:
     """SELECT * FROM pending_trades WHERE id=?"""
     with session_scope() as s:
         obj = s.get(PendingTrade, proposal_id)
@@ -648,14 +647,14 @@ def pending_trades_mark_decided(
     proposal_id: int,
     status: str,
     *,
-    order_json: Optional[str] = None,
-    note: Optional[str] = None,
-    decided_by: Optional[int] = None,
-    decided_at: Optional[str] = None,
+    order_json: str | None = None,
+    note: str | None = None,
+    decided_by: int | None = None,
+    decided_at: str | None = None,
 ) -> None:
     """UPDATE pending_trades SET status, order_json, note, decided_by, decided_at WHERE id=?"""
     if decided_at is None:
-        decided_at = datetime.now(timezone.utc).isoformat()
+        decided_at = datetime.now(UTC).isoformat()
     with session_scope() as s:
         s.execute(
             update(PendingTrade)
@@ -700,13 +699,13 @@ def exit_proposals_insert(
     strategy: str,
     ticker: str,
     rule: str,
-    reason: Optional[str] = None,
-    card_text: Optional[str] = None,
-    created_at: Optional[str] = None,
-) -> Optional[int]:
+    reason: str | None = None,
+    card_text: str | None = None,
+    created_at: str | None = None,
+) -> int | None:
     """Insert a pending exit card; None if group_id already has a pending row."""
     if created_at is None:
-        created_at = datetime.now(timezone.utc).isoformat()
+        created_at = datetime.now(UTC).isoformat()
     with session_scope() as s:
         dup = s.execute(
             select(ExitProposal.id).where(
@@ -731,7 +730,7 @@ def exit_proposals_insert(
         return int(obj.id) if obj.id is not None else None
 
 
-def exit_proposals_get(proposal_id: int) -> Optional[dict]:
+def exit_proposals_get(proposal_id: int) -> dict | None:
     """SELECT * FROM exit_proposals WHERE id=?"""
     with session_scope() as s:
         obj = s.get(ExitProposal, proposal_id)
@@ -753,13 +752,13 @@ def exit_proposals_mark(
     proposal_id: int,
     status: str,
     *,
-    snoozed_until: Optional[str] = None,
-    decided_by: Optional[int] = None,
-    decided_at: Optional[str] = None,
+    snoozed_until: str | None = None,
+    decided_by: int | None = None,
+    decided_at: str | None = None,
 ) -> None:
     """Update an exit proposal's decision columns."""
     if decided_at is None:
-        decided_at = datetime.now(timezone.utc).isoformat()
+        decided_at = datetime.now(UTC).isoformat()
     with session_scope() as s:
         s.execute(
             update(ExitProposal)
@@ -782,13 +781,13 @@ def managed_positions_open(
     strategy: str,
     group_id: str,
     *,
-    order_id: Optional[str] = None,
-    entry_price: Optional[float] = None,
-    metadata: Optional[dict] = None,
-    exit_by: Optional[date] = None,
+    order_id: str | None = None,
+    entry_price: float | None = None,
+    metadata: dict | None = None,
+    exit_by: date | None = None,
 ) -> int:
     """Insert one open row per leg. Returns the number of legs written."""
-    ts = datetime.now(timezone.utc).isoformat()
+    ts = datetime.now(UTC).isoformat()
     base_meta = dict(metadata or {})
     exit_by_s = exit_by.isoformat() if exit_by else None
     with session_scope() as s:
@@ -817,7 +816,7 @@ def managed_positions_open(
     return len(legs)
 
 
-def managed_positions_list(strategy: Optional[str] = None) -> list[dict]:
+def managed_positions_list(strategy: str | None = None) -> list[dict]:
     """SELECT * FROM managed_positions WHERE status='open' [AND strategy=?]"""
     with session_scope() as s:
         stmt = select(ManagedPosition).where(ManagedPosition.status == "open")
@@ -830,8 +829,8 @@ def managed_positions_list(strategy: Optional[str] = None) -> list[dict]:
 def managed_positions_close(
     group_id: str,
     *,
-    exit_price: Optional[float] = None,
-    closed_at: Optional[str] = None,
+    exit_price: float | None = None,
+    closed_at: str | None = None,
 ) -> int:
     """Mark all open rows in a group closed. Returns rows updated."""
     with session_scope() as s:
@@ -843,7 +842,7 @@ def managed_positions_close(
             )
             .values(
                 status="closed",
-                closed_at=closed_at or datetime.now(timezone.utc).isoformat(),
+                closed_at=closed_at or datetime.now(UTC).isoformat(),
                 exit_price=exit_price,
             )
         )
@@ -854,13 +853,13 @@ def managed_positions_close(
 # snapshots / scan_runs (bot helpers)
 # ---------------------------------------------------------------------------
 
-def snapshots_max_scan_date() -> Optional[str]:
+def snapshots_max_scan_date() -> str | None:
     """SELECT MAX(scan_date) FROM snapshots"""
     with session_scope() as s:
         return s.execute(select(func.max(Snapshot.scan_date))).scalar()
 
 
-def scan_runs_latest_success() -> Optional[str]:
+def scan_runs_latest_success() -> str | None:
     """scan_timestamp of the latest successful scan_run, else None."""
     with session_scope() as s:
         return s.execute(
@@ -872,10 +871,10 @@ def scan_runs_latest_success() -> Optional[str]:
 
 
 def _utcnow() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
-def _read_df(sql: str, params: Optional[dict] = None) -> pd.DataFrame:
+def _read_df(sql: str, params: dict | None = None) -> pd.DataFrame:
     return pd.read_sql(text(sql), get_engine(), params=params or {})
 
 
@@ -909,9 +908,9 @@ def risk_state_get(*, ensure: bool = True) -> dict:
 def risk_state_set_halted(
     halted: bool,
     *,
-    reason: Optional[str] = None,
-    tripped_at: Optional[str] = None,
-    tripped_by: Optional[str] = None,
+    reason: str | None = None,
+    tripped_at: str | None = None,
+    tripped_by: str | None = None,
 ) -> None:
     """Trip (halted=1 + reason/at/by) or resume (halted=0, fields NULL)."""
     with session_scope() as s:
@@ -938,8 +937,8 @@ def risk_events_insert(
     event_type: str,
     detail: str,
     *,
-    strategy: Optional[str] = None,
-    ts: Optional[str] = None,
+    strategy: str | None = None,
+    ts: str | None = None,
 ) -> int:
     """INSERT INTO risk_events (ts, event_type, strategy, detail)."""
     with session_scope() as s:
@@ -956,10 +955,10 @@ def risk_events_insert(
 
 def risk_events_list(
     *,
-    limit: Optional[int] = None,
-    event_type: Optional[str] = None,
-    strategy: Optional[str] = None,
-    since: Optional[str] = None,
+    limit: int | None = None,
+    event_type: str | None = None,
+    strategy: str | None = None,
+    since: str | None = None,
     newest_first: bool = True,
 ) -> list[dict]:
     """Filtered risk_events rows."""
@@ -1003,7 +1002,7 @@ def equity_snapshots_insert(
         return int(obj.id) if obj.id is not None else 0
 
 
-def equity_snapshots_latest() -> Optional[dict]:
+def equity_snapshots_latest() -> dict | None:
     """Latest snapshot (id DESC). Columns used by latest_equity()."""
     with session_scope() as s:
         obj = s.execute(
@@ -1019,9 +1018,9 @@ def equity_snapshots_latest() -> Optional[dict]:
         }
 
 
-def equity_snapshots_day_start(on: Optional[date] = None) -> Optional[float]:
+def equity_snapshots_day_start(on: date | None = None) -> float | None:
     """First snapshot equity of the given UTC day (ts >= ISO date)."""
-    on = on or datetime.now(timezone.utc).date()
+    on = on or datetime.now(UTC).date()
     with session_scope() as s:
         val = s.execute(
             select(EquitySnapshot.equity)
@@ -1060,7 +1059,7 @@ def equity_snapshots_daily_avg(days: int = 7) -> list[EquityDailyAvgRow]:
 # strategy_state
 # ---------------------------------------------------------------------------
 
-def strategy_state_get(name: str) -> Optional[dict]:
+def strategy_state_get(name: str) -> dict | None:
     """SELECT * FROM strategy_state WHERE name=?"""
     with session_scope() as s:
         obj = s.get(StrategyState, name)
@@ -1080,8 +1079,8 @@ def strategy_state_upsert(
     name: str,
     *,
     lifecycle: str,
-    updated_at: Optional[str] = None,
-    updated_by: Optional[str] = None,
+    updated_at: str | None = None,
+    updated_by: str | None = None,
 ) -> None:
     """INSERT lifecycle row; ON CONFLICT update lifecycle/updated_* only."""
     ts = updated_at or _utcnow()
@@ -1107,7 +1106,7 @@ def strategy_state_insert_ignore(
     name: str,
     lifecycle: str,
     *,
-    updated_at: Optional[str] = None,
+    updated_at: str | None = None,
     updated_by: str = "config",
 ) -> int:
     """INSERT OR IGNORE into strategy_state. Returns 1 if inserted else 0."""
@@ -1127,7 +1126,7 @@ def strategy_state_set_enabled(
     name: str,
     enabled: bool,
     *,
-    updated_at: Optional[str] = None,
+    updated_at: str | None = None,
     updated_by: str = "operator",
 ) -> None:
     """INSERT (lifecycle=paper, enabled) ON CONFLICT UPDATE enabled/updated_*."""
@@ -1154,7 +1153,7 @@ def strategy_state_set_enabled(
 def strategy_state_clear_enabled(
     name: str,
     *,
-    updated_at: Optional[str] = None,
+    updated_at: str | None = None,
     updated_by: str = "operator",
 ) -> None:
     """UPDATE strategy_state SET enabled=NULL ... WHERE name=?"""
@@ -1184,7 +1183,7 @@ def strategy_state_set_execution_mode(
     name: str,
     mode: str,
     *,
-    updated_at: Optional[str] = None,
+    updated_at: str | None = None,
     updated_by: str = "operator",
 ) -> None:
     """INSERT (lifecycle=paper, execution_mode) ON CONFLICT UPDATE mode/updated_*."""
@@ -1211,7 +1210,7 @@ def strategy_state_set_execution_mode(
 def strategy_state_clear_execution_mode(
     name: str,
     *,
-    updated_at: Optional[str] = None,
+    updated_at: str | None = None,
     updated_by: str = "operator",
 ) -> None:
     """UPDATE strategy_state SET execution_mode=NULL ... WHERE name=?"""
@@ -1241,7 +1240,7 @@ def strategy_state_execution_mode_overrides() -> dict[str, str]:
 # job_runs
 # ---------------------------------------------------------------------------
 
-def job_runs_start(job_name: str, *, started_at: Optional[str] = None) -> int:
+def job_runs_start(job_name: str, *, started_at: str | None = None) -> int:
     """INSERT INTO job_runs (job_name, started_at). Returns id."""
     with session_scope() as s:
         obj = JobRun(job_name=job_name, started_at=started_at or _utcnow())
@@ -1254,9 +1253,9 @@ def job_runs_finish(
     run_id: int,
     *,
     success: int,
-    stats_json: Optional[str] = None,
-    error: Optional[str] = None,
-    finished_at: Optional[str] = None,
+    stats_json: str | None = None,
+    error: str | None = None,
+    finished_at: str | None = None,
 ) -> None:
     """UPDATE job_runs SET finished_at, success, stats_json, error WHERE id=?"""
     with session_scope() as s:
@@ -1272,8 +1271,8 @@ def job_runs_finish(
         )
 
 
-def job_runs_list(*, name: Optional[str] = None, limit: int = 20,
-                  success: Optional[int] = None) -> list[JobRunRow]:
+def job_runs_list(*, name: str | None = None, limit: int = 20,
+                  success: int | None = None) -> list[JobRunRow]:
     """Recent job_runs, optionally filtered by job_name / success."""
     with session_scope() as s:
         stmt = select(JobRun)
@@ -1285,7 +1284,7 @@ def job_runs_list(*, name: Optional[str] = None, limit: int = 20,
         return [_row_dict(r) for r in s.execute(stmt).scalars().all()]
 
 
-def job_runs_latest(job_name: str, *, success: Optional[int] = None) -> Optional[JobRunRow]:
+def job_runs_latest(job_name: str, *, success: int | None = None) -> JobRunRow | None:
     """Most recent row for a job_name."""
     rows = job_runs_list(name=job_name, limit=1, success=success)
     return rows[0] if rows else None
@@ -1310,12 +1309,12 @@ def job_runs_failed(limit: int = 10) -> list[JobRunRow]:
 def data_catalog_upsert(
     dataset: str,
     *,
-    symbol: Optional[str] = None,
-    as_of_date: Optional[str] = None,
+    symbol: str | None = None,
+    as_of_date: str | None = None,
     source: str = "unknown",
-    available_at: Optional[str] = None,
+    available_at: str | None = None,
     pit_safe: bool = True,
-    ingested_at: Optional[str] = None,
+    ingested_at: str | None = None,
 ) -> int:
     """INSERT INTO data_catalog (always-insert; name matches the plan)."""
     ts = _utcnow()
@@ -1338,9 +1337,9 @@ def data_catalog_query(
     dataset: str,
     decision_time: str,
     *,
-    symbol: Optional[str] = None,
-    as_of_start: Optional[str] = None,
-    as_of_end: Optional[str] = None,
+    symbol: str | None = None,
+    as_of_start: str | None = None,
+    as_of_end: str | None = None,
     pit_only: bool = True,
 ) -> list[str]:
     """Distinct as_of_dates knowable at decision_time."""
@@ -1366,7 +1365,7 @@ def data_catalog_query(
         return [r[0] for r in s.execute(text(sql), params).all()]
 
 
-def data_catalog_latest(dataset: str, symbol: Optional[str] = None) -> Optional[dict]:
+def data_catalog_latest(dataset: str, symbol: str | None = None) -> dict | None:
     """Most recent catalog row for a dataset (optional symbol)."""
     with session_scope() as s:
         stmt = select(DataCatalog).where(DataCatalog.dataset == dataset)
@@ -1386,7 +1385,7 @@ def model_registry_register(
     path: str,
     sha256: str,
     *,
-    trained_at: Optional[str] = None,
+    trained_at: str | None = None,
 ) -> int:
     """INSERT OR IGNORE then return the row id for (name, sha256)."""
     with session_scope() as s:
@@ -1409,7 +1408,7 @@ def model_registry_register(
         return int(obj.id) if obj.id is not None else 0
 
 
-def model_registry_promote(name: str, sha256: str, *, promoted_at: Optional[str] = None) -> None:
+def model_registry_promote(name: str, sha256: str, *, promoted_at: str | None = None) -> None:
     """UPDATE model_registry SET promoted_at=? WHERE name=? AND sha256=?"""
     with session_scope() as s:
         s.execute(
@@ -1419,7 +1418,7 @@ def model_registry_promote(name: str, sha256: str, *, promoted_at: Optional[str]
         )
 
 
-def model_registry_get_active(name: str) -> Optional[dict]:
+def model_registry_get_active(name: str) -> dict | None:
     """Most recently promoted (fallback: latest trained) artifact for name."""
     with session_scope() as s:
         obj = s.execute(
@@ -1445,12 +1444,12 @@ def model_registry_list() -> list[dict]:
 def trade_events_insert(
     event_type: str,
     *,
-    symbol: Optional[str] = None,
-    strategy: Optional[str] = None,
-    qty: Optional[float] = None,
-    price: Optional[float] = None,
-    detail: Optional[str] = None,
-    ts: Optional[str] = None,
+    symbol: str | None = None,
+    strategy: str | None = None,
+    qty: float | None = None,
+    price: float | None = None,
+    detail: str | None = None,
+    ts: str | None = None,
 ) -> int:
     """INSERT INTO trade_events."""
     with session_scope() as s:
@@ -1470,7 +1469,7 @@ def trade_events_insert(
 
 def trade_events_list(
     *,
-    event_type: Optional[str] = None,
+    event_type: str | None = None,
     limit: int = 20,
 ) -> list[TradeEventRow]:
     """SELECT * FROM trade_events [WHERE event_type=?] ORDER BY id DESC LIMIT ?"""
@@ -1486,7 +1485,7 @@ def trade_events_list(
 # adopted_positions / alpaca_positions
 # ---------------------------------------------------------------------------
 
-def adopted_positions_insert(symbol: str, adopted_at: Optional[str] = None) -> None:
+def adopted_positions_insert(symbol: str, adopted_at: str | None = None) -> None:
     """INSERT OR IGNORE INTO adopted_positions."""
     with session_scope() as s:
         stmt = sqlite_insert(AdoptedPosition).values(
@@ -1506,16 +1505,16 @@ def adopted_positions_symbols() -> set[str]:
 def alpaca_positions_insert(
     *,
     ts: str,
-    symbol: Optional[str] = None,
-    qty: Optional[float] = None,
-    side: Optional[str] = None,
-    avg_entry_price: Optional[float] = None,
-    current_price: Optional[float] = None,
-    market_value: Optional[float] = None,
-    unrealized_pl: Optional[float] = None,
-    strategy: Optional[str] = None,
+    symbol: str | None = None,
+    qty: float | None = None,
+    side: str | None = None,
+    avg_entry_price: float | None = None,
+    current_price: float | None = None,
+    market_value: float | None = None,
+    unrealized_pl: float | None = None,
+    strategy: str | None = None,
     managed: int = 0,
-    run_id: Optional[int] = None,
+    run_id: int | None = None,
 ) -> int:
     """INSERT INTO alpaca_positions."""
     with session_scope() as s:
@@ -1550,7 +1549,7 @@ def alpaca_positions_list(limit: int = 20) -> list[dict]:
 # managed_positions extras
 # ---------------------------------------------------------------------------
 
-def managed_positions_close_by_id(row_id: int, closed_at: Optional[str] = None) -> int:
+def managed_positions_close_by_id(row_id: int, closed_at: str | None = None) -> int:
     """Mark one managed_positions row closed by id."""
     with session_scope() as s:
         result = s.execute(
@@ -1630,7 +1629,7 @@ def ff_ladders_count_armed() -> int:
         )
 
 
-def ff_ladders_armed_id_for_ticker(ticker: str) -> Optional[int]:
+def ff_ladders_armed_id_for_ticker(ticker: str) -> int | None:
     """id of an armed ladder for ``ticker``, or None."""
     with session_scope() as s:
         row = s.execute(
@@ -1639,7 +1638,7 @@ def ff_ladders_armed_id_for_ticker(ticker: str) -> Optional[int]:
         return int(row[0]) if row else None
 
 
-def ff_ladders_insert(ticker: str, candidate_json: str, armed_by: Optional[int] = None) -> int:
+def ff_ladders_insert(ticker: str, candidate_json: str, armed_by: int | None = None) -> int:
     """INSERT a new armed ladder; returns the new id."""
     with session_scope() as s:
         obj = FfLadder(ticker=ticker, candidate_json=candidate_json, armed_by=armed_by)
@@ -1676,7 +1675,7 @@ def ff_ladders_load_armed() -> list[dict]:
 
 def ff_ladders_update_state(
     ladder_id: int,
-    order_id: Optional[str],
+    order_id: str | None,
     rung: int,
     status: str,
 ) -> None:
@@ -1709,7 +1708,7 @@ def scan_runs_recent(limit: int = 10) -> list[dict]:
         return [dict(r) for r in rows]
 
 
-def scanner_scan_outputs_latest() -> tuple[Optional[str], list[dict]]:
+def scanner_scan_outputs_latest() -> tuple[str | None, list[dict]]:
     """Rows for the latest scan_timestamp in scanner_scan_outputs."""
     with session_scope() as s:
         latest = s.execute(
@@ -2122,7 +2121,7 @@ def snapshots_update_iv(snapshot_ids: list[int], features: dict) -> None:
 def snapshots_mark_iv_skip(
     snapshot_ids: list[int],
     error: str,
-    partial: Optional[dict] = None,
+    partial: dict | None = None,
 ) -> None:
     """Record collection_error (and optional rv/hv) on a batch of ids."""
     if not snapshot_ids:
@@ -2227,8 +2226,8 @@ def snapshots_coalesce_features(snapshot_id: int, feats: dict) -> list[str]:
 def snapshots_iv_gap_rows(
     *,
     with_outcomes_only: bool = False,
-    scan_date_since: Optional[str] = None,
-    limit: Optional[int] = None,
+    scan_date_since: str | None = None,
+    limit: int | None = None,
 ) -> list[dict]:
     """has_options=1 rows with NULL atm_iv_near; labeled / recent first."""
     where = "atm_iv_near IS NULL AND has_options = 1"
@@ -2425,7 +2424,7 @@ def snapshots_usable_outcome_count(ticker: str) -> int:
     return int(rows[0]["n"] if rows else 0)
 
 
-def snapshots_outcome_row(ticker: str, earnings_date: str) -> Optional[dict]:
+def snapshots_outcome_row(ticker: str, earnings_date: str) -> dict | None:
     """id / actual_move_pct / outcome_fetched_at for ticker+earnings_date."""
     rows = _fetchall("SELECT id, actual_move_pct, outcome_fetched_at FROM snapshots "
         "WHERE ticker = :ticker AND earnings_date = :earnings_date "
@@ -2494,7 +2493,7 @@ def snapshots_distinct_tickers() -> list[str]:
     return [r["ticker"] for r in _fetchall("SELECT DISTINCT ticker FROM snapshots", {})]
 
 
-def snapshots_usable_counts_by_ticker(universe: Optional[list[str]] = None) -> dict[str, int]:
+def snapshots_usable_counts_by_ticker(universe: list[str] | None = None) -> dict[str, int]:
     if not universe:
         return {}
     params = {f"t{i}": t for i, t in enumerate(universe)}
@@ -2618,7 +2617,7 @@ def daily_signals_history(
     return [r["v"] for r in rows]
 
 
-def snapshots_latest_price(ticker: str) -> Optional[float]:
+def snapshots_latest_price(ticker: str) -> float | None:
     """Most recent non-null snapshots.price for ticker."""
     with session_scope() as s:
         row = s.execute(

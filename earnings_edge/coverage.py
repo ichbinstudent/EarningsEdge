@@ -13,7 +13,6 @@ Pure read queries + list selection: no network, no writes.
 from __future__ import annotations
 
 import sqlite3
-from typing import Optional
 
 from earnings_edge.db.repositories import (
     snapshots_distinct_tickers,
@@ -34,7 +33,7 @@ _USABLE_OUTCOME = (
 
 
 def hist_move_coverage(
-    universe: Optional[list[str]] = None,
+    universe: list[str] | None = None,
     min_events: int = DEFAULT_MIN_EVENTS,
 ) -> dict:
     """Fraction of the earnings universe passing the FF hist gate.

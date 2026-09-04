@@ -7,8 +7,6 @@ An empty allow-list is not “everyone” — that was the old fail-open hole.
 from __future__ import annotations
 
 import os
-from typing import Optional
-
 
 AUTH_REFUSED = (
     "⛔ Operator lock is on and this chat is not authorized "
@@ -20,7 +18,7 @@ AUTH_UNCONFIGURED = (
 )
 
 
-def operator_chat_ids(env: Optional[dict] = None) -> list[int]:
+def operator_chat_ids(env: dict | None = None) -> list[int]:
     """Parse the allow-list. Empty ⇒ lock is unconfigured (fail closed)."""
     src = env if env is not None else os.environ
     raw = (src.get("TELEGRAM_APPROVAL_CHAT_IDS") or src.get("TELEGRAM_APPROVAL_CHAT_ID") or "").strip()
@@ -38,11 +36,11 @@ def operator_chat_ids(env: Optional[dict] = None) -> list[int]:
     return out
 
 
-def operators_configured(env: Optional[dict] = None) -> bool:
+def operators_configured(env: dict | None = None) -> bool:
     return bool(operator_chat_ids(env))
 
 
-def is_operator(chat_id: Optional[int], env: Optional[dict] = None) -> bool:
+def is_operator(chat_id: int | None, env: dict | None = None) -> bool:
     """True only when an allow-list exists *and* chat_id is on it."""
     if chat_id is None:
         return False
@@ -52,5 +50,5 @@ def is_operator(chat_id: Optional[int], env: Optional[dict] = None) -> bool:
     return int(chat_id) in allowed
 
 
-def auth_message(env: Optional[dict] = None) -> str:
+def auth_message(env: dict | None = None) -> str:
     return AUTH_UNCONFIGURED if not operators_configured(env) else AUTH_REFUSED

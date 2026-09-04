@@ -5,16 +5,14 @@ All writes audit ``trade_events``. Broker mutations go through
 ``mark_group_closed`` only after the broker side is gone or the close filled.
 """
 from __future__ import annotations
-from framework.risk.killswitch import record_event
 
 import logging
 from datetime import date
-from typing import Optional
 
 from earnings_edge.db import adopted_positions_insert, trade_events_insert
+from framework.risk.killswitch import record_event
 
 from ..execution.managed import mark_group_closed, open_groups, record_open_positions
-from .book import ticker_of
 from .guards import parse_occ
 
 logger = logging.getLogger("framework.positions.book_actions")
@@ -122,7 +120,7 @@ def mark_missing_closed(group_id: str, *, by: str = "operator") -> dict:
     return {"ok": True, "local_rows": n}
 
 
-def _event(event_type: str, symbol: Optional[str], strategy: Optional[str],
+def _event(event_type: str, symbol: str | None, strategy: str | None,
            detail: str = "") -> None:
     trade_events_insert(
         event_type, symbol=symbol, strategy=strategy, detail=detail,
@@ -136,14 +134,14 @@ def _f(value):
         return None
 
 
-def find_broker_pos(positions: list[dict], symbol: str) -> Optional[dict]:
+def find_broker_pos(positions: list[dict], symbol: str) -> dict | None:
     for p in positions:
         if p.get("symbol") == symbol:
             return p
     return None
 
 
-def find_group_id(symbol: str) -> Optional[str]:
+def find_group_id(symbol: str) -> str | None:
     for g in open_groups():
         if any(leg.symbol == symbol for leg in g.legs):
             return g.group_id

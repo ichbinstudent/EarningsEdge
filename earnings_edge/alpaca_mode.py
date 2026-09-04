@@ -7,7 +7,6 @@ else — tests, preflight without --i-mean-live, unset env — stays paper.
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 
 def _flag(name: str, default: str = "0") -> bool:
@@ -43,9 +42,9 @@ def broker_label() -> str:
 
 
 def resolve_credentials(
-    api_key: Optional[str] = None,
-    api_secret: Optional[str] = None,
-    paper: Optional[bool] = None,
+    api_key: str | None = None,
+    api_secret: str | None = None,
+    paper: bool | None = None,
 ) -> tuple[str, str, bool]:
     """Return (key, secret, is_paper).
 

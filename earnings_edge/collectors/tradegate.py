@@ -8,7 +8,6 @@ not included, so callers should use mid.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 import requests
 
@@ -32,8 +31,8 @@ class TradegateCollector:
 
     def __init__(
         self,
-        index_isins: Optional[tuple[str, ...]] = None,
-        session: Optional[requests.Session] = None,
+        index_isins: tuple[str, ...] | None = None,
+        session: requests.Session | None = None,
     ):
         self.index_isins = tuple(
             i.strip() for i in (index_isins or DEFAULT_INDEX_ISINS) if i.strip()

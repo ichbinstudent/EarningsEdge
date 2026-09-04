@@ -14,8 +14,7 @@ written, realized PnL recorded — which also feeds lifecycle promotion stats.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
-from typing import Callable, Optional
+from datetime import UTC, date, datetime
 
 from earnings_edge import cards
 from earnings_edge.db import (
@@ -31,24 +30,29 @@ from ..core.registry import StrategyRegistry, get_registry
 from ..execution.managed import close_positions, open_groups
 from ..execution.order_manager import LimitWalkPolicy, ManagedOrder, OrderManager
 from .exits import (
-    ExitSignal, MarketView, PositionGroup, build_exit_rules, leg_mid,
-    remaining_close_plan, unit_structure_value,
+    ExitSignal,
+    MarketView,
+    PositionGroup,
+    build_exit_rules,
+    leg_mid,
+    remaining_close_plan,
+    unit_structure_value,
 )
 
 logger = logging.getLogger("framework.positions.manager")
 
 
 def _utcnow() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class ExitManager:
     def __init__(
         self,
         client,
-        registry: Optional[StrategyRegistry] = None,
-        order_manager: Optional[OrderManager] = None,
-        today: Optional[date] = None,
+        registry: StrategyRegistry | None = None,
+        order_manager: OrderManager | None = None,
+        today: date | None = None,
     ):
         self.client = client
         self.registry = registry or get_registry()
@@ -76,7 +80,7 @@ class ExitManager:
             snaps = {}
 
         cal = get_calendar()
-        today = self._today or datetime.now(timezone.utc).date()
+        today = self._today or datetime.now(UTC).date()
         minutes_to_close = self._minutes_to_close()
 
         for group in groups:
@@ -87,7 +91,7 @@ class ExitManager:
                 out["errors"].append(f"{group.group_id}: {exc}")
         return out
 
-    def _minutes_to_close(self) -> Optional[int]:
+    def _minutes_to_close(self) -> int | None:
         """Minutes until the session closes, or None when the market is
         shut or the clock can't be read — ScheduledExit only fires with a
         real number here, so an unreadable clock fails safe (no auto-close
@@ -108,7 +112,7 @@ class ExitManager:
             return None
 
     def _evaluate_group(self, group: PositionGroup, snaps: dict, cal,
-                        today: date, out: dict, minutes_to_close: Optional[int] = None) -> None:
+                        today: date, out: dict, minutes_to_close: int | None = None) -> None:
         cfg = self.registry.get(group.strategy)
         rules = build_exit_rules(cfg.exits) if cfg else []
         if not rules:
@@ -166,7 +170,7 @@ class ExitManager:
         """Work a closing order; fall back to remaining-leg closes when the
         combo quote is gone (expired near). Marks the group closed on fill
         or when every remaining unquoted leg is past expiry."""
-        today = self._today or datetime.now(timezone.utc).date()
+        today = self._today or datetime.now(UTC).date()
         try:
             snaps = self.client.get_option_snapshots_bulk(
                 *[leg.symbol for leg in group.legs]) or {}
@@ -207,7 +211,7 @@ class ExitManager:
             side = "buy" if group.credit else "sell"
             qty = max(int(group.qty), 1)
 
-            def quote_fn() -> Optional[float]:
+            def quote_fn() -> float | None:
                 try:
                     now_snaps = self.client.get_option_snapshots_bulk(
                         *[leg.symbol for leg in close_legs]) or {}
@@ -219,7 +223,7 @@ class ExitManager:
             mo = self.order_manager.execute(
                 inverted, qty, LimitWalkPolicy(steps=3), quote_fn,
                 side=side,
-                client_order_id=f"exit_{group.group_id}_{int(datetime.now(timezone.utc).timestamp())}",
+                client_order_id=f"exit_{group.group_id}_{int(datetime.now(UTC).timestamp())}",
             )
         else:
             # Remaining-leg path: one single-leg order per still-quoted leg.
@@ -235,7 +239,7 @@ class ExitManager:
                 side = inverted[0]["side"]
                 qty = max(int(leg.qty), 1)
 
-                def quote_fn(leg=leg) -> Optional[float]:
+                def quote_fn(leg=leg) -> float | None:
                     try:
                         now_snaps = self.client.get_option_snapshots_bulk(leg.symbol) or {}
                     except Exception:
@@ -248,7 +252,7 @@ class ExitManager:
                     side=side,
                     client_order_id=(
                         f"exit_{group.group_id}_{leg.symbol}_"
-                        f"{int(datetime.now(timezone.utc).timestamp())}"
+                        f"{int(datetime.now(UTC).timestamp())}"
                     ),
                 )
                 if last.state in ("filled", "partial"):
@@ -292,7 +296,7 @@ class ExitManager:
 
     # ── proposals --------------------------------------------------------------
 
-    def propose_exit(self, group: PositionGroup, signal: ExitSignal) -> Optional[dict]:
+    def propose_exit(self, group: PositionGroup, signal: ExitSignal) -> dict | None:
         """Insert a deduped approval card for a time-based exit."""
         legs_txt = " / ".join(
             f"{'SELL' if leg.side == 'sell' else 'BUY'} {cards.code(leg.symbol)}"
@@ -318,7 +322,7 @@ class ExitManager:
         self._event("exit_signal", group, detail=f"{signal.rule}: {signal.reason}")
         return exit_proposals_get(pid)
 
-    def decide_exit(self, proposal_id: int, close: bool, decided_by: Optional[int] = None) -> dict:
+    def decide_exit(self, proposal_id: int, close: bool, decided_by: int | None = None) -> dict:
         """Handle an approval-card decision. close=True executes immediately."""
         row = exit_proposals_get(proposal_id)
         if row is None:
@@ -356,7 +360,7 @@ class ExitManager:
     # ── internals ----------------------------------------------------------------
 
     def _event(self, event_type: str, group: PositionGroup,
-               price: Optional[float] = None, detail: str = "") -> None:
+               price: float | None = None, detail: str = "") -> None:
         trade_events_insert(
             event_type,
             symbol=group.ticker,

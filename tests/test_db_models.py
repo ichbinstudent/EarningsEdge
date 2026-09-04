@@ -5,7 +5,6 @@ import sqlite3
 import pytest
 
 from earnings_edge.db import engine as db_engine
-from earnings_edge.db.models import Base
 
 PROD_DB = db_engine.DEFAULT_DB_PATH
 

@@ -35,7 +35,7 @@ if __name__ == "__main__":
             AND date(earnings_date, '-1 day') != scan_date
             LIMIT 10
         """)).fetchall()
-        print(f"Tickers where scan != ed-1 (first 10):")
+        print("Tickers where scan != ed-1 (first 10):")
         for r in special:
             print(f"  {r[0]} ed={r[1]} scan={r[2]}")
 

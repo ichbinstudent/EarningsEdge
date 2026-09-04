@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -93,7 +93,7 @@ def load_calendar_trades(db_path: Path) -> pd.DataFrame:
 
 def apply_data_quality_gates(df: pd.DataFrame, max_moneyness_error: float) -> tuple[pd.DataFrame, dict[str, Any]]:
     raw = {
-        "raw_rows": int(len(df)),
+        "raw_rows": len(df),
         "raw_pnl": float(df["pnl_dollars"].sum()) if not df.empty else 0.0,
     }
     if df.empty:
@@ -110,7 +110,7 @@ def apply_data_quality_gates(df: pd.DataFrame, max_moneyness_error: float) -> tu
             "rejected_bad_moneyness": int(reject_bad_moneyness.sum()),
             "rejected_non_positive_debit": int(reject_non_positive_debit.sum()),
             "rejected_negative_exit_value": int(reject_negative_exit_value.sum()),
-            "clean_rows": int(len(clean)),
+            "clean_rows": len(clean),
             "clean_pnl": float(clean["pnl_dollars"].sum()),
             "clean_win_rate": float((clean["pnl_dollars"] > 0).mean()) if len(clean) else None,
         }
@@ -269,7 +269,7 @@ def summarize_selection(name: str, df: pd.DataFrame, mask: np.ndarray) -> dict[s
         return None
     return {
         "name": name,
-        "n": int(len(selected)),
+        "n": len(selected),
         "coverage": float(len(selected) / len(df)),
         "pnl": float(selected["pnl_dollars"].sum()),
         "avg_pnl": float(selected["pnl_dollars"].mean()),
@@ -407,8 +407,8 @@ def train(args: argparse.Namespace) -> dict[str, Any]:
         "min_pnl": args.min_pnl,
         "min_return": args.min_return,
         "data_quality": quality,
-        "trained_at": datetime.now(timezone.utc).isoformat(),
-        "rows": int(len(clean)),
+        "trained_at": datetime.now(UTC).isoformat(),
+        "rows": len(clean),
         "positive_rate": None if regression else float(y.mean()),
         "target_mean": float(y.mean()),
         "holdout_metric": None if holdout_metric is None else float(holdout_metric),
@@ -417,8 +417,8 @@ def train(args: argparse.Namespace) -> dict[str, Any]:
         "holdout_results": holdout_results,
         "time_series_cv_top50": cv_summary,
         "train_fraction": args.train_fraction,
-        "train_rows": int(len(train_df)),
-        "test_rows": int(len(test_df)),
+        "train_rows": len(train_df),
+        "test_rows": len(test_df),
     }
     joblib.dump(artifact, args.output)
     meta_path = args.output.with_suffix(".json")

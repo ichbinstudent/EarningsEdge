@@ -9,22 +9,22 @@ from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
+from sqlalchemy import text
 
 from earnings_edge.alpaca_bridge import (
     MAX_DEBIT_VS_MID,
-    StrikeChangedError,
     StrategyBridge,
+    StrikeChangedError,
     debit_within_mid_cap,
     resolved_keeps_strike,
 )
 from earnings_edge.bot_scanner import quote_is_sane
+from earnings_edge.db import engine as db_engine
 from earnings_edge.fwd_factor import occ_symbol
 from earnings_edge.services.outcome_service import OutcomeService
 from framework.execution.reconcile import Reconciler
 from framework.jobs import run_job
 from framework.risk.equity import snapshot_equity
-from sqlalchemy import text
-from earnings_edge.db import engine as db_engine
 
 
 def test_qty_11_keeps_base_ratio_and_order_qty():

@@ -2,13 +2,14 @@
 """DEPRECATED fallback for the old paper-trade CLI. Daily path is bot.py."""
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import json
-from datetime import datetime, timezone
-from earnings_edge.alpaca_trading import AlpacaTradingClient, create_client
-from earnings_edge.trading_types import DataBundle
 import os
+from datetime import UTC, datetime
+
+from earnings_edge.alpaca_trading import create_client
 
 # Get buying power
 try:
@@ -22,7 +23,7 @@ except Exception:
     bp = 400000.0  # fallback from last known
 
 output = {
-    "timestamp": datetime.now(timezone.utc).isoformat(),
+    "timestamp": datetime.now(UTC).isoformat(),
     "strategies": {
         "calendar_call_ml": {"status": "no-signals", "trades": 0, "submitted": 0, "note": "All candidates DTE=0 (earnings today)"},
         "debit_size_exploit": {"status": "no-signals", "trades": 0, "submitted": 0, "note": "All candidates DTE=0 (earnings today)"},

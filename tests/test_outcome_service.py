@@ -8,18 +8,18 @@ import tempfile
 import unittest
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 from sqlalchemy import text
 
-from earnings_edge.db import engine as db_engine, insert_snapshot
+from earnings_edge.db import engine as db_engine
+from earnings_edge.db import insert_snapshot
 from earnings_edge.services.outcome_service import OutcomeService
 
 
 class FakePolygon:
     """Stand-in for :class:`PolygonClient` — returns canned bars."""
 
-    def __init__(self, bars: Optional[list[dict]] = None):
+    def __init__(self, bars: list[dict] | None = None):
         self.bars = bars if bars is not None else []
         self.calls: list[tuple] = []
 

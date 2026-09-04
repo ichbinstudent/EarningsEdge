@@ -1,26 +1,24 @@
 """Tests for positional option strategies."""
 from __future__ import annotations
 
-import pytest
-import numpy as np
-import pandas as pd
 from datetime import date
 
+import pandas as pd
+import pytest
+
+from earnings_edge.backtest.positional import (
+    POSITIONAL_STRATEGIES,
+    DirectionalCall,
+    DirectionalPut,
+    LongStraddle,
+    ShortStraddle,
+    VolRiskPremium,
+    run_positional,
+)
 from earnings_edge.trading_types import (
     DataBundle,
     Trade,
-    StrategyResult,
 )
-from earnings_edge.backtest.positional import (
-    ShortStraddle,
-    LongStraddle,
-    DirectionalCall,
-    DirectionalPut,
-    VolRiskPremium,
-    run_positional,
-    POSITIONAL_STRATEGIES,
-)
-
 
 # ---------------------------------------------------------------------------
 # Helpers

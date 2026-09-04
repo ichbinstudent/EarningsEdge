@@ -24,18 +24,14 @@ plus multi-strike structures priced from snapshot ATM IV:
 """
 from __future__ import annotations
 
-from earnings_edge.trading_types import Trade, StrategyResult, DataBundle
-
-from dataclasses import dataclass
+import logging
 from datetime import date
-from pathlib import Path
-from typing import Any, Dict, List, Optional
 
 import joblib
 import numpy as np
-import pandas as pd
 
-import logging
+from earnings_edge.trading_types import DataBundle, StrategyResult, Trade
+
 logger = logging.getLogger("positional_strategies")
 
 
@@ -562,7 +558,7 @@ POSITIONAL_STRATEGIES = {
 }
 
 
-def run_positional(bundle: DataBundle, strategies: Optional[List[str]] = None) -> Dict[str, StrategyResult]:
+def run_positional(bundle: DataBundle, strategies: list[str] | None = None) -> dict[str, StrategyResult]:
     results = {}
     selected = strategies or list(POSITIONAL_STRATEGIES.keys())
     for name in selected:

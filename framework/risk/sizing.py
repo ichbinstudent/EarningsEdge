@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -19,7 +18,7 @@ class SizeContext:
     equity: float
     buying_power: float
     price_per_unit: float            # debit paid (or credit received) per contract
-    max_loss_per_unit: Optional[float] = None  # defined-risk trades; None = price
+    max_loss_per_unit: float | None = None  # defined-risk trades; None = price
 
 
 class Sizer(ABC):

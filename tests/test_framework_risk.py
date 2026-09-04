@@ -2,19 +2,23 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
+from sqlalchemy import text
 
+from earnings_edge.db import engine as db_engine
 from framework.risk.equity import daily_pnl, day_start_equity, latest_equity, snapshot_equity
 from framework.risk.killswitch import KillSwitch
 from framework.risk.manager import RiskLimits, RiskManager
 from framework.risk.sizing import (
-    FixedDollarSizer, PercentOfPortfolioSizer, SizeContext, VolTargetSizer, build_sizer,
+    FixedDollarSizer,
+    PercentOfPortfolioSizer,
+    SizeContext,
+    VolTargetSizer,
+    build_sizer,
 )
-from sqlalchemy import text
-from earnings_edge.db import engine as db_engine
 
 
 @pytest.fixture
@@ -143,7 +147,7 @@ def test_vetoes_are_audited(conn):
 
 def test_daily_loss_trips_killswitch(conn):
     rm = RiskManager(RiskLimits(daily_loss_limit_pct=0.05))
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = datetime.now(UTC).date().isoformat()
     with db_engine.session_scope() as s:
         s.execute(
             text(

@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import time
 import logging
-from typing import Optional
+import time
 
 import yfinance as yf
 
-from .base import BaseCollector
 from ..config import session
 from ..settings import get_settings
+from .base import BaseCollector
 
 logger = logging.getLogger("earnings_edge.collectors.market_data")
 
@@ -36,7 +35,7 @@ class MarketDataCollector(BaseCollector):
         """Return a yf.Ticker with the shared session."""
         return yf.Ticker(symbol, session=session)
 
-    def get_price(self, symbol: str) -> Optional[float]:
+    def get_price(self, symbol: str) -> float | None:
         """Get latest close price with retry."""
         self._rate_limit()
 
@@ -53,7 +52,7 @@ class MarketDataCollector(BaseCollector):
             logger.warning("get_price(%s) failed: %s", symbol, exc)
             return None
 
-    def get_options_expiries(self, symbol: str) -> tuple[Optional[object], list[str]]:
+    def get_options_expiries(self, symbol: str) -> tuple[object | None, list[str]]:
         """Get option chain + expiry list with retry.
 
         Returns (chain, expiries). chain is None on failure.

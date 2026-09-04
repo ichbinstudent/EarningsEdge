@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Optional
 
 from .guards import occ_underlying, parse_occ
 
@@ -18,7 +17,7 @@ def ticker_of(symbol: str) -> str:
     return occ_underlying(symbol) or symbol
 
 
-def _f(value) -> Optional[float]:
+def _f(value) -> float | None:
     try:
         return float(value) if value is not None else None
     except (TypeError, ValueError):
@@ -32,13 +31,13 @@ class BookItem:
     ticker: str
     qty: float
     side: str                    # long | short | buy | sell
-    strategy: Optional[str] = None
-    group_id: Optional[str] = None
-    event_date: Optional[date] = None
-    expiry: Optional[date] = None
-    upl: Optional[float] = None
-    current_price: Optional[float] = None
-    avg_entry: Optional[float] = None
+    strategy: str | None = None
+    group_id: str | None = None
+    event_date: date | None = None
+    expiry: date | None = None
+    upl: float | None = None
+    current_price: float | None = None
+    avg_entry: float | None = None
 
 
 @dataclass
@@ -57,7 +56,7 @@ class Book:
 
 
 def classify_book(groups, broker_positions: list[dict],
-                  ignored: Optional[set[str]] = None) -> Book:
+                  ignored: set[str] | None = None) -> Book:
     """Diff open PositionGroups against Alpaca ``get_positions()`` rows.
 
     ``ignored`` is ``adopted_positions`` (operator Ignore / baseline adopt):

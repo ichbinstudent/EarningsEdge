@@ -8,8 +8,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from earnings_edge.db import insert_options_chain_rows, snapshots_optionable_universe
 
@@ -19,10 +18,10 @@ DEFAULT_MAX_TICKERS = 400
 HOURLY_MAX_TICKERS = 250
 
 
-def captured_hour(now: Optional[datetime] = None) -> str:
-    now = now or datetime.now(timezone.utc)
+def captured_hour(now: datetime | None = None) -> str:
+    now = now or datetime.now(UTC)
     if now.tzinfo is None:
-        now = now.replace(tzinfo=timezone.utc)
+        now = now.replace(tzinfo=UTC)
     return now.strftime("%Y-%m-%dT%H")
 
 
@@ -32,10 +31,10 @@ def default_underlyings(max_tickers: int = DEFAULT_MAX_TICKERS) -> list[str]:
 
 
 def row_for_contract(run_id: str, underlying: str, contract_ticker: str,
-                     snap: dict, *, now: Optional[datetime] = None) -> dict:
+                     snap: dict, *, now: datetime | None = None) -> dict:
     from earnings_edge.fwd_factor import occ_parse
 
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     bar = snap.get("dailyBar") or {}
     q = snap.get("latestQuote") or {}
     bid, ask = q.get("bp"), q.get("ap")
@@ -81,11 +80,11 @@ def row_for_contract(run_id: str, underlying: str, contract_ticker: str,
     }
 
 
-def collect(client, underlyings, *, run_id: Optional[str] = None,
+def collect(client, underlyings, *, run_id: str | None = None,
             dry_run: bool = False, sleep_s: float = 0.22) -> dict:
     """Pull chain for each underlying. Returns stats dict."""
-    run_id = run_id or datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    now = datetime.now(timezone.utc)
+    run_id = run_id or datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    now = datetime.now(UTC)
     inserted = 0
     api_calls = 0
     empty = 0
@@ -119,6 +118,7 @@ def collect(client, underlyings, *, run_id: Optional[str] = None,
 def run_hourly(max_tickers: int = HOURLY_MAX_TICKERS, dry_run: bool = False) -> dict:
     """Bot/job entry: resolve universe from DB, pull Alpaca, persist."""
     import os
+
     from earnings_edge.collectors.alpaca_options import AlpacaOptionsClient
 
     key = os.environ.get("APCA_API_KEY_ID", "")

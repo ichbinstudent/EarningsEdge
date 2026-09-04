@@ -13,19 +13,20 @@ caller owns data-source cost discipline.
 """
 
 from __future__ import annotations
-from framework.risk.killswitch import record_event
 
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Callable, Optional
+from datetime import UTC, datetime
+from typing import Callable
+
+from framework.risk.killswitch import record_event
 
 logger = logging.getLogger("framework.execution.order_manager")
 
 
 def _utcnow() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 # ── Pricing policies ---------------------------------------------------------
@@ -35,7 +36,7 @@ class PricingPolicy:
 
     name = "base"
 
-    def walk(self, mid: float, side: str) -> list[Optional[float]]:
+    def walk(self, mid: float, side: str) -> list[float | None]:
         raise NotImplementedError
 
 
@@ -44,7 +45,7 @@ class MidPricePolicy(PricingPolicy):
 
     name = "mid"
 
-    def walk(self, mid: float, side: str) -> list[Optional[float]]:
+    def walk(self, mid: float, side: str) -> list[float | None]:
         return [round(mid, 2)]
 
 
@@ -67,7 +68,7 @@ class LimitWalkPolicy(PricingPolicy):
         self.step_improve_bps = step_improve_bps
         self.final_improve_bps = final_improve_bps
 
-    def walk(self, mid: float, side: str) -> list[Optional[float]]:
+    def walk(self, mid: float, side: str) -> list[float | None]:
         sign = 1.0 if side == "buy" else -1.0
         prices = []
         for i in range(self.steps):
@@ -90,7 +91,7 @@ class ManagedOrder:
     state: str = "working"           # working | filled | partial | canceled | exhausted | error
     order_ids: list[str] = field(default_factory=list)
     filled_qty: float = 0.0
-    filled_avg_price: Optional[float] = None
+    filled_avg_price: float | None = None
     rungs_used: int = 0
     detail: str = ""
 
@@ -113,9 +114,9 @@ class OrderManager:
         legs: list[dict],
         qty: int,
         policy: PricingPolicy,
-        quote_fn: Callable[[], Optional[float]],
+        quote_fn: Callable[[], float | None],
         side: str = "buy",
-        client_order_id: Optional[str] = None,
+        client_order_id: str | None = None,
         time_in_force: str = "day",
     ) -> ManagedOrder:
         """Work an order through the policy's price walk.
@@ -123,7 +124,7 @@ class OrderManager:
         ``legs`` are Alpaca-shaped dicts (symbol/side/ratio_qty). ``quote_fn``
         returns the current net mid for the structure (debit positive for buys).
         """
-        cid = client_order_id or f"managed_{int(datetime.now(timezone.utc).timestamp())}"
+        cid = client_order_id or f"managed_{int(datetime.now(UTC).timestamp())}"
         mo = ManagedOrder(client_order_id=cid, side=side, qty=qty, policy=policy.name)
 
         mid = quote_fn()
@@ -132,7 +133,7 @@ class OrderManager:
             mo.detail = "no quote"
             return mo
 
-        order_id: Optional[str] = None
+        order_id: str | None = None
         for rung, price in enumerate(policy.walk(mid, side), 1):
             mo.rungs_used = rung
             try:
@@ -192,7 +193,7 @@ class OrderManager:
                 logger.warning("submit API error (attempt %d/3): %s", attempt, exc)
                 self._sleep(1.0 * (2 ** (attempt - 1)))
         raise RuntimeError("Submit failed")
-    def _poll_fill(self, order_id: str) -> Optional[tuple[float, Optional[float]]]:
+    def _poll_fill(self, order_id: str) -> tuple[float, float | None] | None:
         """(filled_qty, avg_price) once any fill is seen, else None.
         Calculates net price from legs if the parent order is empty."""
         # Poll up to 3 times, spaced out, rather than a single wait-and-give-up
@@ -206,10 +207,10 @@ class OrderManager:
                 record_event("silent_failure", f"order_manager get_order API error: {exc}")
                 logger.error("get_order API error: %s", exc, exc_info=True)
                 continue
-                
+
             status = (order.get("status") or "").lower()
             filled_qty = float(order.get("filled_qty") or 0)
-            
+
             if status == "filled" or filled_qty > 0:
                 avg = order.get("filled_avg_price")
                 # Fallback to compute net price from legs if Alpaca omits it on the parent

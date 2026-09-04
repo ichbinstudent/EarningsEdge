@@ -11,14 +11,14 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Ensure the project root is importable
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR.parent))
 
-from earnings_edge.alpaca_bridge import run_auto_trade, BEST_STRATEGIES
+from earnings_edge.alpaca_bridge import BEST_STRATEGIES, run_auto_trade
 
 logging.basicConfig(
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
@@ -105,7 +105,7 @@ def send_telegram_notification(chat_id: str, text: str) -> bool:
 def format_summary(summary: dict) -> str:
     """Format execution summary (plain text — safe for Telegram and logs)."""
     lines = [
-        f"📊 Paper Trade Execution — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
+        f"📊 Paper Trade Execution — {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}",
         f"Buying Power: ${summary.get('buying_power', 0):,.2f}",
         "Mode: LIVE",
         "",

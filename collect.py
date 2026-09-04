@@ -9,7 +9,6 @@ import sys
 import time
 from datetime import date, datetime
 from pathlib import Path
-from typing import Optional
 
 import pytz
 
@@ -17,14 +16,14 @@ import pytz
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from earnings_edge.analyzer import OptionsAnalyzer
-from earnings_edge.config import get_logger, setup_logging
 from earnings_edge.collectors.earnings_calendar import EarningsCalendarCollector
-from earnings_edge.earnings import scan_dates
-from earnings_edge.models import EarningsCandidate
+from earnings_edge.config import get_logger, setup_logging
 from earnings_edge.db import insert_snapshot
+from earnings_edge.earnings import scan_dates
 
 setup_logging()
 logger = get_logger("collector")
@@ -32,7 +31,7 @@ logger = get_logger("collector")
 
 def collect_features(
     ticker: str,
-    earnings_date: Optional[date],
+    earnings_date: date | None,
 ) -> dict:
     """
     Collect ALL available features for *ticker*.
@@ -122,7 +121,7 @@ def collect_features(
     return row
 
 
-def run_collection(scan_date: Optional[str] = None) -> int:
+def run_collection(scan_date: str | None = None) -> int:
     """
     Run the full daily collection. Returns number of snapshots stored.
     """

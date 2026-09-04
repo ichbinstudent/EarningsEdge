@@ -1,6 +1,5 @@
 """Selenium-based Market Chameleon scraping for historical win-rate data."""
 
-import logging
 import re
 import threading
 import time

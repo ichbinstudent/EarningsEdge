@@ -8,8 +8,7 @@ loss limit, and %-based sizers read the latest equity.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
-from typing import Optional
+from datetime import UTC, date, datetime
 
 from earnings_edge.db import (
     equity_snapshots_day_start,
@@ -21,7 +20,7 @@ logger = logging.getLogger("framework.risk.equity")
 
 
 def _utcnow() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def snapshot_equity(client, source: str = "alpaca") -> dict:
@@ -44,16 +43,16 @@ def snapshot_equity(client, source: str = "alpaca") -> dict:
     return row
 
 
-def latest_equity() -> Optional[dict]:
+def latest_equity() -> dict | None:
     return equity_snapshots_latest()
 
 
-def day_start_equity(on: Optional[date] = None) -> Optional[float]:
+def day_start_equity(on: date | None = None) -> float | None:
     """First snapshot of the given UTC day (daily-loss baseline)."""
     return equity_snapshots_day_start(on)
 
 
-def daily_pnl(equity_now: float, on: Optional[date] = None) -> Optional[float]:
+def daily_pnl(equity_now: float, on: date | None = None) -> float | None:
     """Current equity minus day-start equity (None when no baseline)."""
     start = day_start_equity(on)
     if start is None or start <= 0:

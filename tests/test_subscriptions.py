@@ -1,13 +1,13 @@
 """Tests for per-strategy signal subscriptions, routing, funnel line, setups."""
 from __future__ import annotations
 
+from earnings_edge.bot_views import SETUP_STRATEGIES, setup_card, setup_menu_text
 from earnings_edge.subscriptions import (
     SIGNAL_STRATEGIES,
     StrategySubscriptions,
     funnel_line,
     route_proposals,
 )
-from earnings_edge.bot_views import SETUP_STRATEGIES, setup_card, setup_menu_text
 
 
 def test_default_is_subscribed(tmp_path):

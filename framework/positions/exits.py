@@ -16,9 +16,8 @@ P&L convention (per-share, matching ``managed_positions.entry_price``):
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from datetime import date, datetime
-from typing import Optional
+from dataclasses import dataclass
+from datetime import date
 
 # Structure sides that collect premium at entry (everything else is debit).
 CREDIT_SIDES = {"SHORT_STRADDLE", "SHORT_STRANGLE", "IRON_CONDOR"}
@@ -31,7 +30,7 @@ class LegPos:
     qty: float = 1.0
     option_type: str = ""
     strike: float = 0.0
-    expiry: Optional[date] = None
+    expiry: date | None = None
 
 
 @dataclass
@@ -42,9 +41,9 @@ class PositionGroup:
     entry_price: float          # net per-share premium at entry (positive)
     opened_at: str              # ISO ts
     credit: bool = False        # True = premium received at entry
-    event_date: Optional[date] = None   # e.g. earnings date
+    event_date: date | None = None   # e.g. earnings date
     qty: int = 1
-    exit_by: Optional[date] = None   # structural deadline computed at entry
+    exit_by: date | None = None   # structural deadline computed at entry
                                       # (e.g. a calendar's near-leg expiry) —
                                       # None when the structure has no
                                       # differential-expiry deadline
@@ -60,11 +59,11 @@ class PositionGroup:
 @dataclass
 class MarketView:
     """What rules see: structure value per share, date/time context."""
-    value_now: Optional[float]   # net mid: +mid long legs, −mid short legs
+    value_now: float | None   # net mid: +mid long legs, −mid short legs
     today: date
     sessions_since_open: int
-    sessions_until_event: Optional[int] = None
-    minutes_to_close: Optional[int] = None   # None when unknown (clock fetch failed)
+    sessions_until_event: int | None = None
+    minutes_to_close: int | None = None   # None when unknown (clock fetch failed)
 
 
 @dataclass
@@ -72,12 +71,12 @@ class ExitSignal:
     rule: str
     reason: str
     auto: bool                   # True → close immediately; False → approval card
-    pnl_pct: Optional[float] = None
+    pnl_pct: float | None = None
 
 
 # ── P&L ---------------------------------------------------------------------
 
-def pnl_pct(group: PositionGroup, value_now: float) -> Optional[float]:
+def pnl_pct(group: PositionGroup, value_now: float) -> float | None:
     if group.entry_price <= 0:
         return None
     if group.credit:
@@ -85,7 +84,7 @@ def pnl_pct(group: PositionGroup, value_now: float) -> Optional[float]:
     return (value_now - group.entry_price) / group.entry_price
 
 
-def structure_value(legs: list[LegPos], snaps: dict[str, dict]) -> Optional[float]:
+def structure_value(legs: list[LegPos], snaps: dict[str, dict]) -> float | None:
     """Net mid value per share: +mid for long legs, −mid for short legs.
 
     None when any leg lacks a usable quote (conservative: no signal).
@@ -99,7 +98,7 @@ def structure_value(legs: list[LegPos], snaps: dict[str, dict]) -> Optional[floa
     return total
 
 
-def _leg_mid(leg: LegPos, snaps: dict[str, dict]) -> Optional[float]:
+def _leg_mid(leg: LegPos, snaps: dict[str, dict]) -> float | None:
     snap = snaps.get(leg.symbol) or {}
     q = snap.get("latestQuote") or {}
     bid, ask = q.get("bp"), q.get("ap")
@@ -108,12 +107,12 @@ def _leg_mid(leg: LegPos, snaps: dict[str, dict]) -> Optional[float]:
     return (float(bid) + float(ask)) / 2.0
 
 
-def leg_mid(leg: LegPos, snaps: dict[str, dict]) -> Optional[float]:
+def leg_mid(leg: LegPos, snaps: dict[str, dict]) -> float | None:
     """Per-share mid for one leg. Limit prices are per-share; do not scale by qty."""
     return _leg_mid(leg, snaps)
 
 
-def unit_structure_value(legs: list[LegPos], snaps: dict[str, dict]) -> Optional[float]:
+def unit_structure_value(legs: list[LegPos], snaps: dict[str, dict]) -> float | None:
     """Net mid per 1x ratio — ignore stored contract qty so a 9-lot calendar
     is priced at the combo mid, not mid×9 (which would never fill)."""
     unit = [
@@ -164,7 +163,7 @@ class ExitRule(ABC):
     auto: bool = False
 
     @abstractmethod
-    def evaluate(self, group: PositionGroup, market: MarketView) -> Optional[ExitSignal]:
+    def evaluate(self, group: PositionGroup, market: MarketView) -> ExitSignal | None:
         ...
 
 
@@ -175,7 +174,7 @@ class ProfitTargetExit(ExitRule):
     def __init__(self, pct: float):
         self.pct = pct
 
-    def evaluate(self, group: PositionGroup, market: MarketView) -> Optional[ExitSignal]:
+    def evaluate(self, group: PositionGroup, market: MarketView) -> ExitSignal | None:
         if market.value_now is None:
             return None
         pnl = pnl_pct(group, market.value_now)
@@ -194,7 +193,7 @@ class StopLossExit(ExitRule):
     def __init__(self, pct: float):
         self.pct = pct
 
-    def evaluate(self, group: PositionGroup, market: MarketView) -> Optional[ExitSignal]:
+    def evaluate(self, group: PositionGroup, market: MarketView) -> ExitSignal | None:
         if market.value_now is None:
             return None
         pnl = pnl_pct(group, market.value_now)
@@ -210,14 +209,14 @@ class TimeExit(ExitRule):
     name = "time"
     auto = False  # day-count-from-entry / T-N are approval cards
 
-    def __init__(self, days_after_entry: Optional[int] = None,
-                 days_before_event: Optional[int] = None,
-                 days_after_event: Optional[int] = None):
+    def __init__(self, days_after_entry: int | None = None,
+                 days_before_event: int | None = None,
+                 days_after_event: int | None = None):
         self.days_after_entry = days_after_entry
         self.days_before_event = days_before_event
         self.days_after_event = days_after_event
 
-    def evaluate(self, group: PositionGroup, market: MarketView) -> Optional[ExitSignal]:
+    def evaluate(self, group: PositionGroup, market: MarketView) -> ExitSignal | None:
         # Post-event deadline: event has arrived (sessions_until_event == 0
         # on event day and every session after). Auto — the vol-crush window
         # is the point of the trade; waiting for a card abandoned fills.
@@ -264,7 +263,7 @@ class ScheduledExit(ExitRule):
     def __init__(self, minutes_before_close: int = 90):
         self.minutes_before_close = minutes_before_close
 
-    def evaluate(self, group: PositionGroup, market: MarketView) -> Optional[ExitSignal]:
+    def evaluate(self, group: PositionGroup, market: MarketView) -> ExitSignal | None:
         if group.exit_by is None or market.minutes_to_close is None:
             return None
         if market.today >= group.exit_by and market.minutes_to_close <= self.minutes_before_close:

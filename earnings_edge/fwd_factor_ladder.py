@@ -1,6 +1,9 @@
 from __future__ import annotations
-from framework.risk.killswitch import record_event
+
 import sqlite3
+
+from framework.risk.killswitch import record_event
+
 """Forward-factor calendar ladder: candidate construction + patient limit execution.
 
 Daily flow (US options session):
@@ -23,9 +26,9 @@ import json
 import logging
 import math
 import os
-from dataclasses import asdict, dataclass, field
-from datetime import date, datetime, timedelta, timezone
-from typing import Callable, Optional
+from dataclasses import asdict, dataclass
+from datetime import UTC, date, datetime, timedelta
+from typing import Callable
 
 from .alpaca_trading import AlpacaTradingClient
 from .fwd_factor import (
@@ -34,7 +37,6 @@ from .fwd_factor import (
     combo_debit,
     forward_iv,
     occ_parse,
-    occ_symbol,
     target_debit,
     within_fill_range,
 )
@@ -94,11 +96,11 @@ class CalendarCandidate:
     d_start: float       # max debit at start_premium (25%)
     d_cap: float         # max debit at floor_premium (20%)
     mid_debit: float
-    skip_reason: Optional[str] = None
-    strategy_override: Optional[str] = None
+    skip_reason: str | None = None
+    strategy_override: str | None = None
 
 
-def hist_rms_move(ticker: str) -> tuple[Optional[float], int]:
+def hist_rms_move(ticker: str) -> tuple[float | None, int]:
     """RMS |actual_move_pct| over the ticker's realized events (as a fraction)."""
     from earnings_edge.db.repositories import snapshots_hist_abs_moves
     vals = [v / 100.0 for v in snapshots_hist_abs_moves(ticker)]
@@ -172,7 +174,7 @@ _POLYGON_SINGLETON = None
 
 def ensure_hist_moves(
     ticker: str,
-    today: Optional[date] = None,
+    today: date | None = None,
     min_events: int = MIN_HIST_EVENTS,
 ) -> int:
     """Backfill realized earnings moves for under-covered tickers.
@@ -186,7 +188,7 @@ def ensure_hist_moves(
         snapshots_usable_outcome_count,
     )
     from .services.outcome_service import OutcomeService
-    today = today or datetime.now(timezone.utc).date()
+    today = today or datetime.now(UTC).date()
     have = snapshots_usable_outcome_count(
         ticker=ticker
     )
@@ -196,6 +198,7 @@ def ensure_hist_moves(
 
     try:
         import yfinance as yf
+
         from .config import session
         try:
             ticker_obj = yf.Ticker(ticker, session=session)
@@ -229,19 +232,19 @@ def ensure_hist_moves(
     if lse is None and polygon is None:
         return have
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     written = 0
     writes: list[dict] = []
     for ed in dates:
         # Early exit optimization - stop once we have enough events
         if have + written >= min_events:
-            logger.info("hist backfill %s: early exit (have=%d, written=%d, min=%d)", 
+            logger.info("hist backfill %s: early exit (have=%d, written=%d, min=%d)",
                         ticker, have, written, min_events)
             break
-            
+
         bars = None
         source = None
-        
+
         # Try LSE first
         if lse is not None:
             try:
@@ -256,7 +259,7 @@ def ensure_hist_moves(
                 record_event('silent_failure', f'fwd_factor_ladder: {exc}')
                 import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
                 logger.info("hist backfill %s %s: LSE bars failed (%s)", ticker, ed, exc)
-        
+
         # Fall back to Polygon if LSE unavailable or returned empty
         if not bars and polygon is not None:
             try:
@@ -273,10 +276,10 @@ def ensure_hist_moves(
                 record_event('silent_failure', f'fwd_factor_ladder: {exc}')
                 import logging; logging.getLogger(__name__).error('fwd_factor_ladder broad exception', exc_info=True)
                 logger.info("hist backfill %s %s: Polygon bars failed (%s)", ticker, ed, exc)
-        
+
         if not bars:
             continue
-            
+
         try:
             outcome = OutcomeService.outcome_from_bars(bars, ed)
         except Exception as exc:
@@ -335,7 +338,7 @@ def ensure_hist_moves(
     return total
 
 
-def _pick_pair_tenor(chain: dict[str, dict], spot: float, today: date, *, t1_min_days: int = 30, t1_max_days: int = 60, t2_gap_days: int = 30) -> tuple[Optional[dict], Optional[dict]]:
+def _pick_pair_tenor(chain: dict[str, dict], spot: float, today: date, *, t1_min_days: int = 30, t1_max_days: int = 60, t2_gap_days: int = 30) -> tuple[dict | None, dict | None]:
     """T1: expiry in [t1_min_days, t1_max_days] (closest to 45 if several).
     T2: expiry ~t2_gap_days days after T1 (closest wins). Strike: closest
     to spot at each expiry. Calls only, as today."""
@@ -355,7 +358,7 @@ def _pick_pair_tenor(chain: dict[str, dict], spot: float, today: date, *, t1_min
     t1_cands = [e for e in by_expiry if t1_min_days <= (e - today).days <= t1_max_days]
     if not t1_cands:
         return None, None
-    
+
     t1_exp = min(t1_cands, key=lambda e: abs((e - today).days - 45))
 
     t2_cands = sorted(
@@ -369,7 +372,7 @@ def _pick_pair_tenor(chain: dict[str, dict], spot: float, today: date, *, t1_min
     return atm(by_expiry[t1_exp]), atm(by_expiry[t2_exp])
 
 
-def _pick_pair(chain: dict[str, dict], spot: float, today: date, event_date: Optional[date] = None) -> tuple[Optional[dict], Optional[dict]]:
+def _pick_pair(chain: dict[str, dict], spot: float, today: date, event_date: date | None = None) -> tuple[dict | None, dict | None]:
     """T1: The next option expiration on or after the event_date.
     T2: Expiry ~30 days after T1.
 
@@ -424,10 +427,10 @@ def build_candidate(
     ticker: str,
     earnings_date: date,
     spec: LadderSpec = LadderSpec(),
-    today: Optional[date] = None,
+    today: date | None = None,
 ) -> CalendarCandidate:
     """Construct (or reject) one ladder candidate from live Alpaca quotes."""
-    today = today or datetime.now(timezone.utc).date()
+    today = today or datetime.now(UTC).date()
     spot = alpaca.get_stock_latest_trade(ticker)
     if not spot or spot < MIN_PRICE:
         return _reject(ticker, earnings_date, spot or 0.0, f"price {spot} < {MIN_PRICE}")
@@ -486,10 +489,10 @@ def build_candidate(
 class ArmedLadder:
     id: int
     candidate: CalendarCandidate
-    order_id: Optional[str] = None
+    order_id: str | None = None
     rung: int = 0
     status: str = "armed"
-    created_at: Optional[str] = None
+    created_at: str | None = None
 
 
 class LadderRunner:
@@ -510,7 +513,7 @@ class LadderRunner:
 
     def __init__(self, alpaca: AlpacaTradingClient, db_path=None,
                  spec: LadderSpec = LadderSpec(),
-                 now_fn: Optional[Callable[[], datetime]] = None):
+                 now_fn: Callable[[], datetime] | None = None):
         self.alpaca = alpaca
         self.spec = spec
         # Injectable clock — production uses wall time; tests freeze it.
@@ -538,7 +541,7 @@ class LadderRunner:
             # exc-policy: narrowed to sqlite3.Error for missing table
             return False  # risk_state table not present in this DB
 
-    def _buying_power(self) -> Optional[float]:
+    def _buying_power(self) -> float | None:
         try:
             bp = self.alpaca.get_account().get("buying_power")
             return float(bp) if bp is not None else None
@@ -595,7 +598,7 @@ class LadderRunner:
             logger.warning("ff arm risk check failed (%s) — ad-hoc gates only", exc)
             return None
 
-    def _take_fill_if_any(self, ladder: "ArmedLadder", cand: CalendarCandidate) -> bool:
+    def _take_fill_if_any(self, ladder: ArmedLadder, cand: CalendarCandidate) -> bool:
         """If the resting order filled (or partial), book it and stop stepping.
 
         Call this *before* expire/disarm so a fill that lands after we
@@ -668,7 +671,7 @@ class LadderRunner:
 
     # ── arm / state ──────────────────────────────────────────────────────
 
-    def arm(self, cand: CalendarCandidate, armed_by: Optional[int] = None) -> Optional[int]:
+    def arm(self, cand: CalendarCandidate, armed_by: int | None = None) -> int | None:
         """Arm a ladder. Returns ladder id, or None if refused (with event)."""
         from earnings_edge.db.repositories import (
             ff_ladders_armed_id_for_ticker,
@@ -814,7 +817,7 @@ class LadderRunner:
         return True
 
     def _step_one(self, ladder: ArmedLadder, cand: CalendarCandidate,
-                  now: datetime, today_et, bp: Optional[float]) -> None:
+                  now: datetime, today_et, bp: float | None) -> None:
         # 0. event already happened — the ladder is dead regardless of orders
         try:
             earnings_passed = date.fromisoformat(cand.earnings_date) < today_et

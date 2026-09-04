@@ -58,15 +58,14 @@ def test_index_explains_browser_open():
 
 
 def test_websocket_hello_and_initial_state():
-    with TestClient(app) as client:
-        with client.websocket_connect("/ws") as ws:
-            hello = json.loads(ws.receive_text())
-            assert hello["type"] == "hello"
-            assert {p["id"] for p in hello["panels"]} == {p.id for p in PANELS}
-            # initial state for every panel follows the hello
-            seen = set()
-            for _ in PANELS:
-                msg = json.loads(ws.receive_text())
-                assert msg["type"] == "panel"
-                seen.add(msg["id"])
-            assert seen == {p.id for p in PANELS}
+    with TestClient(app) as client, client.websocket_connect("/ws") as ws:
+        hello = json.loads(ws.receive_text())
+        assert hello["type"] == "hello"
+        assert {p["id"] for p in hello["panels"]} == {p.id for p in PANELS}
+        # initial state for every panel follows the hello
+        seen = set()
+        for _ in PANELS:
+            msg = json.loads(ws.receive_text())
+            assert msg["type"] == "panel"
+            seen.add(msg["id"])
+        assert seen == {p.id for p in PANELS}

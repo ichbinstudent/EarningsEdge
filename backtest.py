@@ -18,20 +18,18 @@ import json
 import sys
 from pathlib import Path
 
-import pandas as pd
-
+from earnings_edge.backtest.calendar import (
+    get_strategy,
+    list_strategies,
+)
+from earnings_edge.backtest.multi_strike_real import run_multi_strike
+from earnings_edge.backtest.positional import (
+    run_positional as run_positional_family,
+)
 from earnings_edge.trading_types import (
     DataBundle,
     StrategyResult,
 )
-from earnings_edge.backtest.calendar import (
-    list_strategies,
-    get_strategy,
-)
-from earnings_edge.backtest.positional import (
-    run_positional as run_positional_family,
-)
-from earnings_edge.backtest.multi_strike_real import run_multi_strike
 
 
 def run_all(data: DataBundle, strategies: list[str] | None = None) -> dict[str, StrategyResult]:

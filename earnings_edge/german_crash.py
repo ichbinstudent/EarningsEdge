@@ -30,8 +30,7 @@ import logging
 import os
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import datetime, time, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
@@ -112,7 +111,7 @@ class CrashAlertConfig:
     trade_max_age_secs: int = 600
 
     @classmethod
-    def from_env(cls) -> "CrashAlertConfig":
+    def from_env(cls) -> CrashAlertConfig:
         return cls(
             threshold=_env_float("GERMAN_CRASH_THRESHOLD", 0.20),
             window_secs=_env_int("GERMAN_CRASH_WINDOW_SECS", 300),
@@ -133,9 +132,9 @@ class GermanQuote:
     ticker: str
     venue: str
     price: float
-    last: Optional[float]
-    bid: Optional[float]
-    ask: Optional[float]
+    last: float | None
+    bid: float | None
+    ask: float | None
     ts: datetime
     ric: str = ""
     name: str = ""
@@ -151,11 +150,11 @@ class CrashAlert:
     last: float
     window_secs: int
     ts: datetime
-    bid: Optional[float] = None
-    ask: Optional[float] = None
+    bid: float | None = None
+    ask: float | None = None
     name: str = ""
     ric: str = ""
-    high_ts: Optional[datetime] = None
+    high_ts: datetime | None = None
     source: str = ""
 
 
@@ -163,15 +162,15 @@ class CrashAlert:
 class _Sample:
     ts: datetime
     price: float
-    bid: Optional[float]
-    ask: Optional[float]
-    last: Optional[float]
+    bid: float | None
+    ask: float | None
+    last: float | None
     name: str
     ric: str
     source: str
 
 
-def parse_lseg_number(value) -> Optional[float]:
+def parse_lseg_number(value) -> float | None:
     """Parse LSEG widget numbers (``'+183.2'``, ``'+0'``, ``'-'``, ``'n.a.'``)."""
     if value is None:
         return None
@@ -196,7 +195,7 @@ def parse_lseg_number(value) -> Optional[float]:
     return v
 
 
-def parse_tg_number(value) -> Optional[float]:
+def parse_tg_number(value) -> float | None:
     """Parse Tradegate JSON numbers (float or German ``'1 076,00'``)."""
     if value is None:
         return None
@@ -234,10 +233,10 @@ def ric_parts(ric: str) -> tuple[str, str]:
 
 
 def parse_trade_ts(
-    trade_date: Optional[str],
-    trade_time: Optional[str],
+    trade_date: str | None,
+    trade_time: str | None,
     captured_at: datetime,
-) -> Optional[datetime]:
+) -> datetime | None:
     """Parse ``01 SEP 2026`` + ``17:47:33`` as UTC.
 
     The LSEG widget's ``q._TRDTIM_1`` is exchange feed time in UTC — verified
@@ -254,7 +253,7 @@ def parse_trade_ts(
     for fmt in ("%d %b %Y %H:%M:%S", "%d %B %Y %H:%M:%S"):
         try:
             naive = datetime.strptime(f"{date_s} {time_s}", fmt)
-            return naive.replace(tzinfo=timezone.utc)
+            return naive.replace(tzinfo=UTC)
         except ValueError:
             continue
     return None
@@ -262,25 +261,25 @@ def parse_trade_ts(
 
 def _aware(ts: datetime) -> datetime:
     if ts.tzinfo is None:
-        return ts.replace(tzinfo=timezone.utc)
-    return ts.astimezone(timezone.utc)
+        return ts.replace(tzinfo=UTC)
+    return ts.astimezone(UTC)
 
 
 def validate_quote(
     *,
     ticker: str,
     venue: str,
-    last: Optional[float],
-    bid: Optional[float],
-    ask: Optional[float],
+    last: float | None,
+    bid: float | None,
+    ask: float | None,
     ts: datetime,
     now: datetime,
     cfg: CrashAlertConfig,
     ric: str = "",
     name: str = "",
     source: str = "",
-    trade_ts: Optional[datetime] = None,
-) -> Optional[GermanQuote]:
+    trade_ts: datetime | None = None,
+) -> GermanQuote | None:
     """Fail closed: live book, recent print, finite price, not stale.
 
     ``ts`` is observation time. A quote with no last trade, or a last
@@ -340,7 +339,7 @@ def quote_from_lseg(
     raw: dict,
     captured_at: datetime,
     cfg: CrashAlertConfig,
-) -> Optional[GermanQuote]:
+) -> GermanQuote | None:
     ric = str(raw.get("q.RIC") or raw.get("x.RIC") or "").strip()
     if not ric:
         return None
@@ -361,7 +360,7 @@ def quote_from_tradegate(
     raw: dict,
     captured_at: datetime,
     cfg: CrashAlertConfig,
-) -> Optional[GermanQuote]:
+) -> GermanQuote | None:
     isin = str(raw.get("isin") or "").strip()
     if not isin:
         return None
@@ -371,7 +370,7 @@ def quote_from_tradegate(
     ts = captured_at
     unix_ts = raw.get("_timestamp")
     if isinstance(unix_ts, (int, float)) and unix_ts > 0:
-        ts = datetime.fromtimestamp(unix_ts, tz=timezone.utc)
+        ts = datetime.fromtimestamp(unix_ts, tz=UTC)
     name = str(raw.get("name") or "").strip()
     return validate_quote(
         ticker=isin, venue="Tradegate", last=last, bid=bid, ask=ask,
@@ -382,16 +381,16 @@ def quote_from_tradegate(
 class CrashDetector:
     """In-memory rolling windows keyed by (ticker, venue)."""
 
-    def __init__(self, cfg: Optional[CrashAlertConfig] = None):
+    def __init__(self, cfg: CrashAlertConfig | None = None):
         self.cfg = cfg or CrashAlertConfig()
         self._windows: dict[tuple[str, str], deque[_Sample]] = defaultdict(deque)
 
     def ingest(
         self,
         quotes: list[GermanQuote],
-        now: Optional[datetime] = None,
+        now: datetime | None = None,
     ) -> list[CrashAlert]:
-        now = _aware(now or datetime.now(timezone.utc))
+        now = _aware(now or datetime.now(UTC))
         cutoff = now - timedelta(seconds=self.cfg.window_secs)
         alerts: list[CrashAlert] = []
         for q in quotes:
@@ -436,7 +435,7 @@ class CrashDetector:
 class Cooldown:
     """Per (ticker, venue) suppress window. Optional JSON persistence across restarts."""
 
-    def __init__(self, cooldown_secs: int, path: Optional[str] = None):
+    def __init__(self, cooldown_secs: int, path: str | None = None):
         self.cooldown = timedelta(seconds=cooldown_secs)
         self.path = path
         self._last: dict[str, datetime] = {}
@@ -550,7 +549,7 @@ class CrashMonitor:
     collector: object = None
     tradegate: object = None
     data_dir: str = ""
-    cooldown_path: Optional[str] = None
+    cooldown_path: str | None = None
     detector: CrashDetector = field(init=False)
     cooldown: Cooldown = field(init=False)
     _watch_rics: set[str] = field(default_factory=set)
@@ -571,10 +570,10 @@ class CrashMonitor:
             return True
         return False
 
-    def poll(self, now: Optional[datetime] = None) -> dict:
+    def poll(self, now: datetime | None = None) -> dict:
         if not self.cfg.enabled:
             return {"skipped": "disabled", "alerts": []}
-        now = _aware(now or datetime.now(timezone.utc))
+        now = _aware(now or datetime.now(UTC))
         if not in_crash_poll_window(now):
             return {"skipped": "outside_window", "alerts": []}
         n_fetched = 0
@@ -642,7 +641,7 @@ class CrashMonitor:
         }
 
 
-def build_monitor(data_dir: str, cfg: Optional[CrashAlertConfig] = None) -> CrashMonitor:
+def build_monitor(data_dir: str, cfg: CrashAlertConfig | None = None) -> CrashMonitor:
     """Live wiring: Gettex LSEG collector + Tradegate JSON."""
     from earnings_edge.collectors.gettex import GettexCollector
     from earnings_edge.collectors.tradegate import TradegateCollector

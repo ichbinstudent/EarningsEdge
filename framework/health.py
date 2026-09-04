@@ -1,15 +1,13 @@
 """Process readiness: lock + equity freshness + scan age + broker clock."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Optional
-
+from datetime import UTC, datetime, timedelta
 
 EQUITY_STALE_MIN = 30
 SCAN_STALE_HOURS = 26
 
 
-def _parse(ts) -> Optional[datetime]:
+def _parse(ts) -> datetime | None:
     if ts is None:
         return None
     if isinstance(ts, datetime):
@@ -20,19 +18,19 @@ def _parse(ts) -> Optional[datetime]:
         except ValueError:
             return None
     if t.tzinfo is None:
-        t = t.replace(tzinfo=timezone.utc)
+        t = t.replace(tzinfo=UTC)
     return t
 
 
 def health_ready(
     *,
     lock_held: bool,
-    last_equity_ts: Optional[str] = None,
-    last_scan_ts: Optional[str] = None,
+    last_equity_ts: str | None = None,
+    last_scan_ts: str | None = None,
     clock_ok: bool = False,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
     market_open: bool = False,
-    weekday: Optional[bool] = None,
+    weekday: bool | None = None,
     equity_skipped_closed: bool = False,
 ) -> dict:
     """Return ``{"ready": bool, "reasons": list[str]}``.
@@ -40,9 +38,9 @@ def health_ready(
     In RTH, last equity write must be < 30 min (or an explicit closed-market
     skip). On a weekday, last successful scan must be within ~26h.
     """
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     if now.tzinfo is None:
-        now = now.replace(tzinfo=timezone.utc)
+        now = now.replace(tzinfo=UTC)
     if weekday is None:
         weekday = now.weekday() < 5
     reasons: list[str] = []

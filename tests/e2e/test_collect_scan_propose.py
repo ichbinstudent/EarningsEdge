@@ -17,7 +17,6 @@ store, which is exactly where the human approval gate sits in production.
 from __future__ import annotations
 
 import json
-import sqlite3
 from datetime import date, timedelta
 
 import pytest
@@ -83,6 +82,7 @@ def _collect_phase(collector, monkeypatch) -> list:
 def _persist_phase(tmp_db_path, candidates) -> None:
     """Write snapshots + matching calendar_call_trades fixture rows."""
     from sqlalchemy import text
+
     from earnings_edge.db import engine as db_engine
     from earnings_edge.db import insert_snapshot
 
@@ -133,10 +133,10 @@ def _persist_phase(tmp_db_path, candidates) -> None:
 
 
 def test_collect_scan_propose_pipeline(tmp_db_path, tmp_path, monkeypatch, test_settings):
-    from earnings_edge.collectors.earnings_calendar import EarningsCalendarCollector
     from earnings_edge.backtest.calendar import CalendarCallNoML
-    from earnings_edge.trading_types import DataBundle
+    from earnings_edge.collectors.earnings_calendar import EarningsCalendarCollector
     from earnings_edge.trade_approval import PendingTradeStore
+    from earnings_edge.trading_types import DataBundle
 
     # -- 1. collect ------------------------------------------------------
     collector = EarningsCalendarCollector()

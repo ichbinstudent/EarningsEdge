@@ -8,7 +8,6 @@ summaries for two strategies (calendar_call_no_ml, earnings_quality).
 from __future__ import annotations
 
 import json
-import sqlite3
 import subprocess
 import sys
 from datetime import date, timedelta
@@ -59,6 +58,7 @@ def _seed_fixture_db(db_path) -> None:
     actual_move_pct: +8 on even i, -8 on odd i (all clear the 5% gate).
     """
     from sqlalchemy import text
+
     from earnings_edge.db import engine as db_engine
     from earnings_edge.db import insert_snapshot
 

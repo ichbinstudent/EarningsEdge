@@ -1,24 +1,22 @@
 """Diagnose why R² is negative and try better configurations."""
-import json
-import sqlite3
 import warnings
+
 warnings.filterwarnings("ignore")
 
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
 from sklearn.impute import SimpleImputer
-from sklearn.linear_model import Ridge, Lasso
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-from sklearn.metrics import r2_score, mean_absolute_error
-from sklearn.model_selection import TimeSeriesSplit
+from sklearn.linear_model import Lasso, Ridge
+from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 DB = "data/earnings_ml.db"
 
 # Use the same loading logic as train_calendar_filter
-from train_calendar_filter import load_calendar_trades, apply_data_quality_gates, BASE_FEATURES
+from train_calendar_filter import BASE_FEATURES, apply_data_quality_gates, load_calendar_trades
 
 df = load_calendar_trades(DB)
 clean, quality = apply_data_quality_gates(df, 0.20)
@@ -66,24 +64,24 @@ for name, model, feats in configs:
     numeric_pipeline = Pipeline([("imputer", SimpleImputer(strategy="median")), ("scaler", StandardScaler())])
     pre = ColumnTransformer([("num", numeric_pipeline, feats)])
     pipe = Pipeline([("preprocess", pre), ("model", model)])
-    
+
     pipe.fit(train_df[feats].apply(pd.to_numeric, errors="coerce"), y_train)
     pred_test = pipe.predict(test_df[feats].apply(pd.to_numeric, errors="coerce"))
-    
+
     r2 = r2_score(y_test, pred_test)
     mae = mean_absolute_error(y_test, pred_test)
-    
+
     # Top 25% selection
     top25_mask = pred_test >= np.quantile(pred_test, 0.75)
     top25_pnl = test_df.loc[top25_mask, "pnl_dollars"]
     top25_wr = (top25_pnl > 0).mean() if len(top25_pnl) > 0 else 0
     top25_pnl_sum = top25_pnl.sum() if len(top25_pnl) > 0 else 0
-    
+
     print(f"{name:35s} {r2:7.3f} {mae:7.3f} {top25_wr:9.1%} ${top25_pnl_sum:9.0f}")
 
 # Also try classification approach
-from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 
 y_train_cls = (train_df["pnl_dollars"] > 0).astype(int)
@@ -99,14 +97,14 @@ for name, model, feats in [
     numeric_pipeline = Pipeline([("imputer", SimpleImputer(strategy="median")), ("scaler", StandardScaler())])
     pre = ColumnTransformer([("num", numeric_pipeline, feats)])
     pipe = Pipeline([("preprocess", pre), ("model", model)])
-    
+
     pipe.fit(train_df[feats].apply(pd.to_numeric, errors="coerce"), y_train_cls)
     pred_proba = pipe.predict_proba(test_df[feats].apply(pd.to_numeric, errors="coerce"))[:, 1]
-    
+
     auc = roc_auc_score(y_test_cls, pred_proba) if y_test_cls.nunique() == 2 else 0
     top25_mask = pred_proba >= np.quantile(pred_proba, 0.75)
     top25_pnl = test_df.loc[top25_mask, "pnl_dollars"]
     top25_wr = (top25_pnl > 0).mean() if len(top25_pnl) > 0 else 0
     top25_pnl_sum = top25_pnl.sum() if len(top25_pnl) > 0 else 0
-    
+
     print(f"{name:35s} {auc:7.3f} {top25_wr:9.1%} ${top25_pnl_sum:9.0f}")

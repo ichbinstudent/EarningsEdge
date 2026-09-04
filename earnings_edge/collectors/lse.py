@@ -22,12 +22,11 @@ from __future__ import annotations
 import logging
 import time
 from datetime import date, datetime, timedelta
-from typing import Any, Optional
 
 import requests
 
-from .base import BaseCollector
 from ..settings import get_settings
+from .base import BaseCollector
 
 logger = logging.getLogger("earnings_edge.collectors.lse")
 
@@ -37,7 +36,7 @@ LSE_API_BASE = "https://api.londonstrategicedge.com"
 class LSECollector(BaseCollector):
     """LSE vault client with PolygonClient-compatible method shapes."""
 
-    def __init__(self, api_key: Optional[str] = None, client=None, sleep: float = 0.35):
+    def __init__(self, api_key: str | None = None, client=None, sleep: float = 0.35):
         super().__init__(
             name="lse",
             max_retries=3,
@@ -99,10 +98,10 @@ class LSECollector(BaseCollector):
     def option_contracts(
         self,
         underlying: str,
-        as_of: Optional[date] = None,
-        expiry_gte: Optional[date] = None,
-        expiry_lte: Optional[date] = None,
-        contract_type: Optional[str] = None,
+        as_of: date | None = None,
+        expiry_gte: date | None = None,
+        expiry_lte: date | None = None,
+        contract_type: str | None = None,
     ) -> list[dict]:
         """Contracts from the vault chain snapshot, Polygon-shaped keys.
 
@@ -129,7 +128,7 @@ class LSECollector(BaseCollector):
             })
         return out
 
-    def option_close(self, contract_ticker: str, as_of: date, lookback_days: int = 4) -> Optional[float]:
+    def option_close(self, contract_ticker: str, as_of: date, lookback_days: int = 4) -> float | None:
         """Most recent 1m-bar close on/before ``as_of`` (looks back a few days)."""
         rows = self._call(lambda: self.client.option_candles(
             contract_ticker,

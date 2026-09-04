@@ -1,8 +1,7 @@
 """De-duped exception alerts for the approval chat only."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 DEFAULT_WINDOW_S = 15 * 60
 
@@ -30,17 +29,17 @@ class AlertDeduper:
         self._last: dict[str, datetime] = {}
         self._outbox: list[str] = []
 
-    def should_emit(self, key: str, now: Optional[datetime] = None) -> bool:
-        now = now or datetime.now(timezone.utc)
+    def should_emit(self, key: str, now: datetime | None = None) -> bool:
+        now = now or datetime.now(UTC)
         if now.tzinfo is None:
-            now = now.replace(tzinfo=timezone.utc)
+            now = now.replace(tzinfo=UTC)
         prev = self._last.get(key)
         if prev is not None and now - prev < self.window:
             return False
         self._last[key] = now
         return True
 
-    def emit(self, key: str, message: str, now: Optional[datetime] = None) -> Optional[str]:
+    def emit(self, key: str, message: str, now: datetime | None = None) -> str | None:
         """Return ``message`` if it should be sent, else None."""
         if self.should_emit(key, now):
             self._outbox.append(message)
@@ -71,7 +70,7 @@ def is_alpaca_401(exc: BaseException) -> bool:
     return "401" in text or "invalid api" in text
 
 
-def emit_clock_failure(exc: BaseException) -> Optional[str]:
+def emit_clock_failure(exc: BaseException) -> str | None:
     """Clock/DNS vs 401 at get_clock sites."""
     if is_alpaca_401(exc):
         return DEDUPER.emit(
@@ -81,7 +80,7 @@ def emit_clock_failure(exc: BaseException) -> Optional[str]:
     return DEDUPER.emit("clock_dns", f"⚠️ Clock check failed: {exc}")
 
 
-def emit_broker_failure(exc: BaseException) -> Optional[str]:
+def emit_broker_failure(exc: BaseException) -> str | None:
     """401 on get_positions / other broker calls (non-401 is silent here)."""
     if is_alpaca_401(exc):
         return DEDUPER.emit(

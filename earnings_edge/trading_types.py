@@ -10,10 +10,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pandas as pd
-
 
 # ---------------------------------------------------------------------------
 # Trade abstraction
@@ -31,8 +30,8 @@ class Trade:
     exit_price: float = 0.0   # 0 = not yet closed
     pnl: float = 0.0          # absolute PnL (dollars for options, percent for stock)
     pnl_pct: float = 0.0      # return_on_debit for options, simple return for stock
-    features: Dict[str, Any] = field(default_factory=dict)
-    model_score: Optional[float] = None
+    features: dict[str, Any] = field(default_factory=dict)
+    model_score: float | None = None
     ml_decision: str = "SKIP"
     notes: str = ""
 
@@ -82,8 +81,8 @@ class DataBundle:
 @dataclass
 class StrategyResult:
     name: str
-    trades: List[Trade]
-    summary: Dict[str, Any] = field(default_factory=dict)
+    trades: list[Trade]
+    summary: dict[str, Any] = field(default_factory=dict)
 
     def to_dataframe(self) -> pd.DataFrame:
         if not self.trades:

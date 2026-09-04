@@ -2,15 +2,14 @@
 from __future__ import annotations
 
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
-STARTED_AT = datetime.now(timezone.utc)
+STARTED_AT = datetime.now(UTC)
 _REPO = Path(__file__).resolve().parents[2]
 
 
-def code_sha(cwd: Optional[Path] = None) -> str:
+def code_sha(cwd: Path | None = None) -> str:
     try:
         r = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],

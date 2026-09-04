@@ -8,7 +8,6 @@ from sqlalchemy import text
 
 from earnings_edge.db import engine as db_engine
 from earnings_edge.models import EarningsCandidate
-from datetime import date
 
 
 class TestDatabase(unittest.TestCase):

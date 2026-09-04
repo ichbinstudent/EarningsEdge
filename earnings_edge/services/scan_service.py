@@ -17,8 +17,8 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from earnings_edge.bot_scanner import (
     EarningsCalendarScanner,
@@ -65,8 +65,8 @@ class ScanService:
 
     def __init__(
         self,
-        scanner: Optional[EarningsCalendarScanner] = None,
-        db_path: Optional[Any] = None,
+        scanner: EarningsCalendarScanner | None = None,
+        db_path: Any | None = None,
     ) -> None:
         self._db_path = db_path
         # ``scanner`` is an EarningsCalendarScanner (or fake). It bundles the
@@ -98,7 +98,7 @@ class ScanService:
         """
         started = time.monotonic()
         scan_timestamp = (
-            datetime.now(timezone.utc)
+            datetime.now(UTC)
             .replace(microsecond=0)
             .isoformat()
             .replace("+00:00", "Z")
@@ -142,7 +142,7 @@ class ScanService:
                 "scan_run_id": scan_run_id,
                 "stats": stats,
             }
-        except Exception as exc:  # noqa: BLE001 — surface a stable result shape
+        except Exception as exc:
             logger.exception("Earnings scan failed")
             stats["duration_secs"] = round(time.monotonic() - started, 3)
             scan_run_id = self._log_scan_run(
@@ -171,7 +171,7 @@ class ScanService:
         fields: list[dict[str, Any]] = []
         take_summary: list[str] = []
         scored_reports: list[
-            tuple[TickerReport, Optional[str], Optional[float]]
+            tuple[TickerReport, str | None, float | None]
         ] = []
 
         selected_tickers = set(result.tier1 + result.tier2)
@@ -293,7 +293,7 @@ class ScanService:
             "title": "Earnings Scanner Results",
             "color": EMBED_COLOR,
             "fields": fields,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     def _log_scan_run(
@@ -303,7 +303,7 @@ class ScanService:
         stats: dict[str, Any],
         *,
         success: bool,
-        error: Optional[str] = None,
+        error: str | None = None,
     ) -> int:
         """Insert a scan_runs audit row; return its id (0 on failure)."""
         row = {

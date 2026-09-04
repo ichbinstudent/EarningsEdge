@@ -8,12 +8,10 @@ dashboard panels for both already exist but had no writer until now.
 """
 
 from __future__ import annotations
-from framework.risk.killswitch import record_event
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from earnings_edge.db import (
     adopted_positions_insert,
@@ -26,12 +24,13 @@ from earnings_edge.db import (
     table_exists,
     trade_events_insert,
 )
+from framework.risk.killswitch import record_event
 
 logger = logging.getLogger("framework.execution.reconcile")
 
 
 def _utcnow() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @dataclass
@@ -58,7 +57,7 @@ class Reconciler:
 
     def run(self) -> ReconcileReport:
         report = ReconcileReport(run_at=_utcnow())
-        
+
         # 0. Cancel any hanging/orphaned limit orders on startup
         try:
             open_orders = self.client.get_orders(status="open")
@@ -245,8 +244,8 @@ class Reconciler:
                             sym, row["id"])
         return list(remaining)
 
-    def _event(self, event_type: str, symbol: str, strategy: Optional[str],
-               qty: Optional[float] = None, price: Optional[float] = None,
+    def _event(self, event_type: str, symbol: str, strategy: str | None,
+               qty: float | None = None, price: float | None = None,
                detail: str = "") -> None:
         trade_events_insert(
             event_type, symbol=symbol, strategy=strategy,
@@ -257,6 +256,7 @@ class Reconciler:
 def classify_assignments(broker_positions: list, local_open: list) -> list[str]:
     """Stock symbols at the broker whose underlying still has a short call locally."""
     import json as _json
+
     from ..positions.guards import occ_underlying, parse_occ
 
     short_call_tickers: set[str] = set()
@@ -288,7 +288,7 @@ def classify_assignments(broker_positions: list, local_open: list) -> list[str]:
     return found
 
 
-def _f(value) -> Optional[float]:
+def _f(value) -> float | None:
     try:
         return float(value) if value is not None else None
     except (TypeError, ValueError):

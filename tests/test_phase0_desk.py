@@ -5,17 +5,22 @@ from datetime import date
 from unittest.mock import MagicMock
 
 import pytest
+from sqlalchemy import text
 
 from earnings_edge.bot_views import positions_view
+from earnings_edge.db import configure
+from earnings_edge.db import engine as db_engine
 from earnings_edge.ops_auth import (
-    AUTH_UNCONFIGURED, auth_message, is_operator, operator_chat_ids, operators_configured,
+    AUTH_UNCONFIGURED,
+    auth_message,
+    is_operator,
+    operator_chat_ids,
+    operators_configured,
 )
 from framework.execution.managed import record_open_positions
 from framework.ops import InstanceLock, SecretRedactFilter
 from framework.positions.book import classify_book
 from framework.positions.book_actions import adopt_orphan, ignore_orphan, mark_missing_closed
-from sqlalchemy import text
-from earnings_edge.db import configure, engine as db_engine
 
 
 def test_operator_lock_fail_closed_when_unset():
@@ -111,10 +116,12 @@ def test_positions_view_empty_local_still_legacy(tmp_path):
 
 def test_book_action_banner_and_panel_refresh(tmp_path):
     from earnings_edge.bot_views import (
-        book_action_banner, build_positions_panel, positions_keyboard,
+        book_action_banner,
+        build_positions_panel,
+        positions_keyboard,
     )
-    from framework.positions.book import classify_book
     from framework.execution.managed import open_groups
+    from framework.positions.book import classify_book
 
     assert "Adopted ATLO" in book_action_banner(
         "adopt", {"ok": True, "group_id": "adopt-ATLO"}, "ATLO260918C00030000")
@@ -158,7 +165,8 @@ def test_book_action_banner_and_panel_refresh(tmp_path):
 def test_adopt_callback_edits_positions_panel(tmp_path, monkeypatch):
     """Adopt must rewrite the same Positions message — not leave a stale book."""
     import asyncio
-    from unittest.mock import AsyncMock, MagicMock
+    from unittest.mock import AsyncMock
+
     from bot import TradingBot
 
     path = tmp_path / "fw.db"
@@ -204,7 +212,8 @@ def test_adopt_callback_edits_positions_panel(tmp_path, monkeypatch):
 def test_inbox_skip_rewrites_same_panel(tmp_path):
     """Skip from Pending must edit the inbox, not send a new card flood."""
     import asyncio
-    from unittest.mock import AsyncMock, MagicMock
+    from unittest.mock import AsyncMock
+
     from bot import TradingBot
     from earnings_edge.trade_approval import PendingTradeStore
     from earnings_edge.trading_types import Trade

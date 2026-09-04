@@ -12,7 +12,6 @@ import logging
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger("framework.core.config")
 
@@ -92,7 +91,7 @@ def _validate(raw: dict, path: Path) -> StrategyConfig:
     )
 
 
-def load_strategy_configs(config_dir: Optional[Path] = None) -> dict[str, StrategyConfig]:
+def load_strategy_configs(config_dir: Path | None = None) -> dict[str, StrategyConfig]:
     """Load all valid strategy configs; invalid files are logged and skipped."""
     directory = Path(config_dir or DEFAULT_CONFIG_DIR)
     configs: dict[str, StrategyConfig] = {}

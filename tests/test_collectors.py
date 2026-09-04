@@ -1,8 +1,8 @@
 """Tests for the collectors layer."""
 
 import unittest
-from unittest.mock import patch, MagicMock
 from datetime import date
+from unittest.mock import MagicMock, patch
 
 from earnings_edge.collectors.base import BaseCollector, CircuitBreakerOpen
 from earnings_edge.models import EarningsCandidate

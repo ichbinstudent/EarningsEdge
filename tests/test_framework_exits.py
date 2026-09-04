@@ -2,26 +2,36 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from unittest.mock import MagicMock
 
 import pytest
+from sqlalchemy import text
 
+from earnings_edge.db import engine as db_engine
 from framework.core.calendar import TradingCalendar
 from framework.core.config import StrategyConfig
 from framework.core.registry import StrategyRegistry
 from framework.execution.managed import (
-    close_positions, open_groups, record_open_positions,
+    open_groups,
+    record_open_positions,
 )
 from framework.execution.order_manager import OrderManager
 from framework.positions.exits import (
-    LegPos, MarketView, PositionGroup, ProfitTargetExit, ScheduledExit, StopLossExit,
-    TimeExit, build_exit_rules, pnl_pct, remaining_close_plan, structure_value,
+    LegPos,
+    MarketView,
+    PositionGroup,
+    ProfitTargetExit,
+    ScheduledExit,
+    StopLossExit,
+    TimeExit,
+    build_exit_rules,
+    pnl_pct,
+    remaining_close_plan,
+    structure_value,
 )
 from framework.positions.manager import ExitManager
 from framework.risk.killswitch import KillSwitch
-from sqlalchemy import text
-from earnings_edge.db import engine as db_engine
 
 
 @pytest.fixture

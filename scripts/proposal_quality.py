@@ -39,9 +39,9 @@ import argparse
 import json
 import math
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -74,7 +74,7 @@ def bs_call_price(S: float, K: float, T: float, r: float, sigma: float) -> float
 
 
 def solve_call_iv(price: float, S: float, K: float, T: float,
-                  r: float = RISK_FREE_RATE) -> Optional[float]:
+                  r: float = RISK_FREE_RATE) -> float | None:
     """Bisection IV solve; None when the price is outside no-arb bounds."""
     if T <= 0 or S <= 0 or K <= 0 or price <= 0:
         return None
@@ -225,7 +225,7 @@ def load_outcome(conn: Session, ticker: str,
 # ---------------------------------------------------------------------------
 
 def implied_event_move_pct(candidate: dict[str, Any],
-                           proposal_date: date) -> Optional[float]:
+                           proposal_date: date) -> float | None:
     """Implied earnings-event move (%) from stored candidate quotes.
 
     event_var = iv_near^2 * T1 - sigma_fwd^2 * (T1 - tau), solved from the
@@ -276,13 +276,13 @@ def _binomial_p_two_sided(k: int, n: int, p: float = 0.5) -> float:
 # -2.62/-7.10%. Hit rates on the stored convention are therefore flattering
 # for AMC names; compute the event-window move explicitly.
 
-def is_post_market(timing: Optional[str]) -> bool:
+def is_post_market(timing: str | None) -> bool:
     """True when the announcement is after the close on earnings_date."""
     return bool(timing) and "post" in timing.lower()
 
 
 def compute_event_move(bars: list[dict[str, Any]], ed: date,
-                       timing: Optional[str]) -> Optional[float]:
+                       timing: str | None) -> float | None:
     """Close-to-close realized move (%) across the announcement.
 
     bars: Polygon-style agg dicts (``t`` ms epoch, ``c`` close), ascending.
@@ -311,7 +311,7 @@ def compute_event_move(bars: list[dict[str, Any]], ed: date,
     return (post_close - pre_close) / pre_close * 100.0
 
 
-def exit_window_start(ed: date, timing: Optional[str]) -> date:
+def exit_window_start(ed: date, timing: str | None) -> date:
     """First date whose close reflects the announcement (exit pricing basis)."""
     return ed + timedelta(days=1) if is_post_market(timing) else ed
 
@@ -354,7 +354,7 @@ def aggregate(trades: list[dict[str, Any]]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def _fetch_exit_credit(pg: Any, near_symbol: str, far_symbol: str,
-                       ed: date, timing: Optional[str]) -> tuple[Optional[float], Optional[str]]:
+                       ed: date, timing: str | None) -> tuple[float | None, str | None]:
     """Combo credit at the first close reflecting the announcement.
 
     AMC names are priced from the first session AFTER earnings_date; BMO from
@@ -364,7 +364,7 @@ def _fetch_exit_credit(pg: Any, near_symbol: str, far_symbol: str,
     start = exit_window_start(ed, timing)
     end = ed + timedelta(days=6)
 
-    def first_close(symbol: str) -> tuple[Optional[float], Optional[date]]:
+    def first_close(symbol: str) -> tuple[float | None, date | None]:
         bars = pg.daily_bars(f"O:{symbol}", start, end, limit=10)
         bars = [b for b in bars if b.get("c") is not None]
         if not bars:
@@ -469,7 +469,7 @@ def build_report(db_path: Path, *, fetch_exit_prices: bool = False,
             t.pop("_far_symbol", None)
 
         return {
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
             "db_path": str(db_path),
             "summary": summary,
             "by_source": by_source,
@@ -570,7 +570,7 @@ def format_text(report: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def main(argv: Optional[list[str]] = None) -> dict[str, Any]:
+def main(argv: list[str] | None = None) -> dict[str, Any]:
     ap = argparse.ArgumentParser(
         description="Measure approved trade proposals against realized earnings outcomes."
     )

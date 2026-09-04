@@ -14,24 +14,24 @@ import argparse
 import math
 import sys
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from earnings_edge.db.repositories import (
-    ff_universe_snapshots_upsert_many,
-    snapshots_optionable_universe,
-    options_chain_df_latest,
-    snapshots_hist_move_abs,
     _fetchall,
+    ff_universe_snapshots_upsert_many,
+    snapshots_hist_move_abs,
+    snapshots_optionable_universe,
 )
-from earnings_edge.fwd_factor import forward_iv, required_near_iv
+from earnings_edge.fwd_factor import forward_iv
 from earnings_edge.option_math import implied_volatility
-from scripts.ff_backfill import pick_expiries, atm_contract
+from scripts.ff_backfill import atm_contract, pick_expiries
 
 SELECTOR_VERSION = 2
 
@@ -73,7 +73,7 @@ def get_spot(ticker: str, scan_date: str) -> float | None:
     )
     if rows:
         return rows[0]["price"]
-    
+
     # Fallback to most recent
     rows = _fetchall(
         None,
@@ -85,7 +85,7 @@ def get_spot(ticker: str, scan_date: str) -> float | None:
 
 def process_ticker(ticker: str, scan: date) -> dict:
     scan_date_str = scan.strftime("%Y-%m-%d")
-    
+
     row = {
         "ticker": ticker,
         "scan_date": scan_date_str,
@@ -93,7 +93,7 @@ def process_ticker(ticker: str, scan: date) -> dict:
         "skip_reason": None,
         "selector_version": SELECTOR_VERSION,
     }
-    
+
     spot = get_spot(ticker, scan_date_str); spot = float(spot) if spot else None
     if not spot:
         row["skip_reason"] = "no_spot_price"
@@ -128,7 +128,7 @@ def process_ticker(ticker: str, scan: date) -> dict:
 
     T1 = t1["dte"] / 365.0
     T2 = t2["dte"] / 365.0
-    
+
     iv1 = implied_volatility(close1, spot, float(c1["strike_price"]), T1, 0.045, "call") if close1 else None
     iv2 = implied_volatility(close2, spot, float(c2["strike_price"]), T2, 0.045, "call") if close2 else None
 
@@ -149,7 +149,7 @@ def process_ticker(ticker: str, scan: date) -> dict:
     if sigma_fwd is None:
         row["skip_reason"] = "negative_fwd_variance"
         return row
-    
+
     row["sigma_fwd"] = sigma_fwd
     row["forward_factor"] = (iv1 - sigma_fwd) / sigma_fwd
 
@@ -157,7 +157,7 @@ def process_ticker(ticker: str, scan: date) -> dict:
     if earnings_date_str:
         row["has_earnings_in_window"] = 1
         row["earnings_date"] = earnings_date_str
-        
+
         earnings_dt = datetime.strptime(earnings_date_str, "%Y-%m-%d").date()
         tau_days = max((earnings_dt - scan).days, 0) + 1
         tau = tau_days / 365.0
@@ -188,13 +188,13 @@ def main() -> None:
     rows = _fetchall(None, "SELECT MAX(scan_date) as sd FROM options_chain", {})
     if rows and rows[0]["sd"]:
         scan_date_str = rows[0]["sd"]
-    
+
     scan = datetime.strptime(scan_date_str, "%Y-%m-%d").date()
 
     tickers = snapshots_optionable_universe(10000)
     if args.limit:
         tickers = tickers[:args.limit]
-        
+
     total = len(tickers)
     print(f"ff_universe_scan: {total} tickers to process for scan_date {scan_date_str}", flush=True)
     if not total:
@@ -203,7 +203,7 @@ def main() -> None:
     t0 = time.time()
     done = skipped = failed = 0
     batch: list[dict] = []
-    
+
     for i, ticker in enumerate(tickers):
         try:
             row = process_ticker(ticker, scan)
@@ -215,12 +215,12 @@ def main() -> None:
                 "skip_reason": f"error:{exc}"[:80]
             }
         batch.append(row)
-        
+
         if row.get("skip_reason"):
             skipped += 1
         else:
             done += 1
-            
+
         if (i + 1) % 50 == 0:
             if not args.dry_run:
                 ff_universe_snapshots_upsert_many(batch)
@@ -238,16 +238,16 @@ def main() -> None:
         valid = [r for r in batch if not r.get("skip_reason")]
         with_earning = [r for r in valid if r.get("has_earnings_in_window")]
         no_earning = [r for r in valid if not r.get("has_earnings_in_window")]
-        
+
         print(f"Total processed: {len(batch)}")
         print(f"Valid forward_factor: {len(valid)}")
         print(f"Earnings in window: {len(with_earning)}")
         print(f"No earnings in window: {len(no_earning)}")
-        
+
         print("\nExample With Earnings:")
         if with_earning:
             print(with_earning[0])
-            
+
         print("\nExample Without Earnings:")
         if no_earning:
             print(no_earning[0])

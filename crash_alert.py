@@ -19,9 +19,9 @@ from dotenv import load_dotenv
 load_dotenv()
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import pytz
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
-import pytz
 
 from earnings_edge.german_crash import build_monitor, format_alert
 from earnings_edge.ops_auth import operator_chat_ids

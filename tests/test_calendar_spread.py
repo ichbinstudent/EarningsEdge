@@ -1,5 +1,5 @@
-from datetime import date
 import unittest
+from datetime import date
 
 from earnings_edge.calendar_spread import select_calendar_expiries
 

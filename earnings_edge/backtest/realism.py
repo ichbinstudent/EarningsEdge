@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Optional, Sequence
+from typing import Sequence
 
 CONTRACT_MULTIPLIER = 100  # shares per US equity option contract
 
@@ -27,8 +27,8 @@ def realistic_fill(
     bid: float,
     ask: float,
     *,
-    volume: Optional[float] = None,
-    open_interest: Optional[float] = None,
+    volume: float | None = None,
+    open_interest: float | None = None,
     is_otm: bool = False,
     side: str = "buy",
     spread_participation: float = 0.5,
@@ -140,7 +140,7 @@ def _naked_short_margin(leg: OptionLeg) -> float:
     ) * CONTRACT_MULTIPLIER
 
 
-def _vertical_spread_margin(legs: Sequence[OptionLeg]) -> Optional[float]:
+def _vertical_spread_margin(legs: Sequence[OptionLeg]) -> float | None:
     """Margin for a 2-leg defined-risk vertical, or None if *legs* isn't one.
 
     A defined-risk vertical is exactly two legs of the same kind (both calls or
@@ -200,8 +200,8 @@ def regt_margin(legs: Sequence[OptionLeg]) -> float:
 # ── Capacity ─────────────────────────────────────────────────────────
 
 def capacity_cap(
-    volume: Optional[float],
-    open_interest: Optional[float],
+    volume: float | None,
+    open_interest: float | None,
     participation: float = 0.10,
 ) -> float:
     """Max contracts tradeable without price impact.

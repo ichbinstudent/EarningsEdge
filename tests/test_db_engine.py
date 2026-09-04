@@ -1,6 +1,6 @@
 """Tests for the centralized engine/session handler."""
-import sqlalchemy
 import pytest
+import sqlalchemy
 
 from earnings_edge.db import engine as db_engine
 
@@ -30,12 +30,10 @@ def test_session_scope_commits():
 
 
 def test_session_scope_rolls_back_on_error():
-    with pytest.raises(RuntimeError):
-        with db_engine.session_scope() as s:
-            s.execute(sqlalchemy.text("CREATE TABLE t2 (id INTEGER PRIMARY KEY, v TEXT)"))
-            s.execute(sqlalchemy.text("INSERT INTO t2 (v) VALUES (:v)"), {"v": "b"})
-            raise RuntimeError("boom")
+    with pytest.raises(RuntimeError), db_engine.session_scope() as s:
+        s.execute(sqlalchemy.text("CREATE TABLE t2 (id INTEGER PRIMARY KEY, v TEXT)"))
+        s.execute(sqlalchemy.text("INSERT INTO t2 (v) VALUES (:v)"), {"v": "b"})
+        raise RuntimeError("boom")
     # table creation rolled back too -> querying it must fail
-    with db_engine.get_session() as s:
-        with pytest.raises(sqlalchemy.exc.SQLAlchemyError):
-            s.execute(sqlalchemy.text("SELECT v FROM t2")).scalar()
+    with db_engine.get_session() as s, pytest.raises(sqlalchemy.exc.SQLAlchemyError):
+        s.execute(sqlalchemy.text("SELECT v FROM t2")).scalar()

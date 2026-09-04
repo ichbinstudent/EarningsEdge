@@ -15,16 +15,20 @@ from __future__ import annotations
 import argparse
 import time
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta, date
+from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Mapping, Optional
+from typing import Mapping
 
 import joblib
 import numpy as np
 import pandas as pd
 from sqlalchemy import text
 
-from polygon_backfill import PolygonClient, choose_atm_pair
+from earnings_edge.calendar_filter import (
+    data_quality_rejection_reasons,
+    score_calendar_trade,
+    utc_now_iso,
+)
 from earnings_edge.calendar_spread import select_calendar_expiries
 from earnings_edge.db import (
     DEFAULT_DB_PATH,
@@ -35,11 +39,7 @@ from earnings_edge.db import (
     configure,
     get_engine,
 )
-from earnings_edge.calendar_filter import (
-    data_quality_rejection_reasons,
-    score_calendar_trade,
-    utc_now_iso,
-)
+from polygon_backfill import PolygonClient
 
 
 @dataclass(frozen=True)
@@ -60,12 +60,12 @@ class CalendarCallTrade:
     net_debit: float
     exit_value: float
     pnl_dollars: float
-    return_on_debit: Optional[float]
-    model_score: Optional[float] = None
-    model_recommendation: Optional[int] = None
-    model_reason: Optional[str] = None
-    model_name: Optional[str] = None
-    model_scored_at: Optional[str] = None
+    return_on_debit: float | None
+    model_score: float | None = None
+    model_recommendation: int | None = None
+    model_reason: str | None = None
+    model_name: str | None = None
+    model_scored_at: str | None = None
 
 
 def ensure_schema() -> None:
@@ -77,7 +77,7 @@ def parse_date(s: str) -> date:
     return datetime.strptime(s, "%Y-%m-%d").date()
 
 
-def first_option_close_on_or_after(pg: PolygonClient, option_ticker: str, start: date, max_days: int = 5) -> Optional[float]:
+def first_option_close_on_or_after(pg: PolygonClient, option_ticker: str, start: date, max_days: int = 5) -> float | None:
     bars = pg.daily_bars(option_ticker, start, start + timedelta(days=max_days), limit=10)
     bars = [b for b in bars if b.get("c") is not None]
     if not bars:
@@ -85,7 +85,7 @@ def first_option_close_on_or_after(pg: PolygonClient, option_ticker: str, start:
     return float(bars[0]["c"])
 
 
-def select_calendar_calls(pg: PolygonClient, ticker: str, spot: float, as_of: date, earnings_date: date) -> Optional[tuple[dict, dict, date, date]]:
+def select_calendar_calls(pg: PolygonClient, ticker: str, spot: float, as_of: date, earnings_date: date) -> tuple[dict, dict, date, date] | None:
     contracts = pg.option_contracts(
         ticker,
         as_of=as_of,
@@ -166,10 +166,10 @@ def score_trade(
 def build_trade(
     pg: PolygonClient,
     row: Mapping,
-    artifact: Optional[dict] = None,
+    artifact: dict | None = None,
     model_name: str = "",
     threshold: float = 0.55,
-) -> Optional[CalendarCallTrade]:
+) -> CalendarCallTrade | None:
     ticker = row["ticker"]
     ed = parse_date(row["earnings_date"])
     as_of = parse_date(row["scan_date"])
@@ -219,7 +219,7 @@ def insert_trade(trade: CalendarCallTrade) -> None:
     calendar_call_trades_upsert(asdict(trade))
 
 
-def load_model_artifact(path: Optional[Path]) -> Optional[dict]:
+def load_model_artifact(path: Path | None) -> dict | None:
     if path is None:
         return None
     artifact = joblib.load(path)

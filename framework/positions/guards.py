@@ -16,12 +16,11 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Optional
 
 _OCC_RE = re.compile(r"^([A-Z]{1,6})(\d{6})([CP])(\d{8})$")
 
 
-def parse_occ(symbol: str) -> Optional[LegView]:
+def parse_occ(symbol: str) -> LegView | None:
     """Parse an OCC option symbol (AAPL260727C00325000) into a LegView."""
     m = _OCC_RE.match(symbol)
     if not m:
@@ -37,7 +36,7 @@ def parse_occ(symbol: str) -> Optional[LegView]:
     )
 
 
-def occ_underlying(symbol: str) -> Optional[str]:
+def occ_underlying(symbol: str) -> str | None:
     m = _OCC_RE.match(symbol)
     return m.group(1) if m else None
 
@@ -57,7 +56,7 @@ class AssignmentRisk:
     symbol: str
     reason: str              # "dividend_capture" | "near_expiry_itm"
     dte: int
-    dividend_date: Optional[date] = None
+    dividend_date: date | None = None
 
 
 def _is_itm(leg: LegView, spot: float) -> bool:
@@ -69,8 +68,8 @@ def _is_itm(leg: LegView, spot: float) -> bool:
 def check_assignment_risk(
     legs: list[LegView],
     spot: float,
-    on: Optional[date] = None,
-    ex_dividend_date: Optional[date] = None,
+    on: date | None = None,
+    ex_dividend_date: date | None = None,
     dte_threshold: int = 3,
 ) -> list[AssignmentRisk]:
     """Flag short legs with elevated early-assignment risk."""

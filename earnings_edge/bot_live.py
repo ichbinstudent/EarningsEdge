@@ -17,7 +17,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +64,7 @@ def sparkline(values: list[float], width: int = 16) -> str:
 
 
 def progress_text(title: str, stage: str, started: float, tick: int,
-                  now: Optional[float] = None) -> str:
+                  now: float | None = None) -> str:
     """One frame of the animated progress message (plain text)."""
     elapsed = fmt_duration((now if now is not None else time.monotonic()) - started)
     bar = "▓" * (1 + tick % 3) + "░" * (3 - (1 + tick % 3))
@@ -95,7 +94,7 @@ class ProgressMessage:
         self._started = 0.0
         self._tick = 0
         self._msg = None
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         self._done = False
 
     async def start(self) -> None:

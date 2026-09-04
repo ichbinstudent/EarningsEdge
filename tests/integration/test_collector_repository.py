@@ -46,7 +46,9 @@ def test_collector_merges_sources_and_persists(collector, monkeypatch, tmp_db_pa
     """investing + finnhub merge (dedup by ticker, non-Unknown timing wins),
     then every merged candidate lands in the snapshots table."""
     from sqlalchemy import text
-    from earnings_edge.db import engine as db_engine, insert_snapshot
+
+    from earnings_edge.db import engine as db_engine
+    from earnings_edge.db import insert_snapshot
 
     monkeypatch.setattr(
         collector, "_investing_fetch",
@@ -90,7 +92,9 @@ def test_collector_fallback_and_duplicate_insert_ignored(
     scan is a silent no-op via the (ticker, earnings_date, scan_date, timing,
     data_source) unique index."""
     from sqlalchemy import text
-    from earnings_edge.db import engine as db_engine, insert_snapshot
+
+    from earnings_edge.db import engine as db_engine
+    from earnings_edge.db import insert_snapshot
 
     def _boom(d):
         raise RuntimeError("investing.com 403")

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import time
 import logging
-from typing import Callable, TypeVar, Optional
-from datetime import datetime, timezone
+import time
+from datetime import UTC, datetime
+from typing import Callable, TypeVar
 
 T = TypeVar("T")
 
@@ -45,14 +45,14 @@ class BaseCollector:
 
         self._consecutive_failures = 0
         self._circuit_open = False
-        self._circuit_opened_at: Optional[float] = None
-        self._last_success: Optional[datetime] = None
+        self._circuit_opened_at: float | None = None
+        self._last_success: datetime | None = None
 
     def with_retry(self, fn: Callable[[], T]) -> T:
         """Execute fn with retry and circuit-breaker protection."""
         self._check_circuit()
 
-        last_exc: Optional[Exception] = None
+        last_exc: Exception | None = None
         for attempt in range(1, self.max_retries + 1):
             try:
                 result = fn()
@@ -88,7 +88,7 @@ class BaseCollector:
     def _on_success(self) -> None:
         self._consecutive_failures = 0
         self._circuit_open = False
-        self._last_success = datetime.now(timezone.utc)
+        self._last_success = datetime.now(UTC)
 
     def _on_failure(self) -> None:
         self._consecutive_failures += 1

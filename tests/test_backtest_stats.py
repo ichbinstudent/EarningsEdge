@@ -15,7 +15,6 @@ from earnings_edge.backtest.stats import (
     train_test_report,
 )
 
-
 # ── trade_stats --------------------------------------------------------------
 
 def test_trade_stats_known_list():

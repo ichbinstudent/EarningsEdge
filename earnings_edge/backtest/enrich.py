@@ -29,16 +29,16 @@ nothing to tier on); the dollar P&L metrics are always reported.
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Any, Optional
+from typing import Any
 
+from ..trading_types import StrategyResult, Trade
 from .realism import CONTRACT_MULTIPLIER, ibkr_commission
 from .stats import trade_stats, train_test_report
-from ..trading_types import StrategyResult, Trade
 
 DEFAULT_TRAIN_SPLIT = 0.7
 
 
-def _trade_commission(trade: Trade, contracts: int) -> Optional[float]:
+def _trade_commission(trade: Trade, contracts: int) -> float | None:
     """Total entry commission for one trade, or None when premiums unknown."""
     premiums = trade.features.get("leg_premiums")
     if not premiums:

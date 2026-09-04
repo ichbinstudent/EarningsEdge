@@ -13,16 +13,15 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import numpy as np
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from polygon_backfill import PolygonClient, realized_vol_30d, hist_vol
 from earnings_edge.db import (
     snapshots_apply_rv,
     snapshots_count_null_rv30,
     snapshots_rv_pending_pairs,
 )
+from polygon_backfill import PolygonClient, hist_vol, realized_vol_30d
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
@@ -62,7 +61,7 @@ def main():
         try:
             bars = pg.daily_bars(ticker, sd - timedelta(days=120), sd)
             if not bars:
-                print(f"  SKIP: no stock bars")
+                print("  SKIP: no stock bars")
                 failed += 1
                 continue
 
@@ -70,7 +69,7 @@ def main():
             hv = hist_vol(bars, 63)
 
             if rv is None and hv is None:
-                print(f"  SKIP: insufficient data")
+                print("  SKIP: insufficient data")
                 failed += 1
                 continue
 
@@ -84,7 +83,7 @@ def main():
 
     elapsed = (time.time() - start) / 60
     print(f"\nDone in {elapsed:.1f}min: {ok} updated, {failed} failed")
-    
+
     # Summary
     remaining = snapshots_count_null_rv30()
     print(f"Remaining with null rv30: {remaining}")

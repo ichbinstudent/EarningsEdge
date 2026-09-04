@@ -13,7 +13,6 @@ Pure string building; no Telegram imports (unit-testable).
 from __future__ import annotations
 
 import html
-from typing import Optional
 
 ENTRY_EMOJI = "📋"
 FF_EMOJI = "🪜"
@@ -108,7 +107,7 @@ def group_message(strategy: str, rows: list[dict], kind: str) -> str:
 
 
 def batch_overview(strategy_counts: dict, kind: str = "entry",
-                    extra: Optional[str] = None) -> str:
+                    extra: str | None = None) -> str:
     """Top-of-cycle summary across every strategy in one push cycle."""
     emoji = _GROUP_EMOJI[kind]
     noun = _GROUP_NOUN[kind]

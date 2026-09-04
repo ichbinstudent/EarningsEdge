@@ -1,7 +1,7 @@
 """Tests for the live signal layer (scan session -> executable Trades)."""
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
@@ -19,13 +19,14 @@ def _iso(dt: datetime) -> str:
 def scan_db(tmp_path):
     """Tmp DB with the earnings_edge schema + a fresh scan session."""
     import sqlite3
+
     from earnings_edge.db import engine as db_engine
 
     path = tmp_path / "test.db"
     db_engine.configure(path)
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     earn = (now + timedelta(days=1)).date()
     near = earn + timedelta(days=3)
     far = earn + timedelta(days=31)

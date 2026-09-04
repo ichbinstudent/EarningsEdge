@@ -64,6 +64,7 @@ def _seed_calendar_fixture(db_path) -> None:
     pnl_dollars: +12 on even i, -6 on odd i.
     """
     from sqlalchemy import text
+
     from earnings_edge.db import engine as db_engine
     from earnings_edge.db import insert_snapshot
 
@@ -119,8 +120,8 @@ def test_toml_strategy_backtest_deterministic_metrics(tmp_db_path, monkeypatch):
     _seed_calendar_fixture(tmp_db_path)
 
     import earnings_edge.backtest.calendar as strat_mod
-    from earnings_edge.trading_types import DataBundle
     from earnings_edge.backtest.calendar import get_strategy
+    from earnings_edge.trading_types import DataBundle
 
     # Neutralise the ML artifact: the engine path (join -> quality gates ->
     # debit filter -> summarize) is what is under test, not the model.
@@ -151,9 +152,8 @@ def test_toml_strategy_backtest_deterministic_metrics(tmp_db_path, monkeypatch):
 
 def test_earnings_quality_toml_strategy_exact_metrics(tmp_db_path):
     """earnings_quality (TOML-registered) on fixture snapshots: exact metrics."""
-    import sqlite3
-    from earnings_edge.trading_types import DataBundle
     from earnings_edge.backtest.calendar import get_strategy
+    from earnings_edge.trading_types import DataBundle
 
     conn = sqlite3.connect(str(tmp_db_path), timeout=30)
     conn.row_factory = sqlite3.Row
@@ -228,8 +228,9 @@ def _stub_client(snaps: dict, fill_price: float | None = None):
 def _seed_calendar_position(group_id="g1", entry=1.85,
                             opened="2026-07-24T14:00:00+00:00", exit_by=None):
     from sqlalchemy import text
-    from framework.execution.managed import record_open_positions
+
     from earnings_edge.db import engine as db_engine
+    from framework.execution.managed import record_open_positions
 
     legs = [
         {"symbol": "AAPL260731C00190000", "side": "sell", "ratio_qty": 1,
@@ -261,9 +262,11 @@ def _exit_manager(client, registry):
 def test_exit_engine_auto_closes_on_real_toml_profit_target(tmp_path):
     """Fixture position + real calendar_call_ml.toml exits -> auto close."""
     from sqlalchemy import text
+
+    from earnings_edge.db import configure
+    from earnings_edge.db import engine as db_engine
     from framework.core.registry import StrategyRegistry
     from framework.execution.managed import open_groups
-    from earnings_edge.db import configure, engine as db_engine
 
     configure(tmp_path / "fw.db")
     registry = StrategyRegistry()  # loads real strategies/*.toml
@@ -293,9 +296,9 @@ def test_exit_engine_scheduled_exit_auto_closes_on_real_toml_rules(tmp_path):
     calendar_call_ml.toml's "scheduled" rule auto-closes, no approval card.
     This replaced a fixed days_after_entry TOML rule specifically because it
     didn't track the near leg's real expiry (see ScheduledExit docstring)."""
+    from earnings_edge.db import configure
     from framework.core.registry import StrategyRegistry
     from framework.execution.managed import open_groups
-    from earnings_edge.db import configure
 
     configure(tmp_path / "fw.db")
     registry = StrategyRegistry()
@@ -327,9 +330,9 @@ def test_exit_engine_scheduled_exit_no_op_without_exit_by(tmp_path):
     """A position opened before exit_by tracking existed (or any structure
     without a differential-expiry deadline) must not get a phantom exit
     signal now that calendar_call_ml has no day-count time exit fallback."""
+    from earnings_edge.db import configure
     from framework.core.registry import StrategyRegistry
     from framework.execution.managed import open_groups
-    from earnings_edge.db import configure
 
     configure(tmp_path / "fw.db")
     registry = StrategyRegistry()

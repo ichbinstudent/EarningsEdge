@@ -1,7 +1,7 @@
-import pytest
 from unittest.mock import patch
+
 import designer_cli
-import sys
+
 
 def test_designer_cli_basic(capsys):
     # simulate: designer_cli.py --spot 100 --leg "buy call 100 2026-10-16 1 5.0 0.3" --forecast-rv 0.4

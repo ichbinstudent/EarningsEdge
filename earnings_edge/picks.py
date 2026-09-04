@@ -39,7 +39,6 @@ from __future__ import annotations
 
 import math
 from datetime import date, datetime, timedelta
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -273,7 +272,7 @@ def forward_factor_picks(
 def vrp_picks(
     df: pd.DataFrame,
     max_iv_pctl: float = 80.0,
-    min_option_volume: Optional[float] = None,
+    min_option_volume: float | None = None,
 ) -> pd.DataFrame:
     """Volatility-risk-premium picks (iron-condor playbook), sorted by
     iron_condor_mean_return desc.

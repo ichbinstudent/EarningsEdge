@@ -2,21 +2,24 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from starlette.testclient import TestClient
 
 from dashboard.desk import load_desk, run_desk_action
 from dashboard.tg_auth import (
-    InitDataError, require_operator, sign_init_data, verify_init_data, webapp_url,
+    InitDataError,
+    require_operator,
+    sign_init_data,
+    verify_init_data,
+    webapp_url,
 )
-from framework.positions.book_actions import adopt_orphan
 from earnings_edge.db import configure
-
+from framework.positions.book_actions import adopt_orphan
 
 TOKEN = "123456:TEST-TOKEN"
-NOW = datetime(2026, 8, 16, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 8, 16, 12, 0, tzinfo=UTC)
 OP = 256565866
 
 
@@ -130,7 +133,7 @@ def test_action_halt_with_valid_init(tmp_path, monkeypatch):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", TOKEN)
     monkeypatch.setenv("TELEGRAM_APPROVAL_CHAT_ID", str(OP))
     with TestClient(srv.app) as client:
-        real_now = int(datetime.now(timezone.utc).timestamp())
+        real_now = int(datetime.now(UTC).timestamp())
         r = client.post(
             "/api/action",
             json={"op": "halt"},

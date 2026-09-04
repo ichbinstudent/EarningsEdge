@@ -1,7 +1,7 @@
 """Discord webhook helper."""
 
 import logging
-from typing import Any, Dict, Union
+from typing import Any
 
 import requests
 
@@ -10,7 +10,7 @@ from .config import get_logger
 logger = get_logger("webhook")
 
 
-def send_webhook(url: str, message: Union[str, Dict[str, Any]], log: logging.Logger) -> None:
+def send_webhook(url: str, message: str | dict[str, Any], log: logging.Logger) -> None:
     """Send a string (code-block) or embed dict to a Discord webhook."""
     try:
         if isinstance(message, str):

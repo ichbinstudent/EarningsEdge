@@ -1,7 +1,5 @@
 """Iron fly strategy strike calculation."""
 
-import logging
-from typing import Optional
 
 import yfinance as yf
 

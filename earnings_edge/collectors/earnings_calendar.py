@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import logging
-import os
 import random
 from datetime import date
-from typing import List
 
 import requests
 from bs4 import BeautifulSoup
@@ -18,9 +16,9 @@ except ImportError:  # pragma: no cover
     cffi_requests = None
     _HAS_CFFI = False
 
-from .base import BaseCollector
 from ..models import EarningsCandidate
 from ..settings import get_settings
+from .base import BaseCollector
 
 logger = logging.getLogger("earnings_edge.collectors.earnings")
 
@@ -43,7 +41,7 @@ class EarningsCalendarCollector(BaseCollector):
         )
         self._settings = get_settings()
 
-    def fetch(self, target_date: date) -> List[EarningsCandidate]:
+    def fetch(self, target_date: date) -> list[EarningsCandidate]:
         """
         Fetch earnings for target_date using fallback chain:
         1. Investing.com (primary, most complete)
@@ -63,7 +61,7 @@ class EarningsCalendarCollector(BaseCollector):
         logger.warning("All earnings sources empty for %s", target_date)
         return []
 
-    def _safe_fetch(self, fn, target_date: date, source_name: str) -> List[EarningsCandidate]:
+    def _safe_fetch(self, fn, target_date: date, source_name: str) -> list[EarningsCandidate]:
         """Wrap a source fetch with circuit-breaker retry."""
         try:
             return self.with_retry(lambda: fn(target_date))
@@ -71,7 +69,7 @@ class EarningsCalendarCollector(BaseCollector):
             logger.warning("[%s] fetch failed for %s: %s", source_name, target_date, exc)
             return []
 
-    def _investing_fetch(self, target_date: date) -> List[EarningsCandidate]:
+    def _investing_fetch(self, target_date: date) -> list[EarningsCandidate]:
         """Scrape Investing.com earnings calendar."""
         url = "https://www.investing.com/earnings-calendar/Service/getCalendarFilteredData"
         headers = {
@@ -102,7 +100,7 @@ class EarningsCalendarCollector(BaseCollector):
             raise ValueError("Investing.com: missing 'data' key in response")
 
         soup = BeautifulSoup(data["data"], "html.parser")
-        stocks: List[EarningsCandidate] = []
+        stocks: list[EarningsCandidate] = []
         for row in soup.find_all("tr"):
             if not row.find("span", class_="earnCalCompanyName"):
                 continue
@@ -125,7 +123,7 @@ class EarningsCalendarCollector(BaseCollector):
             raise ValueError("Investing.com: parsed 0 candidates (markup changed?)")
         return stocks
 
-    def _finnhub_fetch(self, target_date: date) -> List[EarningsCandidate]:
+    def _finnhub_fetch(self, target_date: date) -> list[EarningsCandidate]:
         """Fetch from Finnhub API."""
         api_key = self._settings.finnhub_api_key
         if not api_key:
@@ -140,7 +138,7 @@ class EarningsCalendarCollector(BaseCollector):
         resp.raise_for_status()
         entries = resp.json().get("earningsCalendar", [])
 
-        stocks: List[EarningsCandidate] = []
+        stocks: list[EarningsCandidate] = []
         for e in entries:
             symbol = e.get("symbol")
             if not symbol:
@@ -157,14 +155,12 @@ class EarningsCalendarCollector(BaseCollector):
         return stocks
 
     @staticmethod
-    def _merge(*lists: List[EarningsCandidate]) -> List[EarningsCandidate]:
+    def _merge(*lists: list[EarningsCandidate]) -> list[EarningsCandidate]:
         """Deduplicate by ticker, preferring non-Unknown timing."""
         merged: dict[str, EarningsCandidate] = {}
         for candidate_list in lists:
             for c in candidate_list:
                 existing = merged.get(c.ticker)
-                if existing is None:
-                    merged[c.ticker] = c
-                elif existing.timing == "Unknown" and c.timing != "Unknown":
+                if existing is None or (existing.timing == "Unknown" and c.timing != "Unknown"):
                     merged[c.ticker] = c
         return list(merged.values())

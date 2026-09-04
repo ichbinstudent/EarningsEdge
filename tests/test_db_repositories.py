@@ -169,10 +169,10 @@ def test_snapshots_arb_universe(tmp_db_path):
     insert_snapshot({"ticker": "AAPL", "has_options": 1, "avg_volume_30d": 1500, "earnings_date": "2030-01-01", "scan_date": "2026-01-02"})
     # Another valid optionable
     insert_snapshot({"ticker": "MSFT", "has_options": 1, "avg_volume_30d": 1000, "earnings_date": "2030-01-01", "scan_date": "2026-01-01"})
-    
+
     universe = snapshots_arb_universe(max_tickers=10, today="2026-01-01")
     assert universe == ["AAPL", "MSFT"]  # AAPL has max vol 1500, MSFT 1000
-    
+
     assert snapshots_arb_universe(max_tickers=1, today="2026-01-01") == ["AAPL"]
 
 

@@ -13,15 +13,13 @@ from __future__ import annotations
 
 import math
 from datetime import date, timedelta
-from typing import Optional
 
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
 
-from earnings_edge.trading_types import Trade, StrategyResult, DataBundle
-from earnings_edge.collectors.alpaca_options import AlpacaOptionsClient
 from earnings_edge.backtest.realism import OptionLeg, regt_margin
+from earnings_edge.trading_types import DataBundle, StrategyResult, Trade
 
 # ---------------------------------------------------------------------------
 # Black-Scholes helpers (same math as multi_strike.py)
@@ -68,7 +66,7 @@ def nearest_strike(price: float, width: int = 5) -> float:
     return round(price / width) * width
 
 
-def pull_bid_ask(chain_df: pd.DataFrame, contract_ticker: str) -> tuple[Optional[float], Optional[float], Optional[float]]:
+def pull_bid_ask(chain_df: pd.DataFrame, contract_ticker: str) -> tuple[float | None, float | None, float | None]:
     """Return (bid, ask, midpoint) for this contract ticker in the chain snapshot."""
     if chain_df.empty:
         return None, None, None
@@ -473,7 +471,7 @@ MULTI_STRIKE_STRATEGIES = {
 }
 
 
-def run_multi_strike(bundle: DataBundle, strategies: Optional[list[str]] = None) -> dict[str, StrategyResult]:
+def run_multi_strike(bundle: DataBundle, strategies: list[str] | None = None) -> dict[str, StrategyResult]:
     results = {}
     selected = strategies or list(MULTI_STRIKE_STRATEGIES.keys())
     for name in selected:

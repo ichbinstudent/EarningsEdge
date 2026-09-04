@@ -6,7 +6,6 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Optional
 
 try:
     import fcntl
@@ -36,7 +35,7 @@ class SecretRedactFilter(logging.Filter):
         return True
 
 
-def install_secret_redaction(logger: Optional[logging.Logger] = None) -> None:
+def install_secret_redaction(logger: logging.Logger | None = None) -> None:
     filt = SecretRedactFilter()
     target = logger or logging.getLogger()
     target.addFilter(filt)
@@ -49,11 +48,11 @@ def install_secret_redaction(logger: Optional[logging.Logger] = None) -> None:
 class InstanceLock:
     """Exclusive flock on ``data/trading-bot.lock``. Second process raises."""
 
-    def __init__(self, path: Optional[Path] = None):
+    def __init__(self, path: Path | None = None):
         self.path = Path(path) if path else DEFAULT_LOCK
         self._fh = None
 
-    def acquire(self) -> "InstanceLock":
+    def acquire(self) -> InstanceLock:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._fh = open(self.path, "a+")
         if fcntl is None:

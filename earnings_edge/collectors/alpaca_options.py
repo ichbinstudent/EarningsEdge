@@ -10,9 +10,9 @@ Both are free on the Developer/paper tier (no monthly subscription).
 """
 from __future__ import annotations
 
-import time
 import logging
-from typing import Any, Optional
+import time
+from typing import Any
 
 import requests
 
@@ -42,11 +42,11 @@ class AlpacaOptionsClient:
         self,
         symbols: list[str],
         timeframe: str = "1D",
-        start: Optional[str] = None,
-        end: Optional[str] = None,
+        start: str | None = None,
+        end: str | None = None,
         limit: int = 1000,
-        page_token: Optional[str] = None,
-    ) -> tuple[list[dict[str, Any]], Optional[str]]:
+        page_token: str | None = None,
+    ) -> tuple[list[dict[str, Any]], str | None]:
         """Return (bars_list, next_page_token).
 
         symbols: list of OCC contract symbols (e.g. "AAPL250117C00150000").
@@ -65,7 +65,7 @@ class AlpacaOptionsClient:
             params["page_token"] = page_token
         resp = self._get("/v1beta1/options/bars", params=params)
         bars: list[dict[str, Any]] = []
-        next_token: Optional[str] = None
+        next_token: str | None = None
         if resp:
             for sym_contract, rows in resp.get("bars", {}).items():
                 for row in rows:
@@ -79,8 +79,8 @@ class AlpacaOptionsClient:
         underlying: str,
         feed: str = "indicative",
         limit: int = 200,
-        page_token: Optional[str] = None,
-    ) -> tuple[dict[str, Any], Optional[str]]:
+        page_token: str | None = None,
+    ) -> tuple[dict[str, Any], str | None]:
         """Return (snapshot_dict, next_page_token).
 
         Each value contains latestQuote {ap bp as bs ax bx t}, latestTrade,
@@ -99,7 +99,7 @@ class AlpacaOptionsClient:
             return resp, next_token
         return {}, None
 
-    def _get(self, path: str, params: Optional[dict[str, Any]] = None) -> Optional[dict[str, Any]]:
+    def _get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any] | None:
         for attempt in range(self.max_retries):
             try:
                 r = self.session.get(f"{DATA_BASE}{path}", params=params, timeout=self.timeout)

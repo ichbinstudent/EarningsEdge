@@ -14,7 +14,6 @@ from earnings_edge.backtest.realism import (
     regt_margin,
 )
 
-
 # ── ibkr_commission ----------------------------------------------------------
 
 def test_commission_tier_boundaries():

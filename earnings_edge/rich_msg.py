@@ -1,6 +1,7 @@
 import html
 import logging
-from typing import Any, Optional
+from typing import Any
+
 import httpx
 
 logger = logging.getLogger("rich_msg")
@@ -101,7 +102,7 @@ def jobs_rich_view(limit: int = 12) -> str:
     if not runs:
         out.append("<p><i>No job runs found.</i></p>")
         return "\n".join(out)
-        
+
     out.append("<table bordered striped compact>")
     out.append("<tr><th>Status</th><th>Job</th><th>Started</th><th>Summary</th></tr>")
     for r in runs:
@@ -109,7 +110,7 @@ def jobs_rich_view(limit: int = 12) -> str:
         status = "✓" if ok else "✗"
         job = str(r["job_name"])
         ts_str = r["started_at"][:19].replace("T", " ")
-        
+
         err = r["error"] or ""
         if err:
             summary_val = str(err)
@@ -125,9 +126,9 @@ def jobs_rich_view(limit: int = 12) -> str:
                     summary_val = str(stats)
             else:
                 summary_val = ""
-        
+
         summary = (summary_val[:97] + "...") if len(summary_val) > 100 else summary_val
-        
+
         out.append(
             f"<tr>"
             f"<td>{html.escape(status)}</td>"
@@ -140,13 +141,13 @@ def jobs_rich_view(limit: int = 12) -> str:
     return "\n".join(out)
 
 def equity_rich_view(days: int = 7) -> str:
-    from framework.risk.equity import latest_equity, day_start_equity, daily_pnl
     from earnings_edge.db import equity_snapshots_daily_avg
-    
+    from framework.risk.equity import daily_pnl, day_start_equity, latest_equity
+
     current = latest_equity()
     if not current:
         return "<h3>EQUITY</h3>\n<p><i>No equity data available.</i></p>"
-    
+
     val = current["equity"]
     bp = current["buying_power"]
     start_val = day_start_equity()

@@ -11,7 +11,6 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import date
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger("framework.core.universe")
 

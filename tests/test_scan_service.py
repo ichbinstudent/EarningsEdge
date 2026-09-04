@@ -9,7 +9,6 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
-from typing import Optional
 
 from earnings_edge.models import (
     NearMiss,
@@ -28,10 +27,10 @@ def _metrics(
     win_quarters: int = 8,
     iv_rv_ratio: float = 1.4,
     term_structure: float = -0.01,
-    sigma_baseline_1y: Optional[float] = 0.35,
-    sigma_short_leg: Optional[float] = 0.40,
-    sigma_short_leg_fair: Optional[float] = 0.45,
-    actual_to_fair_ratio: Optional[float] = 88.9,
+    sigma_baseline_1y: float | None = 0.35,
+    sigma_short_leg: float | None = 0.40,
+    sigma_short_leg_fair: float | None = 0.45,
+    actual_to_fair_ratio: float | None = 88.9,
 ) -> ValidationMetrics:
     return ValidationMetrics(
         price=price,
@@ -54,8 +53,8 @@ def _report(
     passed: bool = True,
     near_miss: bool = False,
     reason: str = "ok",
-    metrics: Optional[ValidationMetrics] = None,
-    earnings_date: Optional[date] = None,
+    metrics: ValidationMetrics | None = None,
+    earnings_date: date | None = None,
 ) -> TickerReport:
     return TickerReport(
         ticker=ticker,
@@ -71,7 +70,7 @@ def _report(
 class FakeInnerScanner:
     """Stand-in for the raw EarningsScanner (``EarningsCalendarScanner._scanner``)."""
 
-    def __init__(self, result: ScanResult, raise_exc: Optional[Exception] = None):
+    def __init__(self, result: ScanResult, raise_exc: Exception | None = None):
         self._result = result
         self._raise = raise_exc
         self.scan_calls: list[dict] = []
@@ -91,7 +90,7 @@ class FakeCalendarScanner:
     deterministically.
     """
 
-    def __init__(self, result: ScanResult, raise_exc: Optional[Exception] = None):
+    def __init__(self, result: ScanResult, raise_exc: Exception | None = None):
         self._scanner = FakeInnerScanner(result, raise_exc=raise_exc)
         self.score_calls: list[tuple] = []
         self.persist_calls: list[tuple] = []
@@ -102,7 +101,7 @@ class FakeCalendarScanner:
         *,
         scan_timestamp: str,
         selected_by_bot: bool = True,
-    ) -> tuple[Optional[str], Optional[float]]:
+    ) -> tuple[str | None, float | None]:
         self.score_calls.append((report.ticker, selected_by_bot))
         # AAPL always TAKEs; other selected tickers SKIP; non-selected → None.
         if report.ticker == "AAPL":
@@ -216,6 +215,7 @@ class TestScanService(unittest.TestCase):
     def test_scan_run_logged_to_db_with_trigger(self):
         out = self.service.run_scan(trigger="manual")
         from sqlalchemy import text
+
         from earnings_edge.db import engine as db_engine
 
         db_engine.configure(self.db_path)
@@ -246,6 +246,7 @@ class TestScanService(unittest.TestCase):
         self.assertGreater(out["scan_run_id"], 0)
 
         from sqlalchemy import text
+
         from earnings_edge.db import engine as db_engine
 
         db_engine.configure(self.db_path)
@@ -267,6 +268,7 @@ class TestScanService(unittest.TestCase):
         self.assertIn("No candidates", out["error"])
         self.assertEqual(out["stats"]["candidate_count"], 0)
         from sqlalchemy import text
+
         from earnings_edge.db import engine as db_engine
         db_engine.configure(self.db_path)
         with db_engine.get_session() as s:

@@ -16,9 +16,7 @@ BANNED_PATHS = [
 def is_banned(path: Path) -> bool:
     rel_path = path.as_posix()
     for b in BANNED_PATHS:
-        if b.endswith("/") and rel_path.startswith(b):
-            return True
-        elif rel_path == b:
+        if (b.endswith("/") and rel_path.startswith(b)) or rel_path == b:
             return True
     return False
 
@@ -34,24 +32,22 @@ def contains_record_event(node):
 
 def check_file(path: Path) -> list:
     errors = []
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         content = f.read()
     try:
         tree = ast.parse(content)
     except SyntaxError:
         return []
-    
+
     for node in ast.walk(tree):
         if isinstance(node, ast.ExceptHandler):
             # bare except: type is None
             # except Exception: type is Name(id='Exception')
             # except Exception as e: type is Name(id='Exception')
             is_broad = False
-            if node.type is None:
+            if node.type is None or (isinstance(node.type, ast.Name) and node.type.id == "Exception"):
                 is_broad = True
-            elif isinstance(node.type, ast.Name) and node.type.id == "Exception":
-                is_broad = True
-                
+
             if is_broad:
                 if not contains_record_event(node):
                     errors.append(f"{path}:{node.lineno}")
@@ -63,7 +59,7 @@ def test_exception_policy():
     for path in root.rglob("*.py"):
         if is_banned(path):
             errors.extend(check_file(path))
-            
+
     if errors:
         msg = "Found banned broad exceptions without record_event:\n" + "\n".join(errors)
         raise AssertionError(msg)

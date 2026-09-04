@@ -1,9 +1,11 @@
-import pytz
 from datetime import datetime
 from unittest.mock import MagicMock
+
+import pytz
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from bot import TradingBot
+
 
 class _FakeBot:
     def __init__(self):
@@ -26,7 +28,7 @@ class _FakeBot:
 def test_scheduler_hardening_properties():
     bot = _FakeBot()
     bot._setup_scheduler()
-    
+
     jobs = bot.scheduler.get_jobs()
     assert len(jobs) > 0
     for job in jobs:
@@ -41,14 +43,14 @@ def test_scheduler_hardening_properties():
 def test_scheduler_hardening_dst_safety():
     bot = _FakeBot()
     bot._setup_scheduler()
-    
+
     ny_tz = pytz.timezone("America/New_York")
-    
+
     # Check winter week (Standard Time)
     winter_base = datetime(2026, 1, 12, tzinfo=pytz.UTC) # A Monday
     # Check summer week (Daylight Saving Time)
     summer_base = datetime(2026, 7, 13, tzinfo=pytz.UTC) # A Monday
-    
+
     # Expected hours in ET (wall-clock)
     expected_hours = {
         "scanner_Earnings Calendar": [14],
@@ -58,11 +60,11 @@ def test_scheduler_hardening_dst_safety():
         "db_backup": [0],
         "daily_picks": [7],
     }
-    
+
     for base_date in [winter_base, summer_base]:
         for job in bot.scheduler.get_jobs():
             trig = job.trigger
-            
+
             # Fire 5 times and check the hour in America/New_York
             current_time = base_date
             for _ in range(5):

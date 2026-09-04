@@ -7,14 +7,13 @@ auto-trade path.
 """
 
 from __future__ import annotations
-from framework.risk.killswitch import record_event
 
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
-from typing import Optional
+from datetime import UTC, date, datetime
 
 from earnings_edge.db import risk_events_list
+from framework.risk.killswitch import record_event
 
 from .equity import daily_pnl, day_start_equity
 from .killswitch import KillSwitch, record_event
@@ -60,7 +59,7 @@ class RiskManager:
     from ``risk_events``/``managed_positions`` so limits survive restarts.
     """
 
-    def __init__(self, limits: Optional[RiskLimits] = None):
+    def __init__(self, limits: RiskLimits | None = None):
         self.limits = limits or RiskLimits()
         self.killswitch = KillSwitch()
 
@@ -76,8 +75,8 @@ class RiskManager:
         buying_power: float = 0.0,
         underlying_exposure: float = 0.0,
         lifecycle: str = "live",
-        limits: Optional[RiskLimits] = None,
-        live_broker: Optional[bool] = None,
+        limits: RiskLimits | None = None,
+        live_broker: bool | None = None,
     ) -> RiskDecision:
         """Approve or veto a proposed order.
 
@@ -151,7 +150,7 @@ class RiskManager:
             f"{ticker} cost={cost:.2f} {detail}".strip(), strategy=strategy,
         )
 
-    def check_daily_loss(self, equity_now: float, on: Optional[date] = None) -> bool:
+    def check_daily_loss(self, equity_now: float, on: date | None = None) -> bool:
         """Trip the kill switch when the daily loss limit is breached."""
         pnl = daily_pnl(equity_now, on)
         start = day_start_equity(on)
@@ -198,7 +197,7 @@ class RiskManager:
         return self._strategy_spend_today(strategy)
 
     def _strategy_spend_today(self, strategy: str) -> float:
-        today = datetime.now(timezone.utc).date().isoformat()
+        today = datetime.now(UTC).date().isoformat()
         rows = risk_events_list(
             event_type="entry", strategy=strategy, since=today, newest_first=False,
         )

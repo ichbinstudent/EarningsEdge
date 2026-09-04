@@ -11,7 +11,6 @@ from earnings_edge.bot_live import (
     spinner_frame,
 )
 
-
 # ── text helpers ──────────────────────────────────────────────────────────
 
 def test_spinner_cycles_through_frames():
@@ -62,6 +61,7 @@ def conn(tmp_path):
 
 def _seed_equity(conn):
     from sqlalchemy import text
+
     from earnings_edge.db import engine as db_engine
     with db_engine.session_scope() as s:
         for i, eq in enumerate((100_000, 100_400, 100_250, 101_100)):

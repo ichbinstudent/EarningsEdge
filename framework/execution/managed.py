@@ -7,11 +7,12 @@ closes). Readers: reconciliation, assignment guards, exit evaluation.
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timezone
-from typing import Optional
+from datetime import UTC, date, datetime
 
 from earnings_edge.db import (
     managed_positions_close as _mp_close,
+)
+from earnings_edge.db import (
     managed_positions_list,
     managed_positions_open,
     managed_positions_set_exit_by,
@@ -20,17 +21,17 @@ from earnings_edge.db import (
 
 
 def _utcnow() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def record_open_positions(
     legs: list[dict],
     strategy: str,
     group_id: str,
-    order_id: Optional[str] = None,
-    entry_price: Optional[float] = None,
-    metadata: Optional[dict] = None,
-    exit_by: Optional[date] = None,
+    order_id: str | None = None,
+    entry_price: float | None = None,
+    metadata: dict | None = None,
+    exit_by: date | None = None,
 ) -> int:
     """Insert one open row per leg for a submitted structure. Returns count.
 
@@ -46,7 +47,7 @@ def record_open_positions(
     )
 
 
-def open_positions(strategy: Optional[str] = None) -> list[dict]:
+def open_positions(strategy: str | None = None) -> list[dict]:
     return managed_positions_list(strategy=strategy)
 
 
@@ -104,8 +105,8 @@ def open_groups() -> list:
 
 def close_positions(
     group_id: str,
-    exit_price: Optional[float] = None,
-    closed_at: Optional[str] = None,
+    exit_price: float | None = None,
+    closed_at: str | None = None,
 ) -> int:
     """Mark all open rows in a group closed. Returns rows updated."""
     return _mp_close(group_id, exit_price=exit_price, closed_at=closed_at)

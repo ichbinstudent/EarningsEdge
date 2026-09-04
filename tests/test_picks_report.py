@@ -1,11 +1,11 @@
-import pytest
 import sqlite3
-import pandas as pd
-from unittest.mock import patch, MagicMock
 from pathlib import Path
-import datetime
+from unittest.mock import patch
+
+import pandas as pd
 
 import picks_report
+
 
 def test_picks_report_no_db(capsys):
     with patch("picks_report.DEFAULT_DB", Path("/does/not/exist.db")):
@@ -18,7 +18,7 @@ def test_picks_report_no_db(capsys):
 def test_picks_report_with_date(capsys, tmp_path):
     db_path = tmp_path / "test.db"
     db_path.touch()
-    
+
     with patch("picks_report.generate_picks") as mock_gen:
         mock_gen.return_value = {
             "earnings": pd.DataFrame({"ticker": ["AAPL"]})

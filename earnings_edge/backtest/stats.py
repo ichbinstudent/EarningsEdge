@@ -17,12 +17,11 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Optional, Sequence
+from typing import Sequence
 
 import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
-
 
 # ── Per-trade statistics ─────────────────────────────────────────────
 
@@ -96,15 +95,15 @@ class PortfolioMetrics:
     sharpe: float
     max_drawdown: float
     total_trades: int
-    benchmark_total_return: Optional[float] = None
-    excess_return: Optional[float] = None
+    benchmark_total_return: float | None = None
+    excess_return: float | None = None
 
 
 def portfolio_metrics(
     equity_curve: Sequence[float],
     *,
     periods_per_year: int = 252,
-    benchmark_curve: Optional[Sequence[float]] = None,
+    benchmark_curve: Sequence[float] | None = None,
 ) -> PortfolioMetrics:
     """Compute PortfolioMetrics over an equity curve (at least one point)."""
     eq = np.asarray(list(equity_curve), dtype=float)
@@ -131,8 +130,8 @@ def portfolio_metrics(
     max_drawdown = float(drawdowns.max()) if drawdowns.size else 0.0
     total_trades = int((rets != 0).sum())
 
-    benchmark_total_return: Optional[float] = None
-    excess_return: Optional[float] = None
+    benchmark_total_return: float | None = None
+    excess_return: float | None = None
     if benchmark_curve is not None:
         bench = np.asarray(list(benchmark_curve), dtype=float)
         if bench.size > 0 and bench[0] > 0:

@@ -26,7 +26,7 @@ def test_registry_loads_real_toml_configs():
 
     reg = StrategyRegistry()  # loads the real strategies/ directory
 
-    assert EXPECTED_STRATEGIES <= set(reg.configs)
+    assert set(reg.configs) >= EXPECTED_STRATEGIES
 
     # calendar_call_ml.toml: max_pct_per_trade = 0.10, pct_portfolio sizer 5%
     limits = reg.limits_for("calendar_call_ml")
@@ -54,10 +54,12 @@ def test_registry_loads_real_toml_configs():
 
 
 def test_registry_limits_drive_risk_gate(tmp_path):
+    from sqlalchemy import text
+
+    from earnings_edge.db import configure
+    from earnings_edge.db import engine as db_engine
     from framework.core.registry import StrategyRegistry
     from framework.risk.manager import RiskManager
-    from sqlalchemy import text
-    from earnings_edge.db import configure, engine as db_engine
 
     configure(tmp_path / "framework_test.db")
     reg = StrategyRegistry()

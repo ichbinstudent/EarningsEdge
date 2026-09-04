@@ -35,7 +35,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import date
-from typing import Optional, Union
+from typing import Union
 
 import numpy as np
 from scipy.stats import norm
@@ -111,8 +111,8 @@ def net_premium(legs: Position) -> float:
 
 # ── Structure tagging ----------------------------------------------------------
 
-def tag_structure(legs: Position, S: Optional[float] = None, r: float = RISK_FREE_RATE,
-                  as_of: Optional[date] = None) -> dict:
+def tag_structure(legs: Position, S: float | None = None, r: float = RISK_FREE_RATE,
+                  as_of: date | None = None) -> dict:
     """Classify Direction x Risk x Vol Exposure like oquants' structure tags.
 
     Direction: signed leg count weighted by directional sign (+1 calls/stock,
@@ -191,19 +191,19 @@ def pnl_at_front_expiry(legs: Position, S_grid, r: float, as_of: date) -> np.nda
     options = [l for l in legs if l.is_option]
     if not options:
         return pnl_at_expiry(legs, S_grid)
-        
+
     front_expiry = min(l.expiry for l in options)
-    
+
     def value_fn(leg: Leg, S: np.ndarray) -> np.ndarray:
         if not leg.is_option:
             return np.asarray(S, dtype=float)
-        
+
         # Time remaining for this leg when we reach the front expiry
         T = max((leg.expiry - front_expiry).days, 0) / DAYS_PER_YEAR
-        
+
         if T <= 0:
             return _expiry_value_per_share(leg, S)
-            
+
         sigma = max(leg.iv, MIN_IV)
         return _value_per_share(leg, S, T, r, sigma)
 
@@ -247,7 +247,7 @@ def pnl_at_date(legs: Position, S_grid, as_of_T: float, r: float = RISK_FREE_RAT
 
 # ── Greeks ----------------------------------------------------------------------
 
-def _leg_times(legs: Position, T: Optional[float], as_of: Optional[date]) -> list[float]:
+def _leg_times(legs: Position, T: float | None, as_of: date | None) -> list[float]:
     """Per-leg years to expiry: shared *T* if given, else from *as_of*."""
     if T is not None:
         return [T] * len(legs)
@@ -256,7 +256,7 @@ def _leg_times(legs: Position, T: Optional[float], as_of: Optional[date]) -> lis
 
 
 def position_greeks(legs: Position, S: float, r: float = RISK_FREE_RATE,
-                    T: Optional[float] = None, as_of: Optional[date] = None) -> dict:
+                    T: float | None = None, as_of: date | None = None) -> dict:
     """Net position greeks at (S, r): delta/gamma/theta/vega in dollar terms.
 
     Options use BSM at each leg's fill IV (x100 multiplier); stock legs have
@@ -271,9 +271,9 @@ def position_greeks(legs: Position, S: float, r: float = RISK_FREE_RATE,
             continue
         if T_leg <= 0 or leg.iv <= 0:
             if leg.kind == "call":
-                totals["delta"] += sign_mult * (1.0 if S > leg.strike else 0.0)
+                totals["delta"] += sign_mult * (1.0 if leg.strike < S else 0.0)
             else:
-                totals["delta"] += sign_mult * (-1.0 if S < leg.strike else 0.0)
+                totals["delta"] += sign_mult * (-1.0 if leg.strike > S else 0.0)
             continue
         totals["delta"] += sign_mult * black_scholes_delta(S, leg.strike, T_leg, r, leg.iv, leg.kind)
         totals["gamma"] += sign_mult * black_scholes_gamma(S, leg.strike, T_leg, r, leg.iv, leg.kind)
@@ -283,7 +283,7 @@ def position_greeks(legs: Position, S: float, r: float = RISK_FREE_RATE,
 
 
 def optimal_delta_hedge(legs: Position, S: float, r: float = RISK_FREE_RATE,
-                        as_of: Optional[date] = None) -> float:
+                        as_of: date | None = None) -> float:
     """Signed number of underlying shares that zeroes position delta."""
     return -position_greeks(legs, S, r, as_of=as_of)["delta"]
 
@@ -331,7 +331,7 @@ def _breakevens(legs: Position, grid: np.ndarray, pnl: np.ndarray) -> list[float
     return out
 
 
-def _front_expiry(legs: Position) -> Optional[date]:
+def _front_expiry(legs: Position) -> date | None:
     """Earliest option expiry in the position, or None for stock-only."""
     expiries = [l.expiry for l in legs if l.is_option]
     return min(expiries) if expiries else None
@@ -397,7 +397,7 @@ def _win_rate_at_expiry(legs: Position, S: float, r: float, breakevens: list[flo
 
 
 def analyze(legs: Position, S: float, r: float = RISK_FREE_RATE,
-            as_of: Optional[date] = None) -> dict:
+            as_of: date | None = None) -> dict:
     """Summary metrics: max profit/loss, breakevens, greeks, premium, win rate.
 
     Max profit/loss and breakevens come from a fine front-expiry P&L grid
@@ -431,8 +431,8 @@ def analyze(legs: Position, S: float, r: float = RISK_FREE_RATE,
 # ── RV forecast simulation --------------------------------------------------------
 
 def rv_scenario(legs: Position, S: float, r: float, forecast_rv: float,
-                n_sims: int = 20000, seed: Optional[int] = None,
-                as_of: Optional[date] = None) -> dict:
+                n_sims: int = 20000, seed: int | None = None,
+                as_of: date | None = None) -> dict:
     """Monte-Carlo terminal P&L distribution at a forecast realized vol.
 
     Terminal spot is lognormal with sigma = forecast_rv (drift r) over the

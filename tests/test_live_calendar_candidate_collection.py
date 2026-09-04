@@ -1,13 +1,15 @@
-from datetime import date
 import sqlite3
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
-from earnings_edge.bot_scanner import EarningsCalendarScanner, LiveCalendarQuote
 from sqlalchemy import text
-from earnings_edge.db import engine as db_engine, insert_live_calendar_candidate
+
+from earnings_edge.bot_scanner import EarningsCalendarScanner, LiveCalendarQuote
+from earnings_edge.db import engine as db_engine
+from earnings_edge.db import insert_live_calendar_candidate
 from earnings_edge.models import NearMiss, ScanResult, TickerReport, ValidationMetrics
 
 

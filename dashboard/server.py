@@ -19,7 +19,7 @@ import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 import httpx
 from starlette.applications import Starlette
@@ -180,12 +180,14 @@ def p_picks() -> dict:
         return {"empty": "no snapshots yet"}
 
     from datetime import datetime
+
     import pandas as pd
+
     from earnings_edge.picks import generate_picks
 
     as_of = datetime.strptime(latest_str[:10], "%Y-%m-%d").date()
     picks = generate_picks(as_of)
-    
+
     frames = []
     for name, df in picks.items():
         if df.empty:
@@ -193,10 +195,10 @@ def p_picks() -> dict:
         df = df.head(5).copy()
         df.insert(0, "strategy", name)
         frames.append(df)
-        
+
     if not frames:
         return {"empty": "no picks found"}
-        
+
     combined = pd.concat(frames, ignore_index=True)
     combined = combined.fillna("—")
     rows = combined.to_dict(orient="records")
@@ -208,7 +210,7 @@ def p_backtest_summary() -> dict:
         return {"empty": "no calendar trades yet"}
 
     from earnings_edge.backtest.realism import ibkr_commission
-    from earnings_edge.backtest.stats import trade_stats, portfolio_metrics, cross_sectional_test
+    from earnings_edge.backtest.stats import cross_sectional_test, portfolio_metrics, trade_stats
 
     df = calendar_call_trades_ml_frame()
     if df.empty:
@@ -216,7 +218,7 @@ def p_backtest_summary() -> dict:
 
     returns = df["return_on_debit"].dropna()
     gross = trade_stats(returns)
-    
+
     commissions = (
         df["near_entry"].apply(ibkr_commission)
         + df["far_entry"].apply(ibkr_commission)
@@ -227,12 +229,12 @@ def p_backtest_summary() -> dict:
     debit_dollars = df["net_debit"] * 100.0
     net_returns = (net_pnl / debit_dollars).where(debit_dollars > 0).dropna()
     net = trade_stats(net_returns)
-    
+
     init_cap = 100000.0
     by_date = df.groupby("scan_date")["pnl_dollars"].sum().sort_index()
     equity = [init_cap] + list(init_cap + by_date.cumsum())
     pm = portfolio_metrics(equity, periods_per_year=252)
-    
+
     stats = {
         "trades": len(df),
         "gross mean": f"{gross.mean:+.4f}",
@@ -242,11 +244,11 @@ def p_backtest_summary() -> dict:
         "sharpe": f"{pm.sharpe:.2f}",
         "max dd": f"{pm.max_drawdown:.2%}",
     }
-    
+
     if "model_score" in df and df["model_score"].notna().sum() >= 3:
         cs = cross_sectional_test(df["model_score"], df["return_on_debit"], n_buckets=5)
         stats["spearman rho"] = f"{cs.spearman_rho:+.3f}"
-        
+
     return {"stats": stats}
 
 
@@ -284,7 +286,7 @@ class Hub:
         self.clients: set[WebSocket] = set()
         self.hashes: dict[str, str] = {}
         self.latest: dict[str, dict] = {}
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
 
     async def start(self) -> None:
         self._task = asyncio.create_task(self._poll_loop())
@@ -362,7 +364,7 @@ def _loopback(request: Request) -> bool:
     return _client_host(request) in {"127.0.0.1", "::1", "testclient"}
 
 
-def _init_data_of(request: Request, body: Optional[dict] = None) -> str:
+def _init_data_of(request: Request, body: dict | None = None) -> str:
     """Pull initData from header, Authorization, query, or JSON body.
 
     Tailscale Funnel and some Telegram WebViews drop custom headers;
@@ -381,7 +383,7 @@ def _init_data_of(request: Request, body: Optional[dict] = None) -> str:
     )
 
 
-def _operator_or_error(request: Request, body: Optional[dict] = None):
+def _operator_or_error(request: Request, body: dict | None = None):
     try:
         return require_operator(_init_data_of(request, body)), None
     except InitDataError as exc:

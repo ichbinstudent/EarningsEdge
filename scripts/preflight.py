@@ -16,7 +16,6 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -67,7 +66,7 @@ def _alpaca_account_checks(client, *, live: bool) -> bool:
     return ok
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Pre-flight checks before starting the bot")
     parser.add_argument("--i-mean-live", action="store_true",
                         help="Confirm you intend to talk to the Alpaca LIVE API")

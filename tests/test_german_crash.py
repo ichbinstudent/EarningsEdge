@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import inspect
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
@@ -26,7 +26,7 @@ from earnings_edge.german_crash import (
     validate_quote,
 )
 
-NOW = datetime(2026, 9, 1, 16, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 1, 16, 0, 0, tzinfo=UTC)
 CFG = CrashAlertConfig(
     threshold=0.20,
     window_secs=300,
@@ -444,9 +444,9 @@ def test_monitor_does_not_alert_on_fetch_failure(tmp_path):
 
 
 def test_in_open_snapshot_window():
-    berlin_0730 = datetime(2026, 9, 1, 5, 30, tzinfo=timezone.utc)  # 07:30 CEST
-    berlin_0800 = datetime(2026, 9, 1, 6, 0, tzinfo=timezone.utc)
-    berlin_0900 = datetime(2026, 9, 1, 7, 0, tzinfo=timezone.utc)
+    berlin_0730 = datetime(2026, 9, 1, 5, 30, tzinfo=UTC)  # 07:30 CEST
+    berlin_0800 = datetime(2026, 9, 1, 6, 0, tzinfo=UTC)
+    berlin_0900 = datetime(2026, 9, 1, 7, 0, tzinfo=UTC)
     assert in_open_snapshot_window(berlin_0730)
     assert in_open_snapshot_window(berlin_0800)
     assert not in_open_snapshot_window(berlin_0900)
@@ -454,19 +454,19 @@ def test_in_open_snapshot_window():
 
 def test_in_crash_poll_window_0730_to_2300_berlin_weekdays():
     # Tue 2026-09-01 is CEST (UTC+2)
-    assert in_crash_poll_window(datetime(2026, 9, 1, 5, 30, tzinfo=timezone.utc))  # 07:30
-    assert in_crash_poll_window(datetime(2026, 9, 1, 21, 0, tzinfo=timezone.utc))   # 23:00
-    assert not in_crash_poll_window(datetime(2026, 9, 1, 5, 29, tzinfo=timezone.utc))  # 07:29
-    assert not in_crash_poll_window(datetime(2026, 9, 1, 21, 0, 1, tzinfo=timezone.utc))  # 23:00:01
+    assert in_crash_poll_window(datetime(2026, 9, 1, 5, 30, tzinfo=UTC))  # 07:30
+    assert in_crash_poll_window(datetime(2026, 9, 1, 21, 0, tzinfo=UTC))   # 23:00
+    assert not in_crash_poll_window(datetime(2026, 9, 1, 5, 29, tzinfo=UTC))  # 07:29
+    assert not in_crash_poll_window(datetime(2026, 9, 1, 21, 0, 1, tzinfo=UTC))  # 23:00:01
     # Saturday
-    assert not in_crash_poll_window(datetime(2026, 9, 5, 10, 0, tzinfo=timezone.utc))
+    assert not in_crash_poll_window(datetime(2026, 9, 5, 10, 0, tzinfo=UTC))
 
 
 def test_poll_skips_outside_berlin_window():
     collector = MagicMock()
     tradegate = MagicMock()
     mon = CrashMonitor(cfg=CFG, collector=collector, tradegate=tradegate)
-    out = mon.poll(datetime(2026, 9, 1, 5, 0, tzinfo=timezone.utc))  # 07:00 CEST
+    out = mon.poll(datetime(2026, 9, 1, 5, 0, tzinfo=UTC))  # 07:00 CEST
     assert out["skipped"] == "outside_window"
     assert out["alerts"] == []
     collector.fetch_quotes.assert_not_called()
@@ -485,8 +485,9 @@ def test_bot_does_not_register_german_crash_jobs():
 
 
 def test_crash_alert_process_owns_the_scheduler():
-    import crash_alert as ca
     import inspect as ins
+
+    import crash_alert as ca
 
     src = ins.getsource(ca.main)
     assert 'id="german_crash"' in src

@@ -20,7 +20,6 @@ from earnings_edge.market_data_provider import (
 from earnings_edge.models import AnalysisResult, EarningsCandidate
 from earnings_edge.validator import StockValidator
 
-
 # ── helpers ---------------------------------------------------------------
 
 def _hist_df(close: float, days: int = 5, volume: float = 2_000_000) -> pd.DataFrame:
@@ -264,7 +263,7 @@ def test_resilient_recovers_when_yahoo_healthy_again():
     r = ResilientProvider(yahoo=yahoo, polygon=StubProvider(), recheck_calls=2)
     assert r.active_name == "stub"
     yahoo._healthy = True
-    yahoo.history = lambda *a, **k: _hist_df(100.0)  # noqa: E501 - now works
+    yahoo.history = lambda *a, **k: _hist_df(100.0)
     r.history("TEST", "1d")  # call 1
     r.history("TEST", "1d")  # call 2 → recheck triggers
     assert r.active_name == "yahoo"

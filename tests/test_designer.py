@@ -19,7 +19,6 @@ from earnings_edge.designer import (
     pnl_at_expiry,
     position_greeks,
     rv_scenario,
-    tag_structure,
 )
 from earnings_edge.option_math import (
     black_scholes_gamma,

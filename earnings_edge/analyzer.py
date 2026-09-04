@@ -3,10 +3,9 @@ Core options math: Black-Scholes pricing, implied-volatility solver,
 Yang-Zhang realised-volatility estimator, and IV term-structure builder.
 """
 
-import logging
 import warnings
 from datetime import datetime, timedelta
-from typing import Callable, List, Optional
+from typing import Callable
 
 import numpy as np
 import pandas as pd
@@ -19,7 +18,7 @@ from .option_math import black_scholes_price, implied_volatility  # noqa: F401  
 logger = get_logger("analyzer")
 
 
-def _thin_expiries(dates: List[str], max_count: Optional[int]) -> List[str]:
+def _thin_expiries(dates: list[str], max_count: int | None) -> list[str]:
     """Reduce expiries to *max_count* while keeping near and far anchors."""
     if not max_count or len(dates) <= max_count:
         return dates
@@ -47,7 +46,7 @@ class OptionsAnalyzer:
     # -- helpers ----------------------------------------------------------
 
     @staticmethod
-    def filter_dates(dates: List[str], min_dte: int = 45) -> List[str]:
+    def filter_dates(dates: list[str], min_dte: int = 45) -> list[str]:
         """Return expiration dates ≥ *min_dte* days out (plus the first one before)."""
         today = datetime.today().date()
         cutoff = today + timedelta(days=min_dte)
@@ -109,7 +108,7 @@ class OptionsAnalyzer:
             return np.nan
 
     @staticmethod
-    def build_term_structure(days: List[int], ivs: List[float]) -> Callable[[float], float]:
+    def build_term_structure(days: list[int], ivs: list[float]) -> Callable[[float], float]:
         """Linear interpolation of DTE → ATM IV."""
         try:
             d = np.array(days)
@@ -135,7 +134,7 @@ class OptionsAnalyzer:
     def compute_recommendation(
         self,
         ticker: str,
-        earnings_date: Optional[datetime.date] = None,
+        earnings_date: datetime.date | None = None,
         provider=None,
     ) -> AnalysisResult:
         """Full options analysis for a single ticker.

@@ -10,7 +10,6 @@ closing risk is always allowed, even for a paused strategy.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from sqlalchemy.exc import SQLAlchemyError
 

@@ -1,8 +1,7 @@
 """Hot-DB-safe backup: online backup API, never TRUNCATE the live WAL."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -10,7 +9,7 @@ import pytest
 from earnings_edge.db import engine as db_engine
 from framework.backup import backup_db
 
-NOW = datetime(2026, 9, 1, 6, 15, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 1, 6, 15, tzinfo=UTC)
 
 
 def test_backup_invoke(tmp_path):

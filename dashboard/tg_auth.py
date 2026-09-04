@@ -5,8 +5,7 @@ import hashlib
 import hmac
 import json
 import os
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 from urllib.parse import parse_qsl
 
 from earnings_edge.ops_auth import is_operator, operators_configured
@@ -16,7 +15,7 @@ class InitDataError(ValueError):
     """initData missing, forged, stale, or not an operator."""
 
 
-def webapp_url(env: Optional[dict] = None) -> Optional[str]:
+def webapp_url(env: dict | None = None) -> str | None:
     """Public HTTPS origin of the Mini App, or None if unset/invalid."""
     src = env if env is not None else os.environ
     raw = (src.get("TELEGRAM_WEBAPP_URL") or "").strip()
@@ -26,16 +25,16 @@ def webapp_url(env: Optional[dict] = None) -> Optional[str]:
     return None
 
 
-def _bot_token(env: Optional[dict] = None) -> str:
+def _bot_token(env: dict | None = None) -> str:
     src = env if env is not None else os.environ
     return (src.get("TELEGRAM_BOT_TOKEN") or "").strip().strip('"').strip("'")
 
 
 def verify_init_data(
     init_data: str,
-    bot_token: Optional[str] = None,
+    bot_token: str | None = None,
     *,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
     max_age_s: int = 24 * 3600,
 ) -> dict:
     """Validate Telegram WebApp initData. Returns ``{user_id, auth_date, user}``."""
@@ -58,9 +57,9 @@ def verify_init_data(
         auth_date = int(fields.get("auth_date") or "0")
     except ValueError as exc:
         raise InitDataError("bad auth_date") from exc
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     if now.tzinfo is None:
-        now = now.replace(tzinfo=timezone.utc)
+        now = now.replace(tzinfo=UTC)
     if max_age_s and (int(now.timestamp()) - auth_date) > max_age_s:
         raise InitDataError("initData expired")
     user = _json_field(fields.get("user"))
@@ -90,10 +89,10 @@ def _json_field(raw) -> dict:
 
 def require_operator(
     init_data: str,
-    bot_token: Optional[str] = None,
+    bot_token: str | None = None,
     *,
-    env: Optional[dict] = None,
-    now: Optional[datetime] = None,
+    env: dict | None = None,
+    now: datetime | None = None,
 ) -> int:
     """Verify initData and fail-closed operator lock. Returns Telegram user id."""
     parsed = verify_init_data(init_data, bot_token, now=now)

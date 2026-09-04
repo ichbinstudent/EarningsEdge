@@ -6,18 +6,16 @@ Provides:
 - PositionManager: track fills, open positions, exits, PnL
 """
 from __future__ import annotations
-from framework.risk.killswitch import record_event
 
-import json
 import logging
 import os
 import time
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
-from typing import Optional
-from urllib.parse import urljoin
+from datetime import date, timedelta
 
 import requests
+
+from framework.risk.killswitch import record_event
 
 logger = logging.getLogger(__name__)
 
@@ -61,8 +59,8 @@ class AlpacaTradingClient:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        api_secret: Optional[str] = None,
+        api_key: str | None = None,
+        api_secret: str | None = None,
         paper: bool = True,
     ):
         self.paper = bool(paper)
@@ -82,9 +80,9 @@ class AlpacaTradingClient:
         self,
         method: str,
         path: str,
-        base: Optional[str] = None,
-        params: Optional[dict] = None,
-        json_body: Optional[dict] = None,
+        base: str | None = None,
+        params: dict | None = None,
+        json_body: dict | None = None,
         retry: int = 2,
     ) -> dict | list:
         """Make an API request with basic retry + error handling."""
@@ -141,14 +139,14 @@ class AlpacaTradingClient:
         """Return all open positions."""
         return self._request("GET", "/positions")
 
-    def get_position(self, symbol: str) -> Optional[dict]:
+    def get_position(self, symbol: str) -> dict | None:
         """Get position for a specific symbol. Returns None if not found."""
         try:
             return self._request("GET", f"/positions/{symbol}")
         except AlpacaNotFoundError:
             return None
 
-    def close_position(self, symbol: str, qty: Optional[int] = None) -> dict:
+    def close_position(self, symbol: str, qty: int | None = None) -> dict:
         """Close a position (option or stock). qty=None closes all."""
         params = {"percentage": "100"} if qty is None else {"quantity": str(qty)}
         return self._request("DELETE", f"/positions/{symbol}", params=params)
@@ -162,14 +160,14 @@ class AlpacaTradingClient:
     def get_option_contracts(
         self,
         underlying_symbol: str,
-        expiration_date_gte: Optional[str] = None,
-        expiration_date_lte: Optional[str] = None,
-        strike_price_gte: Optional[float] = None,
-        strike_price_lte: Optional[float] = None,
-        style: Optional[str] = None,
+        expiration_date_gte: str | None = None,
+        expiration_date_lte: str | None = None,
+        strike_price_gte: float | None = None,
+        strike_price_lte: float | None = None,
+        style: str | None = None,
         status: str = "active",
         limit: int = 200,
-        page_token: Optional[str] = None,
+        page_token: str | None = None,
     ) -> dict:
         """Get option contracts (metadata) for an underlying.
 
@@ -231,7 +229,7 @@ class AlpacaTradingClient:
                 return out
             params["page_token"] = token
 
-    def get_stock_latest_trade(self, symbol: str) -> Optional[float]:
+    def get_stock_latest_trade(self, symbol: str) -> float | None:
         """Latest stock trade price (data API)."""
         result = self._request(
             "GET", f"/stocks/{symbol}/trades/latest",
@@ -244,8 +242,8 @@ class AlpacaTradingClient:
     def get_option_chain_full(
         self,
         underlying: str,
-        expiration_date_gte: Optional[str] = None,
-        expiration_date_lte: Optional[str] = None,
+        expiration_date_gte: str | None = None,
+        expiration_date_lte: str | None = None,
         limit: int = 100,
     ) -> list[dict]:
         """Convenience: full option chain with snapshots merged.
@@ -334,9 +332,9 @@ class AlpacaTradingClient:
         side: str,
         order_type: str = "market",
         time_in_force: str = "day",
-        limit_price: Optional[float] = None,
-        stop_price: Optional[float] = None,
-        client_order_id: Optional[str] = None,
+        limit_price: float | None = None,
+        stop_price: float | None = None,
+        client_order_id: str | None = None,
         extended_hours: bool = False,
     ) -> dict:
         """Submit a single-leg option order."""
@@ -365,8 +363,8 @@ class AlpacaTradingClient:
         legs: list[dict],
         order_type: str = "market",
         time_in_force: str = "day",
-        limit_price: Optional[float] = None,
-        client_order_id: Optional[str] = None,
+        limit_price: float | None = None,
+        client_order_id: str | None = None,
         qty: int = 1,
     ) -> dict:
         """Submit a multi-leg option order (complex spread).
@@ -411,7 +409,7 @@ class AlpacaTradingClient:
         )
         return order
 
-    def get_orders(self, status: str = "open", symbols: Optional[list[str]] = None) -> list[dict]:
+    def get_orders(self, status: str = "open", symbols: list[str] | None = None) -> list[dict]:
         """Get orders (open, closed, etc.)."""
         params: dict[str, str] = {"status": status}
         if symbols:
@@ -475,7 +473,7 @@ class AlpacaTradingClient:
         target_strike: float,
         target_expiry: date,
         tolerance: float = 0.01,
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Find nearest matching contract for type/expiry/strike.
 
         Walks contracts with expiry within ±2 days of target_expiry,
@@ -534,7 +532,7 @@ class PositionManager:
             if p.get("underlying_symbol", "") == underlying
         )
 
-    def close_all_options(self, underlying: Optional[str] = None) -> list[dict]:
+    def close_all_options(self, underlying: str | None = None) -> list[dict]:
         """Close all option positions (optionally filter by underlying)."""
         positions = self.open_positions()
         results = []
@@ -560,10 +558,10 @@ class OrderResult:
     legs: list[dict]
     status: str
     filled_qty: int
-    filled_avg_price: Optional[float]
+    filled_avg_price: float | None
     created_at: str
     raw: dict
-    exit_by: Optional[date] = None   # structural exit deadline, set by the
+    exit_by: date | None = None   # structural exit deadline, set by the
                                       # caller (StrategyBridge.execute_trade)
                                       # — not derivable from Alpaca's response
 
@@ -590,9 +588,9 @@ class OrderResult:
 
 
 def create_client(
-    api_key: Optional[str] = None,
-    api_secret: Optional[str] = None,
-    paper: Optional[bool] = None,
+    api_key: str | None = None,
+    api_secret: str | None = None,
+    paper: bool | None = None,
 ) -> AlpacaTradingClient:
     """Factory: build a trading client from env vars or args.
 

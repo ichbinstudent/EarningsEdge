@@ -25,8 +25,7 @@ NOT mapped:
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, date, datetime, timedelta
 
 import pandas as pd
 
@@ -50,17 +49,17 @@ LIVE_STRATEGIES = [
 ]
 
 
-def _parse_ts(raw) -> Optional[datetime]:
+def _parse_ts(raw) -> datetime | None:
     try:
         ts = pd.to_datetime(raw)
     except Exception:
         return None
     if ts.tzinfo is None:
-        ts = ts.tz_localize(timezone.utc)
+        ts = ts.tz_localize(UTC)
     return ts.to_pydatetime()
 
 
-def _parse_date(raw) -> Optional[date]:
+def _parse_date(raw) -> date | None:
     if raw is None or (isinstance(raw, float) and pd.isna(raw)):
         return None
     try:
@@ -101,7 +100,7 @@ def latest_scan_frame(db_path=None, max_age_hours: float = 30.0) -> pd.DataFrame
     ts = _parse_ts(latest)
     if ts is None:
         return pd.DataFrame()
-    if datetime.now(timezone.utc) - ts > timedelta(hours=max_age_hours):
+    if datetime.now(UTC) - ts > timedelta(hours=max_age_hours):
         logger.info("latest scan session %s is stale (>%.0fh)", latest, max_age_hours)
         return pd.DataFrame()
     df = pd.read_sql(
@@ -149,7 +148,7 @@ def _first_positive(*vals) -> float:
     return 0.0
 
 
-def _calendar_trade(row, strategy: str, decision: str = "TAKE") -> Optional[Trade]:
+def _calendar_trade(row, strategy: str, decision: str = "TAKE") -> Trade | None:
     strike = _first_positive(row.get("strike"))
     price = _first_positive(row.get("price"))
     near = _parse_date(row.get("near_expiry"))
@@ -189,7 +188,7 @@ def _calendar_trade(row, strategy: str, decision: str = "TAKE") -> Optional[Trad
     )
 
 
-def _straddle_trade(row, strategy: str) -> Optional[Trade]:
+def _straddle_trade(row, strategy: str) -> Trade | None:
     strike = _first_positive(row.get("strike"))
     price = _first_positive(row.get("price"))
     near = _parse_date(row.get("near_expiry"))

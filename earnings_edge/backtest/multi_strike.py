@@ -9,12 +9,9 @@ ATM IV level) have predictive power for common option structures.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
-from typing import Optional
 
 import numpy as np
 from scipy.stats import norm
-
 
 # ---------------------------------------------------------------------------
 # Black-Scholes core (identical math to analyzer.py)
@@ -63,7 +60,7 @@ class IronCondor:
 
     @classmethod
     def construct(cls, S: float, wing_width: int = 5, r: float = 0.045,
-                  T: float = None, sigma: float = 0.5) -> "IronCondor":
+                  T: float = None, sigma: float = 0.5) -> IronCondor:
         atm = _nearest_strike(S)
         sc = atm + wing_width
         lc = atm + 2 * wing_width
@@ -109,7 +106,7 @@ class Butterfly:
 
     @classmethod
     def construct(cls, S: float, width: int = 5, r: float = 0.045,
-                  T: float = None, sigma: float = 0.5) -> "Butterfly":
+                  T: float = None, sigma: float = 0.5) -> Butterfly:
         atm = _nearest_strike(S)
         lo = atm - width
         hi = atm + width
@@ -152,7 +149,7 @@ class RiskReversal:
 
     @classmethod
     def construct(cls, S: float, width: int = 5, r: float = 0.045,
-                  T: float = None, sigma: float = 0.5) -> "RiskReversal":
+                  T: float = None, sigma: float = 0.5) -> RiskReversal:
         atm = _nearest_strike(S)
         kc = atm + width
         kp = atm - width

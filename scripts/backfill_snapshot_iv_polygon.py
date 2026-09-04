@@ -23,14 +23,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv
+
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 import os
 
 from sqlalchemy.exc import OperationalError
 
-from polygon_backfill import PolygonClient, EarningsEvent, collect_polygon_features
 from earnings_edge.db import snapshots_coalesce_features, snapshots_iv_gap_rows
+from polygon_backfill import EarningsEvent, PolygonClient, collect_polygon_features
 
 FIELDS = [
     "price", "avg_volume_30d", "rv30", "hist_vol_3m", "has_options",

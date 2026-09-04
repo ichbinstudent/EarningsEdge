@@ -9,22 +9,21 @@ Supports sizing (Kelly fraction or fixed), pre-submission validation,
 dry-run mode, and order-result tracking.
 """
 from __future__ import annotations
-from framework.risk.killswitch import record_event
 
 import logging
-import os
 import time
-from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
-from typing import Callable, Optional
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
+from typing import Callable
 
 from earnings_edge.alpaca_trading import (
+    AlpacaError,
     AlpacaTradingClient,
     OrderResult,
-    AlpacaError,
     create_client,
 )
-from earnings_edge.trading_types import Trade, StrategyResult, DataBundle
+from earnings_edge.trading_types import DataBundle, Trade
+from framework.risk.killswitch import record_event
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +77,7 @@ def debit_within_mid_cap(
     return float(debit) <= float(mid) * cap + 1e-9
 
 
-def combo_quotes(legs: list[dict], snaps: dict[str, dict]) -> Optional[dict]:
+def combo_quotes(legs: list[dict], snaps: dict[str, dict]) -> dict | None:
     """Net mid / spread for a multi-leg from Alpaca snapshot dicts.
 
     Returns None when any leg lacks a two-sided quote.
@@ -106,12 +105,12 @@ def last_look_veto(
     legs: list[dict],
     snaps: dict[str, dict],
     *,
-    spot: Optional[float] = None,
-    proposed_debit: Optional[float] = None,
+    spot: float | None = None,
+    proposed_debit: float | None = None,
     max_spread_vs_mid: float = MAX_SPREAD_VS_MID,
     max_debit_pct_of_spot: float = LAST_LOOK_MAX_DEBIT_PCT_OF_SPOT,
     max_debit_vs_mid: float = MAX_DEBIT_VS_MID,
-) -> Optional[str]:
+) -> str | None:
     """Return a skip reason if the combo is not tradable at these marks."""
     q = combo_quotes(legs, snaps)
     if q is None:
@@ -141,12 +140,12 @@ def resolved_keeps_strike(requested: float, resolved_symbol: str, tol: float = 0
 
 
 def preflight_combo(
-    bridge: "StrategyBridge",
-    trade: "Trade",
+    bridge: StrategyBridge,
+    trade: Trade,
     legs: list[dict],
     *,
     max_spread_vs_mid: float = MAX_SPREAD_VS_MID,
-) -> tuple[Optional[str], Optional[float]]:
+) -> tuple[str | None, float | None]:
     """Proposal-time check of a combo against the EXECUTION venue's book.
 
     The scan layer prices candidates from LSEG marks; execution goes to
@@ -222,8 +221,8 @@ class StrategyBridge:
 
     def __init__(
         self,
-        client: Optional[AlpacaTradingClient] = None,
-        config: Optional[BridgeConfig] = None,
+        client: AlpacaTradingClient | None = None,
+        config: BridgeConfig | None = None,
         risk_manager=None,
         lifecycle_manager=None,
         limits_resolver=None,
@@ -248,12 +247,12 @@ class StrategyBridge:
         self.sizer_resolver = sizer_resolver
         self.submitted: list[OrderResult] = []
         # Full broker positions, fetched lazily ONCE for risk exposure math.
-        self._positions_full: Optional[list[dict]] = None
+        self._positions_full: list[dict] | None = None
         # Account snapshot, fetched lazily ONCE (sizing + risk gate share it).
-        self._account: Optional[dict] = None
+        self._account: dict | None = None
         # Position-symbol set, fetched ONCE lazily (the per-leg has_position()
         # calls it replaces cost an API round-trip each — fatal on mega days).
-        self._position_syms: Optional[set[str]] = None
+        self._position_syms: set[str] | None = None
         # Contract-catalog cache for the lazy symbol-resolution fallback:
         # (ticker, gte, lte) -> raw response
         self._contracts_cache: dict[tuple[str, str, str], dict] = {}
@@ -272,7 +271,7 @@ class StrategyBridge:
 
     # ──────────────── Core: Trade → Order ────────────────────────────────
 
-    def execute_trade(self, trade: Trade) -> Optional[OrderResult]:
+    def execute_trade(self, trade: Trade) -> OrderResult | None:
         """Execute a single strategy Trade as an Alpaca order.
 
         Dispatches on trade.side to the appropriate leg builder.
@@ -389,7 +388,7 @@ class StrategyBridge:
                     logger.info("%s %s: probation size multiplier %.2f → qty %d",
                                 trade.strategy, trade.ticker, decision.qty_multiplier, qty)
             # Submit
-            client_order_id = f"{trade.strategy}_{trade.ticker}_{trade.scan_date}_{int(datetime.now(timezone.utc).timestamp())}"
+            client_order_id = f"{trade.strategy}_{trade.ticker}_{trade.scan_date}_{int(datetime.now(UTC).timestamp())}"
             exit_by = self._exit_by(legs)
             if self.config.dry_run:
                 logger.info(
@@ -414,7 +413,7 @@ class StrategyBridge:
                     status="dry_run",
                     filled_qty=0,
                     filled_avg_price=None,
-                    created_at=datetime.now(timezone.utc).isoformat(),
+                    created_at=datetime.now(UTC).isoformat(),
                     raw={},
                     exit_by=exit_by,
                 )
@@ -515,7 +514,7 @@ class StrategyBridge:
             return max(EARNINGS_STRESS_MULTIPLE * em * 100 * qty, entry * 100 * qty)
         return max(strike * 100 * qty * self._NOTIONAL_RISK_FRAC, entry * 100 * qty)
 
-    def _get_account(self) -> Optional[dict]:
+    def _get_account(self) -> dict | None:
         """Account snapshot, fetched once per bridge run. None = fetch failed."""
         if self._account is None:
             try:
@@ -619,7 +618,7 @@ class StrategyBridge:
         self,
         trade: Trade,
         legs: list[dict],
-        limit_price: Optional[float],
+        limit_price: float | None,
         client_order_id: str,
         qty: int = 1,
     ) -> dict:
@@ -658,7 +657,7 @@ class StrategyBridge:
     def _submit_legs(
         self,
         legs: list[dict],
-        limit_price: Optional[float],
+        limit_price: float | None,
         client_order_id: str,
         qty: int = 1,
     ) -> dict:
@@ -810,7 +809,7 @@ class StrategyBridge:
 
     # ──────────────── Helpers ─────────────────────────────────────────────
 
-    def _resolve_symbol(self, ticker: str, expiry: date, strike: float, option_type: str) -> Optional[str]:
+    def _resolve_symbol(self, ticker: str, expiry: date, strike: float, option_type: str) -> str | None:
         """Resolve Alpaca's internal option symbol via the contract catalog.
 
         Used ONLY as the lazy fallback when an OCC-constructed symbol is
@@ -871,7 +870,7 @@ class StrategyBridge:
         strike_padded = f"{int(round(strike * 1000)):08d}"
         return f"{root}{date_code}{type_code}{strike_padded}"
 
-    def _parse_date(self, val) -> Optional[date]:
+    def _parse_date(self, val) -> date | None:
         if val is None:
             return None
         if isinstance(val, date):
@@ -886,12 +885,12 @@ class StrategyBridge:
                 return None
         return None
 
-    def _min_expiry(self, legs: list[dict]) -> Optional[date]:
+    def _min_expiry(self, legs: list[dict]) -> date | None:
         expiries = [leg.get("expiry") for leg in legs if leg.get("expiry") is not None]
         return min(expiries) if expiries else None
 
     def _last_look(self, trade: Trade, legs: list[dict],
-                   limit_price: Optional[float]) -> tuple[Optional[str], Optional[float]]:
+                   limit_price: float | None) -> tuple[str | None, float | None]:
         """Refresh combo marks immediately before submit. (veto, mid)."""
         symbols = [leg["symbol"] for leg in legs]
         snaps: dict = {}
@@ -978,7 +977,7 @@ class StrategyBridge:
                 return latest
         return latest
 
-    def _exit_by(self, legs: list[dict]) -> Optional[date]:
+    def _exit_by(self, legs: list[dict]) -> date | None:
         """Structural exit deadline: the earliest leg expiry, but only when
         legs span more than one distinct expiry (calendar-style structures,
         e.g. calendar_call_ml/debit_size_exploit — the near leg vanishing is
@@ -988,7 +987,7 @@ class StrategyBridge:
         expiries = {leg.get("expiry") for leg in legs if leg.get("expiry") is not None}
         return min(expiries) if len(expiries) > 1 else None
 
-    def _midpoint_price(self, legs: list[dict]) -> Optional[float]:
+    def _midpoint_price(self, legs: list[dict]) -> float | None:
         """Compute midpoint price for limit orders (sum of leg midpoints)."""
         total = 0.0
         for leg in legs:
@@ -1043,10 +1042,10 @@ def _resolve_strategy(name: str):
 
 
 def run_auto_trade(
-    strategies: Optional[list[str]] = None,
-    db_path: Optional[str] = None,
-    api_key: Optional[str] = None,
-    api_secret: Optional[str] = None,
+    strategies: list[str] | None = None,
+    db_path: str | None = None,
+    api_key: str | None = None,
+    api_secret: str | None = None,
     max_per_ticker: float = 5000.0,
     min_buying_power: float = 10000.0,
     max_orders: int = 20,
@@ -1060,7 +1059,6 @@ def run_auto_trade(
 
     Returns dict with execution summary.
     """
-    from earnings_edge.trading_types import DataBundle
 
     bundle = DataBundle.from_db(db_path)
     try:
@@ -1169,7 +1167,7 @@ def run_auto_trade(
         pass
 
     summary = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "strategies": results,
         "buying_power": buying_power,
         "total_submitted": total_submitted,

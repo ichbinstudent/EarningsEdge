@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Dict, List, Optional
-
 
 # ── Earnings calendar ─────────────────────────────────────────────────
 
@@ -14,7 +12,7 @@ class EarningsCandidate:
     """A single ticker from the earnings calendar."""
     ticker: str
     timing: str  # "Pre Market", "Post Market", "During Market", "Unknown"
-    earnings_date: Optional[date] = None
+    earnings_date: date | None = None
     source: str = "unknown"  # "investing", "finnhub", "dolthub", "merge"
 
 
@@ -34,20 +32,20 @@ class AnalysisResult:
     avg_volume_pass: bool
 
     # Optional — populated when data is available
-    sigma_baseline_1y: Optional[float] = None
-    sigma_short_leg_fair: Optional[float] = None
-    sigma_short_leg: Optional[float] = None
-    actual_to_fair_ratio: Optional[float] = None
-    atm_call_delta: Optional[float] = None
-    atm_put_delta: Optional[float] = None
-    atm_iv_near: Optional[float] = None
-    atm_call_iv: Optional[float] = None
-    atm_put_iv: Optional[float] = None
-    rv30: Optional[float] = None
-    hist_vol_3m: Optional[float] = None
+    sigma_baseline_1y: float | None = None
+    sigma_short_leg_fair: float | None = None
+    sigma_short_leg: float | None = None
+    actual_to_fair_ratio: float | None = None
+    atm_call_delta: float | None = None
+    atm_put_delta: float | None = None
+    atm_iv_near: float | None = None
+    atm_call_iv: float | None = None
+    atm_put_iv: float | None = None
+    rv30: float | None = None
+    hist_vol_3m: float | None = None
 
     # Error state
-    error: Optional[str] = None
+    error: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -88,12 +86,12 @@ class ValidationMetrics:
     win_quarters: int = 0
     expected_move_dollars: float = 0.0
     expected_move_pct: float = 0.0
-    sigma_baseline_1y: Optional[float] = None
-    sigma_short_leg: Optional[float] = None
-    sigma_short_leg_fair: Optional[float] = None
-    actual_to_fair_ratio: Optional[float] = None
-    atm_call_delta: Optional[float] = None
-    atm_put_delta: Optional[float] = None
+    sigma_baseline_1y: float | None = None
+    sigma_short_leg: float | None = None
+    sigma_short_leg_fair: float | None = None
+    actual_to_fair_ratio: float | None = None
+    atm_call_delta: float | None = None
+    atm_put_delta: float | None = None
     tier: int = 0
 
 
@@ -132,7 +130,7 @@ class IronFlyResult:
     risk_reward_ratio: float = 0.0
     expiration: str = ""
 
-    error: Optional[str] = None
+    error: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -160,9 +158,9 @@ class TickerReport:
     spy_iv_rv: float = 0.0
     iv_rv_pass_threshold: float = 0.0
     iv_rv_near_miss_threshold: float = 0.0
-    earnings_date: Optional[date] = None
+    earnings_date: date | None = None
 
-    error: Optional[str] = None
+    error: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -172,7 +170,7 @@ class TickerReport:
 @dataclass
 class ScanResult:
     """Full earnings scan output."""
-    tier1: List[str] = field(default_factory=list)
-    tier2: List[str] = field(default_factory=list)
-    near_misses: List[NearMiss] = field(default_factory=list)
-    reports: Dict[str, TickerReport] = field(default_factory=dict)
+    tier1: list[str] = field(default_factory=list)
+    tier2: list[str] = field(default_factory=list)
+    near_misses: list[NearMiss] = field(default_factory=list)
+    reports: dict[str, TickerReport] = field(default_factory=dict)

@@ -10,15 +10,15 @@ Covers:
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import text
 
+from earnings_edge.db import engine as db_engine
 from framework.core.control import (
     clear_execution_mode_override,
     effective_execution_mode,
     execution_mode_overrides,
     set_execution_mode,
 )
-from sqlalchemy import text
-from earnings_edge.db import engine as db_engine
 
 
 @pytest.fixture

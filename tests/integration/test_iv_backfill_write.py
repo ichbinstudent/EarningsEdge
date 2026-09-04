@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
 def _seed(ticker, ed, sd, labeled=True, has_options=1, **cols):
     from sqlalchemy import text
+
     from earnings_edge.db import engine as db_engine
 
     base = dict(
@@ -42,9 +43,10 @@ def _seed(ticker, ed, sd, labeled=True, has_options=1, **cols):
 
 
 def test_apply_features_fills_nulls_and_preserves_existing(tmp_db_path):
-    from sqlalchemy import text
-    from earnings_edge.db import engine as db_engine
     import backfill_snapshot_iv_polygon as ivbf
+    from sqlalchemy import text
+
+    from earnings_edge.db import engine as db_engine
 
     sid = _seed("IVCO", "2026-07-30", "2026-07-29",
                 atm_iv_near=None, rv30=None, sigma_short_leg=0.31)

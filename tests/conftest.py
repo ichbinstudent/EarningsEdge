@@ -10,8 +10,8 @@ integration/e2e conftests apply the network guard autouse.
 """
 
 import tempfile
-from pathlib import Path
 from datetime import date
+from pathlib import Path
 
 import pytest
 
@@ -185,30 +185,31 @@ def network_guard(monkeypatch):
 def seeded_db(tmp_db_path):
     """Seed the temporary database with representative rows for views to read."""
     from sqlalchemy import text
+
     from earnings_edge.db import engine as db_engine
-    
+
     engine = db_engine.get_engine()
     with engine.begin() as conn:
         conn.execute(text(
             "INSERT INTO snapshots (ticker, earnings_date, scan_date, timing) "
             "VALUES ('AAPL', '2026-10-15', '2026-09-04', 'Post Market')"
         ))
-        
+
         conn.execute(text(
             "INSERT INTO live_calendar_candidates (ticker, earnings_date, scan_timestamp, passed) "
             "VALUES ('AAPL', '2026-10-15', '2026-09-04T08:00:00.000', 1)"
         ))
-        
+
         conn.execute(text(
             "INSERT INTO trade_events (symbol, strategy, event_type, price, detail, ts) "
             "VALUES ('AAPL260918C00250000', 'momentum', 'buy_to_open', 150.5, 'Bought 100 shares <foo>', '2026-09-04T08:00:00.123')"
         ))
-        
+
         conn.execute(text(
             "INSERT INTO job_runs (job_name, started_at, success, stats_json, error) "
             "VALUES ('sync', '2026-09-04T08:00:00.000', 1, '{\"a\": 1, \"b\": 2}', '')"
         ))
-        
+
         conn.execute(text(
             "INSERT INTO equity_snapshots (ts, equity, buying_power, portfolio_value) "
             "VALUES ('2026-09-03T16:00:00.000', 9950.0, 5000.0, 9950.0)"

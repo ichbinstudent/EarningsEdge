@@ -2,15 +2,20 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
+from sqlalchemy import text as sa_text
 
 from earnings_edge.alpaca_bridge import (
-    MAX_DEBIT_VS_MID, StrategyBridge, debit_within_mid_cap, size_veto_reason,
+    StrategyBridge,
+    debit_within_mid_cap,
+    size_veto_reason,
 )
+from earnings_edge.bot_views import monitor_view, status_view
+from earnings_edge.db import configure
+from earnings_edge.db import engine as db_engine
 from earnings_edge.inbox import assemble_inbox, inbox_keyboard, render_inbox
 from earnings_edge.live_signals import calendar_funnel_reasons, calendar_row_reason
 from framework.alerts import AlertDeduper
@@ -20,12 +25,8 @@ from framework.health import health_ready
 from framework.jobs import run_job
 from framework.revision import code_sha, started_at_iso
 from framework.scan_retry import next_retry, record_retry, should_chain_proposals, should_retry_scan
-from sqlalchemy import text as sa_text
-from earnings_edge.db import configure, engine as db_engine
-from earnings_edge.bot_views import monitor_view, status_view
 
-
-NOW = datetime(2026, 8, 15, 18, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 8, 15, 18, 0, tzinfo=UTC)
 
 
 def test_inbox_lists_four_live_kinds_and_expires_stale():
@@ -288,9 +289,9 @@ def test_monitor_text_sync_passes_desk_facts(tmp_path, monkeypatch):
 
 
 def test_collect_desk_facts_feeds_monitor(tmp_path):
+    from earnings_edge.alpaca_trading import AlpacaAuthError
     from earnings_edge.bot_views import collect_desk_facts, desk_view_kwargs, monitor_view
     from framework.alerts import DEDUPER, emit_clock_failure, is_alpaca_401
-    from earnings_edge.alpaca_trading import AlpacaAuthError
 
     configure(tmp_path / "desk.db")
     with db_engine.session_scope() as s:
@@ -368,6 +369,7 @@ def test_reconcile_missing_emits_missing_alert(tmp_path):
 
 def test_flush_alerts_pushes_scan_fail_to_approval_chat():
     import asyncio
+
     from bot import TradingBot
     from framework.alerts import DEDUPER
     DEDUPER.reset()

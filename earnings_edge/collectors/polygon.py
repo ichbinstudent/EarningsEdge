@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import time
 import logging
+import time
 from collections import deque
-from typing import Optional
 
 import requests
 
-from .base import BaseCollector
 from ..settings import get_settings
+from .base import BaseCollector
 
 logger = logging.getLogger("earnings_edge.collectors.polygon")
 
@@ -52,7 +51,7 @@ class PolygonClient(BaseCollector):
             time.sleep(max(wait, 1))
             self._wait_for_rate_limit()  # re-check
 
-    def get(self, path: str, params: Optional[dict] = None) -> Optional[dict]:
+    def get(self, path: str, params: dict | None = None) -> dict | None:
         """Make a rate-limited GET request to Polygon API."""
         api_key = self._settings.polygon_api_key
         if not api_key:

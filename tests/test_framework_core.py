@@ -9,9 +9,11 @@ import pytest
 from framework.core.calendar import TradingCalendar
 from framework.core.config import ConfigError, _validate, load_strategy_configs
 from framework.core.universe import (
-    EarningsCalendarUniverse, FileUniverse, StaticListUniverse, build_universe,
+    EarningsCalendarUniverse,
+    FileUniverse,
+    StaticListUniverse,
+    build_universe,
 )
-
 
 # ── Trading calendar (XNYS facts) ------------------------------------------
 

@@ -1,9 +1,8 @@
 """Nightly SQLite backup via the online backup API (hot-DB safe)."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 from earnings_edge.db.engine import DEFAULT_DB_PATH, wal_checkpoint
 
@@ -12,10 +11,10 @@ DEFAULT_DEST = Path(__file__).resolve().parent.parent / "data" / "backups"
 
 
 def backup_db(
-    src: Optional[Path] = None,
-    dest_dir: Optional[Path] = None,
+    src: Path | None = None,
+    dest_dir: Path | None = None,
     *,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
 ) -> Path:
     """Online-backup ``src`` (live, hot DB safe) to ``dest_dir/earnings_ml_YYYYMMDDTHHMMSSZ.db``.
 
@@ -34,7 +33,7 @@ def backup_db(
     if not src.exists():
         raise FileNotFoundError(src)
     dest_dir.mkdir(parents=True, exist_ok=True)
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     stamp = now.strftime("%Y%m%dT%H%M%SZ")
     dest = dest_dir / f"earnings_ml_{stamp}.db"
     tmp_dest = dest_dir / f".{dest.name}.tmp"

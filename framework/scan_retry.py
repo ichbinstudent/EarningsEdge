@@ -1,13 +1,12 @@
 """Exactly one follow-up scan after a failed/empty run, 10–15 minutes later."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 RETRY_MINUTES = 12  # inside the 10–15 min window
 
 
-def should_retry_scan(result: Optional[dict]) -> bool:
+def should_retry_scan(result: dict | None) -> bool:
     if not result:
         return True
     if not result.get("success"):
@@ -18,17 +17,17 @@ def should_retry_scan(result: Optional[dict]) -> bool:
     return False
 
 
-def should_chain_proposals(result: Optional[dict]) -> bool:
+def should_chain_proposals(result: dict | None) -> bool:
     if not result or not result.get("success"):
         return False
     stats = result.get("stats") or {}
     return int(stats.get("candidate_count") or 0) > 0
 
 
-def next_retry(now: Optional[datetime] = None, minutes: int = RETRY_MINUTES) -> datetime:
+def next_retry(now: datetime | None = None, minutes: int = RETRY_MINUTES) -> datetime:
     if not 10 <= minutes <= 15:
         raise ValueError("retry must be 10–15 minutes")
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     return now + timedelta(minutes=minutes)
 
 

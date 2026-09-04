@@ -12,19 +12,19 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from earnings_edge.config import get_logger, setup_logging
 from earnings_edge.chain_cache import (
     DEFAULT_MAX_TICKERS,
     collect,
     default_underlyings,
 )
+from earnings_edge.config import get_logger, setup_logging
 
 setup_logging()
 logger = get_logger("collect_options_snapshot")
@@ -62,7 +62,7 @@ def main():
         logger.warning("No underlyings to collect")
         return
 
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    run_id = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     logger.info("Starting options-chain collection run=%s (%d underlyings)",
                 run_id, len(underlyings))
     stats = collect(client, underlyings, run_id=run_id, dry_run=args.dry_run)

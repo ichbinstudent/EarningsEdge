@@ -17,11 +17,9 @@ import math
 import os
 import sys
 import time
-import uuid
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-import numpy as np
 from dotenv import load_dotenv
 from scipy.stats import norm
 
@@ -133,7 +131,6 @@ def candidates_for_snapshot(row: dict) -> list[str]:
 
 def backfill(client, snapshots_df, *, run_id, dry_run=False):
     """Pull bars for each snapshot and persist."""
-    from earnings_edge.collectors.alpaca_options import AlpacaOptionsClient
 
     inserted = 0
     api_calls = 0

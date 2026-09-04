@@ -29,9 +29,7 @@ Execution:
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta, timezone
-from typing import Optional
+from datetime import UTC, date, datetime, timedelta, timezone
 
 from .option_math import black_scholes_price, implied_volatility
 
@@ -48,7 +46,7 @@ def occ_parse(symbol: str) -> dict:
         "strike": int(symbol[-8:]) / 1000.0,
     }
 
-def forward_volatility(iv_near: float, T1: float, iv_far: float, T2: float) -> Optional[float]:
+def forward_volatility(iv_near: float, T1: float, iv_far: float, T2: float) -> float | None:
     if T2 <= T1 or iv_near <= 0 or iv_far <= 0:
         return None
     var = iv_far ** 2 * T2 - iv_near ** 2 * T1
@@ -56,7 +54,7 @@ def forward_volatility(iv_near: float, T1: float, iv_far: float, T2: float) -> O
         return None
     return math.sqrt(var / (T2 - T1))
 
-def calculate_forward_factor(iv_near: float, fwd_vol: float) -> Optional[float]:
+def calculate_forward_factor(iv_near: float, fwd_vol: float) -> float | None:
     if fwd_vol <= 0:
         return None
     return (iv_near / fwd_vol) - 1.0
@@ -73,7 +71,7 @@ def target_debit_for_factor(
     fwd_vol: float,
     target_factor: float,
     r: float = RISK_FREE_RATE,
-) -> Optional[float]:
+) -> float | None:
     """Max calendar debit consistent with a specific Forward Factor."""
     iv_star = required_near_iv_for_factor(fwd_vol, target_factor)
     near_star = black_scholes_price(spot, strike, T1, r, iv_star, "call")
@@ -82,7 +80,7 @@ def target_debit_for_factor(
     return far_price - near_star
 
 # Ex-Earnings Math requires stripping the event variance from the near leg
-def calculate_ex_earnings_iv(iv_near: float, T1: float, hist_rms_move: float) -> Optional[float]:
+def calculate_ex_earnings_iv(iv_near: float, T1: float, hist_rms_move: float) -> float | None:
     """Strip the historical earnings variance from the near leg."""
     total_var = (iv_near ** 2) * T1
     event_var = hist_rms_move ** 2
@@ -92,54 +90,54 @@ def calculate_ex_earnings_iv(iv_near: float, T1: float, hist_rms_move: float) ->
     return math.sqrt(ex_event_var / T1)
 
 
-def build_candidate(alpaca, ticker: str, *, today: Optional[date] = None):
+def build_candidate(alpaca, ticker: str, *, today: date | None = None):
     """Scan the option chain and evaluate if the ticker qualifies for Forward Factor Arbitrage."""
-    from .fwd_factor_ladder import occ_parse, _pick_pair_tenor, CalendarCandidate, _reject, hist_rms_move
-    from .fwd_factor import combo_debit
     from .db.repositories import snapshots_next_earnings_date
-    
+    from .fwd_factor import combo_debit
+    from .fwd_factor_ladder import CalendarCandidate, _pick_pair_tenor, _reject, hist_rms_move
+
     if today is None:
-        today = datetime.now(timezone.utc).date()
-        
+        today = datetime.now(UTC).date()
+
     next_earnings_str = snapshots_next_earnings_date(ticker, today=today.isoformat()) or ""
     try:
         next_earnings_date = date.fromisoformat(next_earnings_str) if next_earnings_str else None
     except ValueError:
         next_earnings_date = None
-        
+
     fake_ed = next_earnings_date or date.min
-        
+
     chain = alpaca.get_options_chain_snapshots(ticker)
     if not chain:
         return _reject(ticker, fake_ed, 0.0, "no chain")
-        
+
     spot = alpaca.get_stock_latest_trade(ticker)
     if not spot:
         return _reject(ticker, fake_ed, 0.0, "no spot")
-    
+
     t1, t2 = _pick_pair_tenor(chain, spot, today)
     if not t1 or not t2:
         return _reject(ticker, fake_ed, spot, "no T1/T2 pair")
-        
+
     T1 = (t1["expiry"] - today).days / 365.0
     T2 = (t2["expiry"] - today).days / 365.0
-    
+
     q1, q2 = chain[t1["symbol"]], chain[t2["symbol"]]
     mid1 = (q1["bid"] + q1["ask"]) / 2.0
     mid2 = (q2["bid"] + q2["ask"]) / 2.0
     iv1 = implied_volatility(mid1, spot, t1["strike"], T1, RISK_FREE_RATE, "call")
     iv2 = implied_volatility(mid2, spot, t2["strike"], T2, RISK_FREE_RATE, "call")
-    
+
     if not iv1 or not iv2 or math.isnan(iv1) or math.isnan(iv2):
         return _reject(ticker, fake_ed, spot, "no IV")
-        
+
     # Conditional ex-earnings correction: the ONLY earnings use. Strip the
     # event variance from the near-leg IV when an event falls strictly
     # inside T1; otherwise price off the raw near-leg IV.
     event_inside_t1 = bool(next_earnings_date and today < next_earnings_date <= t1["expiry"])
     ex_iv1 = iv1
     rms = 0.0
-    
+
     if event_inside_t1:
         # Hist-RMS gate ONLY — no backfill here. ensure_hist_moves hits
         # Yahoo/LSE synchronously; calling it per-ticker inside the bot's
@@ -149,7 +147,7 @@ def build_candidate(alpaca, ticker: str, *, today: Optional[date] = None):
         rms, n_hist = hist_rms_move(ticker=ticker)
         if rms is None:
             return _reject(ticker, fake_ed, spot, "event inside T1, no hist rms")
-            
+
         ex_iv_calc = calculate_ex_earnings_iv(iv1, T1, rms)
         if ex_iv_calc is None:
             return _reject(ticker, fake_ed, spot, "ex-earnings var <= 0")
@@ -158,33 +156,33 @@ def build_candidate(alpaca, ticker: str, *, today: Optional[date] = None):
     fwd_vol = forward_volatility(ex_iv1, T1, iv2, T2)
     if not fwd_vol:
         return _reject(ticker, fake_ed, spot, "fwd_vol <= 0")
-        
+
     factor = calculate_forward_factor(ex_iv1, fwd_vol)
     if not factor or factor < 0.10: # < 1.1 ratio
         return _reject(ticker, fake_ed, spot, f"factor {factor+1:.2f} < 1.1")
-        
+
     near_bid = q1.get("bid", 0)
     far_ask = q2.get("ask", 0)
     if near_bid <= 0 or far_ask <= 0:
         return _reject(ticker, fake_ed, spot, "invalid quotes")
-        
+
     debit_start = target_debit_for_factor(far_ask, spot, t1["strike"], T1, fwd_vol, 0.50) # factor 1.5
     debit_cap = target_debit_for_factor(far_ask, spot, t1["strike"], T1, fwd_vol, 0.25)   # factor 1.25
-    
+
     if debit_start is None or debit_cap is None:
         return _reject(ticker, fake_ed, spot, "math domain error")
-        
+
     mid_debit = combo_debit(q1.get("bid", 0), q1.get("ask", 0), q2.get("bid", 0), q2.get("ask", 0), executable=False)
     if not mid_debit:
         return _reject(ticker, fake_ed, spot, "no mid")
-        
+
     # Earnings-agnostic candidates carry no earnings date; T1 expiry IS the
     # trade's exit horizon, so use it wherever a date is required downstream
     # (ff_candidate_to_trade does date.fromisoformat(cand.earnings_date) —
     # an empty string would crash the whole proposal batch, and the LadderRunner
     # arm/step guards compare against this date to expire unfilled ladders).
     ed_out = next_earnings_str if event_inside_t1 else t1["expiry"].isoformat()
-    
+
     return CalendarCandidate(
         ticker=ticker, spot=spot, earnings_date=ed_out,
         strike=t1["strike"],

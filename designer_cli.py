@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """CLI entrypoint for Position Designer (designer.py)."""
 import argparse
-import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from pprint import pprint
 
 import numpy as np
 
 from earnings_edge.designer import Leg, analyze, pnl_at_expiry, pnl_at_front_expiry, rv_scenario
+
 
 def parse_leg(s: str) -> Leg:
     # format: action kind strike expiry qty price iv
@@ -113,12 +112,12 @@ def main() -> int:
                 l = Leg(l.action, l.kind, l.strike, l.expiry, l.quantity, price, iv)
             resolved.append(l)
         legs = resolved
-    
+
     print("\n" + "=" * 50)
     print("POSITION SUMMARY")
     print("=" * 50)
     summary = analyze(legs, args.spot, args.r)
-    
+
     for k, v in summary.items():
         if isinstance(v, dict):
             print(f"{k}:")

@@ -10,8 +10,8 @@ seeding is INSERT OR IGNORE.
 from __future__ import annotations
 
 import logging
+from datetime import UTC
 from pathlib import Path
-from typing import Optional
 
 from ..risk.manager import RiskLimits
 from .config import StrategyConfig, load_strategy_configs
@@ -20,15 +20,15 @@ logger = logging.getLogger("framework.core.registry")
 
 
 class StrategyRegistry:
-    def __init__(self, configs: Optional[dict[str, StrategyConfig]] = None,
-                 config_dir: Optional[Path] = None,
-                 base_limits: Optional[RiskLimits] = None):
+    def __init__(self, configs: dict[str, StrategyConfig] | None = None,
+                 config_dir: Path | None = None,
+                 base_limits: RiskLimits | None = None):
         self.configs = configs if configs is not None else load_strategy_configs(config_dir)
         self.base_limits = base_limits or RiskLimits()
 
     # -- resolution -------------------------------------------------------------
 
-    def get(self, name: str) -> Optional[StrategyConfig]:
+    def get(self, name: str) -> StrategyConfig | None:
         return self.configs.get(name)
 
     def limits_for(self, name: str) -> RiskLimits:
@@ -53,7 +53,7 @@ class StrategyRegistry:
         """Filter a code-level strategy list by config enabled flags."""
         return [n for n in names if self.is_enabled(n)]
 
-    def sizer_spec(self, name: str) -> Optional[dict]:
+    def sizer_spec(self, name: str) -> dict | None:
         cfg = self.configs.get(name)
         return dict(cfg.sizer) if cfg and cfg.sizer else None
 
@@ -65,9 +65,10 @@ class StrategyRegistry:
         Never overwrites: an operator's /promote //demote persists across
         restarts. Returns the number of rows seeded.
         """
-        from datetime import datetime, timezone
+        from datetime import datetime
+
         from earnings_edge.db import strategy_state_insert_ignore
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         seeded = 0
         for name, cfg in self.configs.items():
             seeded += strategy_state_insert_ignore(
@@ -78,7 +79,7 @@ class StrategyRegistry:
         return seeded
 
 
-_REGISTRY: Optional[StrategyRegistry] = None
+_REGISTRY: StrategyRegistry | None = None
 
 
 def get_registry() -> StrategyRegistry:

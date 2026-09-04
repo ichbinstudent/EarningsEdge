@@ -8,20 +8,20 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Mapping
 
 import joblib
 import numpy as np
 
 from earnings_edge.base import BaseScanner
-from earnings_edge.calendar_spread import select_calendar_expiries
 from earnings_edge.calendar_filter import (
     CalendarModelScore,
     data_quality_rejection_reasons,
     score_calendar_trade,
 )
+from earnings_edge.calendar_spread import select_calendar_expiries
 from earnings_edge.config import get_logger
 from earnings_edge.db import configure, insert_live_calendar_candidate, insert_scanner_output
 from earnings_edge.models import TickerReport, ValidationMetrics
@@ -91,7 +91,7 @@ def quote_is_sane(
     return True
 
 
-def _safe_float(value: Any) -> Optional[float]:
+def _safe_float(value: Any) -> float | None:
     try:
         result = float(value)
     except (TypeError, ValueError):
@@ -101,7 +101,7 @@ def _safe_float(value: Any) -> Optional[float]:
     return result
 
 
-def _option_bid_ask(row: Mapping[str, Any]) -> Optional[tuple[float, float]]:
+def _option_bid_ask(row: Mapping[str, Any]) -> tuple[float, float] | None:
     bid = _safe_float(row.get("bid"))
     ask = _safe_float(row.get("ask"))
     if bid is not None and ask is not None and bid >= 0 and ask > 0 and ask >= bid:
@@ -109,7 +109,7 @@ def _option_bid_ask(row: Mapping[str, Any]) -> Optional[tuple[float, float]]:
     return None
 
 
-def _option_mid(row: Mapping[str, Any]) -> Optional[float]:
+def _option_mid(row: Mapping[str, Any]) -> float | None:
     quote = _option_bid_ask(row)
     if quote is not None:
         bid, ask = quote
@@ -121,9 +121,9 @@ def _option_mid(row: Mapping[str, Any]) -> Optional[float]:
 def select_live_calendar_call_quote(
     ticker: str,
     price: float,
-    earnings_date: Optional[date],
+    earnings_date: date | None,
     provider=None,
-) -> Optional[LiveCalendarQuote]:
+) -> LiveCalendarQuote | None:
     """Select the live near/far ATM call calendar spread for bot ML scoring.
 
     The backtest uses Polygon EOD closes. On the Yahoo backend this uses
@@ -268,7 +268,7 @@ def format_model_prediction(score: CalendarModelScore, row: Mapping[str, Any]) -
     )
 
 
-def load_calendar_model(path: Path) -> Optional[dict[str, Any]]:
+def load_calendar_model(path: Path) -> dict[str, Any] | None:
     if not path.exists():
         logger.warning("Calendar model not found: %s", path)
         return None
@@ -288,9 +288,9 @@ class EarningsCalendarScanner(BaseScanner):
 
     def __init__(
         self,
-        model_path: Optional[Path] = None,
-        model_threshold: Optional[float] = None,
-        db_path: Optional[Path] = None,
+        model_path: Path | None = None,
+        model_threshold: float | None = None,
+        db_path: Path | None = None,
     ):
         super().__init__("Earnings Calendar")
         self._scanner = EarningsScanner()
@@ -309,7 +309,7 @@ class EarningsCalendarScanner(BaseScanner):
             self._calendar_model = None
 
 
-    def scan(self) -> Dict[str, Any]:
+    def scan(self) -> dict[str, Any]:
         """Delegate to ScanService for clean separation of concerns."""
         from earnings_edge.services.scan_service import ScanService
         # forward the scanner's db_path — otherwise ScanService falls back to
@@ -323,7 +323,7 @@ class EarningsCalendarScanner(BaseScanner):
         feature_row: Mapping[str, Any],
         *,
         scan_timestamp: str,
-        score: Optional[CalendarModelScore],
+        score: CalendarModelScore | None,
         rejection_reasons: list[str],
         selected_by_bot: bool,
         report: TickerReport,
@@ -406,7 +406,7 @@ class EarningsCalendarScanner(BaseScanner):
         feature_row: Mapping[str, Any],
         *,
         scan_timestamp: str,
-        score: Optional[CalendarModelScore],
+        score: CalendarModelScore | None,
         rejection_reasons: list[str],
         selected_by_bot: bool,
         report: TickerReport,
@@ -431,10 +431,10 @@ class EarningsCalendarScanner(BaseScanner):
 
     def _persist_scanner_output(
         self,
-        feature_row: Optional[Mapping[str, Any]],
+        feature_row: Mapping[str, Any] | None,
         *,
         scan_timestamp: str,
-        score: Optional[CalendarModelScore],
+        score: CalendarModelScore | None,
         rejection_reasons: list[str],
         selected_by_bot: bool,
         report: TickerReport,
@@ -463,7 +463,7 @@ class EarningsCalendarScanner(BaseScanner):
         *,
         scan_timestamp: str,
         selected_by_bot: bool = True,
-    ) -> tuple[Optional[str], Optional[float]]:
+    ) -> tuple[str | None, float | None]:
         selected_tickers = getattr(self, '_selected_tickers', set())
         display_status = "displayed" if selected_by_bot else "not_displayed"
         if not report.metrics or report.metrics.price <= 0:

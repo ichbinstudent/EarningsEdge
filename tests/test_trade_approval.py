@@ -1,16 +1,14 @@
 """Tests for the human-in-the-loop trade approval flow."""
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from sqlalchemy import text
 
 from earnings_edge.alpaca_bridge import BridgeConfig, StrategyBridge
 from earnings_edge.db import engine as db_engine
-from earnings_edge.trading_types import StrategyResult, Trade
 from earnings_edge.trade_approval import (
     PROPOSAL_TTL_HOURS,
     PendingTradeStore,
@@ -22,6 +20,7 @@ from earnings_edge.trade_approval import (
     trade_from_json,
     trade_to_json,
 )
+from earnings_edge.trading_types import StrategyResult, Trade
 
 
 def _age_proposal(store: PendingTradeStore, proposal_id: int, created_at: str) -> None:
@@ -235,7 +234,7 @@ def test_execute_rejects_non_pending(store):
 def test_execute_expires_stale_proposals(store, mock_bridge):
     pid = store.add(_trade(), "card")
     # age the row beyond the TTL
-    stale = (datetime.now(timezone.utc) - timedelta(hours=PROPOSAL_TTL_HOURS + 1)).isoformat()
+    stale = (datetime.now(UTC) - timedelta(hours=PROPOSAL_TTL_HOURS + 1)).isoformat()
     _age_proposal(store, pid, stale)
 
     result = execute_proposal(store, pid, bridge=mock_bridge)
@@ -394,9 +393,9 @@ def _during_ff_window(created_at: str) -> datetime:
     eastern = pytz.timezone("US/Eastern")
     created = datetime.fromisoformat(created_at)
     if created.tzinfo is None:
-        created = created.replace(tzinfo=timezone.utc)
+        created = created.replace(tzinfo=UTC)
     created_et = created.astimezone(eastern)
-    return created_et.replace(hour=14, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+    return created_et.replace(hour=14, minute=0, second=0, microsecond=0).astimezone(UTC)
 
 
 def test_execute_ff_arms_via_runner(store):
@@ -430,7 +429,7 @@ def test_execute_ff_refusal_marks_error(store):
 
 def test_execute_ff_stale_candidate_expires(store):
     rows = build_ff_proposals(store, [_ff_candidate()])
-    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    yesterday = (datetime.now(UTC) - timedelta(days=1)).isoformat()
     _age_proposal(store, rows[0]["id"], yesterday)
     runner = _FakeRunner()
     result = execute_proposal(store, rows[0]["id"], ff_runner=runner)

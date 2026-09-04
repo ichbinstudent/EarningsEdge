@@ -21,15 +21,15 @@ pytestmark = pytest.mark.integration
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
-import proposal_quality as pq  # noqa: E402
+import proposal_quality as pq
 
 
 @pytest.fixture
 def pq_db(tmp_path):
     """Temp DB with earnings + framework + approval/ladder schema applied."""
+    from earnings_edge.db import configure
     from earnings_edge.fwd_factor_ladder import DDL as FF_DDL
     from earnings_edge.trade_approval import _SCHEMA as PENDING_DDL
-    from earnings_edge.db import configure
 
     path = tmp_path / "pq.db"
     configure(path)

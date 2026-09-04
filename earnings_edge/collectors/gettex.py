@@ -7,15 +7,14 @@ LSEG exchange codes; quotes are last/bid/ask plus trade date/time.
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import os
 import re
-import base64
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import requests
 
@@ -51,10 +50,10 @@ class GettexCollector:
     def __init__(
         self,
         data_dir: str,
-        exchanges: Optional[list[str]] = None,
+        exchanges: list[str] | None = None,
         batch_size: int = 80,
         max_workers: int = 8,
-        session: Optional[requests.Session] = None,
+        session: requests.Session | None = None,
     ):
         self.data_dir = data_dir
         os.makedirs(self.data_dir, exist_ok=True)
@@ -68,7 +67,7 @@ class GettexCollector:
         self._rics_cache: dict[str, list[str]] = {}
         self._rics_cached_at: float = 0.0
 
-    def _headers(self, jwt: Optional[str] = None) -> dict[str, str]:
+    def _headers(self, jwt: str | None = None) -> dict[str, str]:
         token = jwt if jwt is not None else self._jwt
         return {
             "accept": "application/json",
@@ -124,7 +123,7 @@ class GettexCollector:
             self._jwt = self._get_jwt()
         return self._headers()
 
-    def _get_json(self, url: str) -> Optional[dict]:
+    def _get_json(self, url: str) -> dict | None:
         res = self._session.get(url, headers=self.get_headers(), timeout=20)
         if res.status_code == 401:
             self._jwt = self._get_jwt()
@@ -138,7 +137,7 @@ class GettexCollector:
             logger.warning("LSEG non-JSON from %s", url.split("?", 1)[0])
             return None
 
-    def fetch_sto_instruments(self, exchange: Optional[str] = None) -> list[str]:
+    def fetch_sto_instruments(self, exchange: str | None = None) -> list[str]:
         """All STO RICs on one exchange (or the first configured exchange)."""
         ex = (exchange or self.exchanges[0]).upper()
         rics: list[str] = []
@@ -162,7 +161,7 @@ class GettexCollector:
 
     def fetch_instruments(
         self,
-        exchanges: Optional[tuple[str, ...]] = None,
+        exchanges: tuple[str, ...] | None = None,
         force: bool = False,
         ttl_secs: float = 3600.0,
     ) -> list[str]:
@@ -219,11 +218,11 @@ class GettexCollector:
                     logger.warning("Gettex quote batch failed: %s", exc)
         return out
 
-    def write_snapshot(self, quotes: list[dict], now: Optional[datetime] = None) -> str:
+    def write_snapshot(self, quotes: list[dict], now: datetime | None = None) -> str:
         """Append raw LSEG rows to today's jsonl. Returns the path."""
-        now = now or datetime.now(timezone.utc)
+        now = now or datetime.now(UTC)
         if now.tzinfo is None:
-            now = now.replace(tzinfo=timezone.utc)
+            now = now.replace(tzinfo=UTC)
         today = now.astimezone().strftime("%Y-%m-%d")
         filepath = os.path.join(self.data_dir, f"gettex_quotes_{today}.jsonl")
         ts = now.isoformat()
@@ -235,7 +234,7 @@ class GettexCollector:
         logger.info("Captured %d gettex quotes to %s", len(quotes), filepath)
         return filepath
 
-    def capture_snapshot(self) -> Optional[str]:
+    def capture_snapshot(self) -> str | None:
         """Full-universe fetch + jsonl append (original 07:30–08:00 CET job)."""
         rics = self.fetch_instruments()
         if not rics:

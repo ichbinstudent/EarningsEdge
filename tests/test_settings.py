@@ -8,6 +8,7 @@ class TestSettings(unittest.TestCase):
         os.environ["POLYGON_RATE_SLEEP"] = "5.0"
         # Force re-read
         import importlib
+
         import earnings_edge.settings
         importlib.reload(earnings_edge.settings)
         from earnings_edge.settings import Settings
@@ -16,7 +17,7 @@ class TestSettings(unittest.TestCase):
         self.assertEqual(s.polygon_rate_sleep, 5.0)
 
     def test_filter_thresholds_have_defaults(self):
-        from earnings_edge.settings import Settings, FilterThresholds
+        from earnings_edge.settings import Settings
         s = Settings()
         self.assertEqual(s.filters.min_price, 3.0)
         self.assertEqual(s.filters.min_volume, 1_500_000)

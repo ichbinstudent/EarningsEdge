@@ -8,16 +8,16 @@ import argparse
 import logging
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
 from earnings_edge.config import setup_logging
-from earnings_edge.scanner import EarningsScanner
 from earnings_edge.discord_webhook import send_webhook
-from earnings_edge.models import ScanResult, TickerReport
+from earnings_edge.models import ScanResult
+from earnings_edge.scanner import EarningsScanner
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -240,7 +240,7 @@ def _send_webhook(args, scanner, result: ScanResult):
         "title": "Earnings Scanner Results",
         "color": 3066993,
         "fields": fields,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
     logger = logging.getLogger("earnings_edge.cli")
     send_webhook(args.webhook, embed, logger)

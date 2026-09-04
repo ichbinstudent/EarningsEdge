@@ -40,7 +40,6 @@ import threading
 import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -105,7 +104,7 @@ class YahooProvider:
     """yfinance backend (uses the shared curl_cffi session, proxy-aware)."""
 
     name = "yahoo"
-    max_expiries_hint: Optional[int] = None  # full chains are cheap on Yahoo
+    max_expiries_hint: int | None = None  # full chains are cheap on Yahoo
 
     def __init__(self, session=None):
         if session is None:
@@ -152,9 +151,9 @@ class PolygonProvider:
     """
 
     name = "polygon"
-    max_expiries_hint: Optional[int] = 3  # keep options-class calls bounded
+    max_expiries_hint: int | None = 3  # keep options-class calls bounded
 
-    def __init__(self, api_key: Optional[str] = None, http: Optional[requests.Session] = None):
+    def __init__(self, api_key: str | None = None, http: requests.Session | None = None):
         self._key = api_key if api_key is not None else get_settings().polygon_api_key
         self._http = http or requests.Session()
         self._limiters = {
@@ -169,13 +168,13 @@ class PolygonProvider:
 
     # -- HTTP plumbing -----------------------------------------------------
 
-    def _get(self, path: str, params: Optional[dict] = None, kind: str = "stock") -> dict:
+    def _get(self, path: str, params: dict | None = None, kind: str = "stock") -> dict:
         if not self._key:
             raise ValueError("POLYGON_API_KEY not set")
         params = dict(params or {})
         params["apiKey"] = self._key
         limiter = self._limiters[kind]
-        last_exc: Optional[Exception] = None
+        last_exc: Exception | None = None
         for attempt in range(4):
             limiter.acquire()
             try:
@@ -212,7 +211,7 @@ class PolygonProvider:
                 self._grouped_cache.pop(next(iter(self._grouped_cache)))
         return self._grouped_cache[day]
 
-    def _latest_bar(self, ticker: str) -> Optional[dict]:
+    def _latest_bar(self, ticker: str) -> dict | None:
         """Most recent daily bar via grouped daily, falling back to /prev."""
         for back in range(0, 7):
             day = date.today() - timedelta(days=back)
@@ -311,7 +310,7 @@ class PolygonProvider:
             logger.info("options_expiries(%s) failed: %s", ticker, exc)
             return []
 
-    def _option_close(self, contract_ticker: str) -> Optional[dict]:
+    def _option_close(self, contract_ticker: str) -> dict | None:
         """Most recent daily bar for one option contract."""
         to_day = date.today()
         from_day = to_day - timedelta(days=14)
@@ -411,11 +410,11 @@ class LSEProvider:
     """
 
     name = "lse"
-    max_expiries_hint: Optional[int] = None  # whole chain is one call
+    max_expiries_hint: int | None = None  # whole chain is one call
     _CHAIN_TTL_SECS = 900.0  # re-fetch a ticker's chain at most every 15 min
     _VAULT_CONCURRENCY = 2  # observed plan limit — see class docstring
 
-    def __init__(self, api_key: Optional[str] = None, client=None):
+    def __init__(self, api_key: str | None = None, client=None):
         self._key = api_key if api_key is not None else get_settings().lse_api_key
         self._client = client  # injectable; lazily constructed from the key
         self._limiter = _AimdRateLimiter(0.4, 0.31, 5.0)  # stay under 200/min
@@ -567,9 +566,9 @@ class ResilientProvider:
 
     def __init__(
         self,
-        yahoo: Optional[YahooProvider] = None,
-        polygon: Optional[PolygonProvider] = None,
-        lse: Optional[LSEProvider] = None,
+        yahoo: YahooProvider | None = None,
+        polygon: PolygonProvider | None = None,
+        lse: LSEProvider | None = None,
         recheck_calls: int = 60,
     ):
         if lse is None and get_settings().lse_api_key:
@@ -599,7 +598,7 @@ class ResilientProvider:
         return self._active.name
 
     @property
-    def max_expiries_hint(self) -> Optional[int]:
+    def max_expiries_hint(self) -> int | None:
         return self._active.max_expiries_hint
 
     def _maybe_recheck(self) -> None:
@@ -618,7 +617,7 @@ class ResilientProvider:
             self._call_count += 1
             self._maybe_recheck()
             start = self._order.index(self._active)
-        last_exc: Optional[Exception] = None
+        last_exc: Exception | None = None
         for idx in range(start, len(self._order)):
             provider = self._order[idx]
             try:

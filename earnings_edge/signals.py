@@ -22,8 +22,8 @@ All computation functions are pure; ``upsert_daily_signals`` is the only I/O.
 from __future__ import annotations
 
 import sqlite3
-from datetime import date, datetime
-from typing import Optional, Sequence
+from datetime import date
+from typing import Sequence
 
 import numpy as np
 import pandas as pd
@@ -40,7 +40,7 @@ MOM_SKIP_BARS = 22
 MOM_MIN_BARS = 60
 
 
-def _to_date(value) -> Optional[date]:
+def _to_date(value) -> date | None:
     try:
         ts = pd.to_datetime(value, errors="coerce")
         if ts is None or pd.isna(ts):
@@ -147,7 +147,7 @@ def compute_chain_signals(    chain: pd.DataFrame,
 
 
 def compute_iv_percentile(history: Sequence[float], current: float,
-                          min_obs: int = MIN_HISTORY) -> Optional[float]:
+                          min_obs: int = MIN_HISTORY) -> float | None:
     """Percentile (0-100) of *current* within *history*; None if thin."""
     hist = [float(h) for h in history if h is not None and np.isfinite(h)]
     if len(hist) < min_obs or current is None or not np.isfinite(current):
@@ -158,7 +158,7 @@ def compute_iv_percentile(history: Sequence[float], current: float,
 
 
 def compute_zscore(history: Sequence[float], current: float,
-                   min_obs: int = MIN_HISTORY) -> tuple[Optional[float], Optional[float]]:
+                   min_obs: int = MIN_HISTORY) -> tuple[float | None, float | None]:
     """(z-score, mean) of *current* vs *history*; (None, None) if thin."""
     hist = [float(h) for h in history if h is not None and np.isfinite(h)]
     if len(hist) < min_obs or current is None or not np.isfinite(current):
@@ -171,7 +171,7 @@ def compute_zscore(history: Sequence[float], current: float,
     return float((current - mean) / std), mean
 
 
-def compute_ts_momentum(bars: Sequence[dict]) -> Optional[float]:
+def compute_ts_momentum(bars: Sequence[dict]) -> float | None:
     """12-month-minus-1-month total return from daily bars (oldest first).
 
     Bars are dicts with a close under key ``c`` (Polygon aggregate shape).
@@ -187,8 +187,8 @@ def compute_ts_momentum(bars: Sequence[dict]) -> Optional[float]:
     return float(end / window[0] - 1.0)
 
 
-def relative_momentum(ts_momentum: Optional[float],
-                      benchmark_momentum: Optional[float]) -> Optional[float]:
+def relative_momentum(ts_momentum: float | None,
+                      benchmark_momentum: float | None) -> float | None:
     """(1 + ticker) / (1 + benchmark); > 1 means outperforming."""
     if ts_momentum is None or benchmark_momentum in (None, -1.0):
         return None
@@ -230,7 +230,7 @@ def contract_market(
     spot: float,
     r: float = 0.045,
     as_of: date | str | None = None,
-) -> Optional[dict]:
+) -> dict | None:
     """Market data for one contract from the latest persisted options_chain.
 
     Returns {"price", "iv", "delta", "scan_date"} or None when the contract

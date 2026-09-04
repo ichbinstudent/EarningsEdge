@@ -3,7 +3,7 @@ Abstract base class for all trading signal scanners.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Any
 
 
 class BaseScanner(ABC):
@@ -16,7 +16,7 @@ class BaseScanner(ABC):
         self.name = name
 
     @abstractmethod
-    def scan(self) -> Dict[str, Any]:
+    def scan(self) -> dict[str, Any]:
         """
         Run the scan and return results.
 

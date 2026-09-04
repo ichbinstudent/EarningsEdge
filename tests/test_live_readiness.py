@@ -1,10 +1,10 @@
 """Gating tests for Alpaca live-readiness: mode switch, last-look, sizers, chain cache."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
-import pytest
+from sqlalchemy import text
 
 from earnings_edge.alpaca_bridge import (
     LAST_LOOK_MAX_DEBIT_PCT_OF_SPOT,
@@ -18,12 +18,11 @@ from earnings_edge.alpaca_mode import (
     live_max_qty,
     resolve_credentials,
 )
-from earnings_edge.chain_cache import captured_hour, default_underlyings, row_for_contract
-from sqlalchemy import text
-from earnings_edge.db import insert_options_chain_rows
+from earnings_edge.chain_cache import default_underlyings, row_for_contract
+from earnings_edge.db import configure, insert_options_chain_rows
+from earnings_edge.db import engine as db_engine
 from framework.risk.manager import RiskManager
 from framework.risk.sizing import FixedDollarSizer, SizeContext
-from earnings_edge.db import configure, engine as db_engine
 
 
 def test_mode_defaults_paper(monkeypatch):
@@ -119,8 +118,8 @@ def test_last_look_vetoes_wide_spread_and_fat_debit():
 
 def test_hourly_chain_allows_two_hours(tmp_path):
     configure(tmp_path / "ml.db")
-    now1 = datetime(2026, 8, 22, 14, 0, tzinfo=timezone.utc)
-    now2 = datetime(2026, 8, 22, 15, 0, tzinfo=timezone.utc)
+    now1 = datetime(2026, 8, 22, 14, 0, tzinfo=UTC)
+    now2 = datetime(2026, 8, 22, 15, 0, tzinfo=UTC)
     snap = {"dailyBar": {"c": 1.5, "o": 1.4, "h": 1.6, "l": 1.3, "n": 1, "v": 10, "vw": 1.5},
             "latestQuote": {"bp": 1.4, "ap": 1.6, "bs": 1, "as": 1}}
     r1 = row_for_contract("run1", "AAPL", "AAPL260828C00200000", snap, now=now1)

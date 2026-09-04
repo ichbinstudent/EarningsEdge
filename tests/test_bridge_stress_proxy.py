@@ -17,15 +17,13 @@ from unittest.mock import MagicMock
 import pytest
 
 from earnings_edge.alpaca_bridge import (
-    EARNINGS_STRESS_MULTIPLE,
     BridgeConfig,
     StrategyBridge,
 )
+from earnings_edge.db import engine as db_engine
 from earnings_edge.trading_types import Trade
 from framework.risk.manager import RiskManager
 from framework.risk.sizing import SizeContext, build_sizer
-from earnings_edge.db import engine as db_engine
-
 
 # ── Helpers ------------------------------------------------------------------
 

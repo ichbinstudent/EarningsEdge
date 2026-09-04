@@ -13,6 +13,7 @@ from curl_cffi import requests as curl_requests
 
 from .settings import get_settings
 
+
 # ── Shared HTTP session (curl_cffi impersonating Chrome) ──────────────
 def _build_session() -> curl_requests.Session:
     """Chrome-impersonating session; honours YFINANCE_PROXY when set."""
@@ -21,7 +22,7 @@ def _build_session() -> curl_requests.Session:
     if proxy:
         kwargs["proxies"] = {"http": proxy, "https": proxy}
     sess = curl_requests.Session(**kwargs)
-    
+
     # Enforce default timeout to prevent indefinite hangs if yfinance misses it
     orig_request = sess.request
     def _request_with_timeout(*args, **req_kwargs):

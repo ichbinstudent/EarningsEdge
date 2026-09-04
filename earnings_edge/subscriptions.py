@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Iterable, Optional
+from typing import Iterable
 
 logger = logging.getLogger(__name__)
 
@@ -128,8 +128,8 @@ def route_proposals(
     proposals: list[dict],
     *,
     universe: set[int],
-    subs: Optional[StrategySubscriptions],
-    override_chat: Optional[int] = None,
+    subs: StrategySubscriptions | None,
+    override_chat: int | None = None,
 ) -> dict[int, list[dict]]:
     """Per-chat proposal routing.
 
@@ -151,7 +151,7 @@ def route_proposals(
     return routed
 
 
-def funnel_line(funnel: Optional[dict]) -> str:
+def funnel_line(funnel: dict | None) -> str:
     """One-line plain-text funnel summary for the proposal batch message.
 
     Aggregated across strategies: max input rows, then summed stage counts.

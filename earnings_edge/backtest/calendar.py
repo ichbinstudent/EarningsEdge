@@ -14,10 +14,8 @@ All data is passed in via DataBundle so they can be unit-tested without real dat
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -27,16 +25,13 @@ from earnings_edge.calendar_filter import (
     data_quality_rejection_reasons,
     score_calendar_trade,
 )
-
-
 from earnings_edge.trading_types import DataBundle, StrategyResult, Trade
-
 
 # ---------------------------------------------------------------------------
 # Strategy protocol + registry
 # ---------------------------------------------------------------------------
 
-_STRATEGIES: Dict[str, Any] = {}
+_STRATEGIES: dict[str, Any] = {}
 
 
 def register(strategy: Any) -> Any:
@@ -50,7 +45,7 @@ def get_strategy(name: str) -> Any:
     return _STRATEGIES[name]
 
 
-def list_strategies() -> List[str]:
+def list_strategies() -> list[str]:
     return list(_STRATEGIES)
 
 
@@ -153,7 +148,6 @@ class CalendarCallStrategy:
 
     def _load_model(self):
         import joblib
-        from pathlib import Path
         path = Path(self.model_path)
         if not path.exists():
             return None
@@ -162,7 +156,7 @@ class CalendarCallStrategy:
         except Exception:
             return None
 
-    def _summarize(self, trades: List[Trade]) -> Dict[str, Any]:
+    def _summarize(self, trades: list[Trade]) -> dict[str, Any]:
         taken = [t for t in trades if t.ml_decision == "TAKE"]
         return {
             "total": len(trades),
@@ -269,7 +263,7 @@ class StockDriftStrategy:
 
         return StrategyResult(self.name, trades, self._summarize(trades))
 
-    def _summarize(self, trades: List[Trade]) -> Dict[str, Any]:
+    def _summarize(self, trades: list[Trade]) -> dict[str, Any]:
         return {
             "total": len(trades),
             "avg_return_pct": float(np.mean([t.pnl for t in trades])) if trades else 0.0,
@@ -398,7 +392,7 @@ class EarningsQualityStrategy:
 
         return StrategyResult(self.name, trades, self._summarize(trades))
 
-    def _summarize(self, trades: List[Trade]) -> Dict[str, Any]:
+    def _summarize(self, trades: list[Trade]) -> dict[str, Any]:
         return {
             "total": len(trades),
             "avg_return_pct": float(np.mean([t.pnl for t in trades])) if trades else 0.0,

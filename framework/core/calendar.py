@@ -7,12 +7,11 @@ hardcoded weekday-only logic (e.g. ``earnings.scan_dates`` weekend rolls).
 from __future__ import annotations
 
 import functools
-from datetime import date, datetime, time as dtime
-from typing import Optional
-
-import pandas as pd
+from datetime import date, datetime
+from datetime import time as dtime
 
 import exchange_calendars as xc
+import pandas as pd
 
 # Regular XNYS close is 16:00 ET; early close (half-days) is 13:00 ET.
 _ET = "America/New_York"
@@ -75,7 +74,7 @@ class TradingCalendar:
             return False
         return self.session_close(d).time() < dtime(16, 0)
 
-    def is_open_now(self, now: Optional[datetime] = None) -> bool:
+    def is_open_now(self, now: datetime | None = None) -> bool:
         now = now or pd.Timestamp.now(tz=_ET)
         return bool(self._cal.is_open_on_minute(pd.Timestamp(now)))
 

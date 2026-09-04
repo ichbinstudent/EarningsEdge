@@ -30,14 +30,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
-from polygon_backfill import PolygonClient, implied_vol  # noqa: E402
-from earnings_edge.db import (  # noqa: E402
+from earnings_edge.db import (
     ff_snapshots_pending_pairs,
     ff_snapshots_upsert_many,
     snapshots_hist_move_abs,
 )
+from polygon_backfill import PolygonClient, implied_vol
 
 # Bump when the T1/T2 selection rule changes — stale rows are reprocessed.
 # v1: T1 closest to 45, T2 +28. v2: T1 closest to 30, T2 +30 (2026-07-25).

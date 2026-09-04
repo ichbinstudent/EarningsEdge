@@ -1,7 +1,7 @@
 """Monkey-patch yfinance cookie handling for robustness."""
 
-from requests.cookies import create_cookie
 import yfinance.data as _data
+from requests.cookies import create_cookie
 
 
 def _wrap_cookie(cookie, session):

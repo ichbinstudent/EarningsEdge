@@ -9,7 +9,7 @@ from __future__ import annotations
 import threading
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator, Optional, Union
+from typing import Iterator
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
@@ -17,8 +17,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "earnings_ml.db"
 
-_engine: Optional[Engine] = None
-_session_factory: Optional[sessionmaker] = None
+_engine: Engine | None = None
+_session_factory: sessionmaker | None = None
 _lock = threading.Lock()
 
 
@@ -39,7 +39,7 @@ def _begin(conn) -> None:
     conn.exec_driver_sql("BEGIN")
 
 
-def configure(db_path: Union[str, Path, None] = None) -> Engine:
+def configure(db_path: str | Path | None = None) -> Engine:
     """(Re)create the engine bound to ``db_path`` (default: production path).
 
     Creates the directory, applies schema (create_all + column migrations),
@@ -58,8 +58,8 @@ def configure(db_path: Union[str, Path, None] = None) -> Engine:
         event.listen(_engine, "connect", _set_pragmas)
         event.listen(_engine, "begin", _begin)
         _session_factory = sessionmaker(bind=_engine, expire_on_commit=False)
-        from .models import Base
         from .migrations import run_migrations
+        from .models import Base
 
         Base.metadata.create_all(_engine)
         with _engine.begin() as conn:
@@ -93,7 +93,7 @@ def session_scope() -> Iterator[Session]:
         session.close()
 
 
-def wal_checkpoint(db_path: Union[str, Path, None] = None, mode: str = "PASSIVE") -> None:
+def wal_checkpoint(db_path: str | Path | None = None, mode: str = "PASSIVE") -> None:
     """PRAGMA wal_checkpoint(<mode>) against ``db_path`` (or the current engine file).
 
     Default is PASSIVE: never blocks writers, never truncates the WAL, safe to

@@ -1,20 +1,22 @@
 """Tests for Alpaca options client and multi-strike positional strategies."""
 from __future__ import annotations
 
-import pytest
-import numpy as np
 import pandas as pd
-from datetime import date
-from unittest.mock import MagicMock, patch
 
-from earnings_edge.collectors.alpaca_options import AlpacaOptionsClient
 from earnings_edge.backtest.multi_strike_real import (
-    bs_price, delta, strike_for_delta, nearest_strike, AlpacaMultiStrike,
-    IronCondorReal, ButterflyReal, RiskReversalReal, pull_bid_ask,
-    MULTI_STRIKE_STRATEGIES, run_multi_strike,
+    MULTI_STRIKE_STRATEGIES,
+    ButterflyReal,
+    IronCondorReal,
+    RiskReversalReal,
+    bs_price,
+    delta,
+    nearest_strike,
+    pull_bid_ask,
+    run_multi_strike,
+    strike_for_delta,
 )
-from earnings_edge.trading_types import DataBundle, Trade
-
+from earnings_edge.collectors.alpaca_options import AlpacaOptionsClient
+from earnings_edge.trading_types import DataBundle
 
 # ---------------------------------------------------------------------------
 # BS helpers

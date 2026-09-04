@@ -22,7 +22,7 @@ import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any
 
 import numpy as np
 import requests
@@ -59,7 +59,7 @@ class PolygonClient:
         self.sleep = sleep
         self.session = requests.Session()
 
-    def get(self, path: str, params: Optional[dict[str, Any]] = None) -> Optional[dict[str, Any]]:
+    def get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any] | None:
         p = dict(params or {})
         p["apiKey"] = self.api_key
         for attempt in range(3):
@@ -98,7 +98,7 @@ class PolygonClient:
         as_of: date,
         expiry_gte: date,
         expiry_lte: date,
-        contract_type: Optional[str] = None,
+        contract_type: str | None = None,
     ) -> list[dict]:
         """Fetch option contracts active as-of a historical date."""
         out: list[dict] = []
@@ -145,7 +145,7 @@ class PolygonClient:
                 logger.warning("Polygon contract pagination failed: %s", exc)
                 return out
 
-    def option_close(self, option_ticker: str, as_of: date, lookback_days: int = 4) -> Optional[float]:
+    def option_close(self, option_ticker: str, as_of: date, lookback_days: int = 4) -> float | None:
         """Get most recent option close on/before as_of."""
         start = as_of - timedelta(days=lookback_days)
         bars = self.daily_bars(option_ticker, start, as_of, limit=10)
@@ -157,7 +157,7 @@ def _dt_from_ms(ms: int) -> date:
     return datetime.fromtimestamp(ms / 1000).date()
 
 
-def realized_vol_30d(bars: list[dict]) -> Optional[float]:
+def realized_vol_30d(bars: list[dict]) -> float | None:
     closes = [float(b["c"]) for b in bars if b.get("c") and b["c"] > 0]
     if len(closes) < 22:
         return None
@@ -167,7 +167,7 @@ def realized_vol_30d(bars: list[dict]) -> Optional[float]:
     return float(np.std(rets, ddof=1) * math.sqrt(252))
 
 
-def hist_vol(bars: list[dict], days: int = 63) -> Optional[float]:
+def hist_vol(bars: list[dict], days: int = 63) -> float | None:
     closes = [float(b["c"]) for b in bars if b.get("c") and b["c"] > 0]
     if len(closes) < min(days, 20):
         return None
@@ -187,7 +187,7 @@ def bs_price(sigma: float, S: float, K: float, T: float, r: float, opt_type: str
     return K * math.exp(-r * T) * norm.cdf(-d2) - S * norm.cdf(-d1)
 
 
-def implied_vol(price: float, S: float, K: float, T: float, opt_type: str, r: float = 0.045) -> Optional[float]:
+def implied_vol(price: float, S: float, K: float, T: float, opt_type: str, r: float = 0.045) -> float | None:
     if not price or price <= 0 or S <= 0 or K <= 0 or T <= 0:
         return None
     intrinsic = max(0.0, S - K) if opt_type == "call" else max(0.0, K - S)
@@ -203,14 +203,14 @@ def implied_vol(price: float, S: float, K: float, T: float, opt_type: str, r: fl
     return None
 
 
-def delta(S: float, K: float, T: float, iv: float, opt_type: str, r: float = 0.045) -> Optional[float]:
+def delta(S: float, K: float, T: float, iv: float, opt_type: str, r: float = 0.045) -> float | None:
     if not iv or iv <= 0 or T <= 0 or S <= 0 or K <= 0:
         return None
     d1 = (math.log(S / K) + (r + 0.5 * iv * iv) * T) / (iv * math.sqrt(T))
     return float(norm.cdf(d1) if opt_type == "call" else norm.cdf(d1) - 1)
 
 
-def choose_atm_pair(contracts: list[dict], spot: float, expiry: date) -> tuple[Optional[dict], Optional[dict]]:
+def choose_atm_pair(contracts: list[dict], spot: float, expiry: date) -> tuple[dict | None, dict | None]:
     same = [c for c in contracts if c.get("expiration_date") == expiry.isoformat()]
     calls = [c for c in same if c.get("contract_type") == "call"]
     puts = [c for c in same if c.get("contract_type") == "put"]
@@ -221,7 +221,7 @@ def choose_atm_pair(contracts: list[dict], spot: float, expiry: date) -> tuple[O
     return call, put
 
 
-def fetch_events_finnhub(start: date, end: date, tickers: Optional[set[str]] = None) -> list[EarningsEvent]:
+def fetch_events_finnhub(start: date, end: date, tickers: set[str] | None = None) -> list[EarningsEvent]:
     key = os.environ.get("FINNHUB_API_KEY")
     if not key:
         raise RuntimeError("FINNHUB_API_KEY not set; cannot use --events-source finnhub")
@@ -258,7 +258,7 @@ def fetch_events_finnhub(start: date, end: date, tickers: Optional[set[str]] = N
     return deduped
 
 
-def fetch_events_polygon_benzinga(pg: PolygonClient, start: date, end: date, tickers: Optional[set[str]] = None) -> list[EarningsEvent]:
+def fetch_events_polygon_benzinga(pg: PolygonClient, start: date, end: date, tickers: set[str] | None = None) -> list[EarningsEvent]:
     params: dict[str, Any] = {"date.gte": start.isoformat(), "date.lte": end.isoformat(), "limit": 1000}
     data = pg.get("/benzinga/v1/earnings", params)
     if not data:
@@ -409,7 +409,7 @@ def collect_polygon_features(pg: PolygonClient, event: EarningsEvent, scan_offse
     return row
 
 
-def fetch_events_investing(start: date, end: date, tickers: Optional[set[str]] = None, limit: Optional[int] = None) -> list[EarningsEvent]:
+def fetch_events_investing(start: date, end: date, tickers: set[str] | None = None, limit: int | None = None) -> list[EarningsEvent]:
     """Fetch historical earnings events from the Investing.com calendar parser only."""
     out: list[EarningsEvent] = []
     cur = start
@@ -446,7 +446,7 @@ def fetch_events_investing(start: date, end: date, tickers: Optional[set[str]] =
     return deduped
 
 
-def parse_manual_events(values: Optional[list[str]]) -> list[EarningsEvent]:
+def parse_manual_events(values: list[str] | None) -> list[EarningsEvent]:
     """Parse --event TICKER:YYYY-MM-DD[:TIMING] entries for exact smoke tests."""
     events: list[EarningsEvent] = []
     for value in values or []:
@@ -465,11 +465,11 @@ def run_backfill(
     start: date,
     end: date,
     events_source: str,
-    tickers: Optional[set[str]],
-    limit: Optional[int],
+    tickers: set[str] | None,
+    limit: int | None,
     dry_run: bool,
     rate_sleep: float,
-    manual_events: Optional[list[EarningsEvent]] = None,
+    manual_events: list[EarningsEvent] | None = None,
     insert_errors: bool = False,
 ) -> int:
     key = os.environ.get("POLYGON_API_KEY")
@@ -522,7 +522,7 @@ def run_backfill(
     return inserted
 
 
-def parse_tickers(value: Optional[str]) -> Optional[set[str]]:
+def parse_tickers(value: str | None) -> set[str] | None:
     if not value:
         return None
     return {x.strip().upper() for x in value.split(",") if x.strip()}

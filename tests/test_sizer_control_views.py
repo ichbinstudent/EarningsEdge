@@ -3,22 +3,25 @@ runtime strategy enable/disable overrides, and the bot's operational views."""
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date
 from unittest.mock import MagicMock, patch
 
-import pytest
+from sqlalchemy import text
 
 from earnings_edge.alpaca_bridge import BridgeConfig, StrategyBridge
+from earnings_edge.db import configure
+from earnings_edge.db import engine as db_engine
 from earnings_edge.trading_types import Trade
+from framework.core.config import StrategyConfig
 from framework.core.control import (
-    clear_override, effective_enabled, enabled_overrides, filter_enabled,
+    clear_override,
+    effective_enabled,
+    enabled_overrides,
+    filter_enabled,
     set_enabled,
 )
-from framework.core.config import StrategyConfig
 from framework.core.registry import StrategyRegistry
 from framework.risk.manager import RiskLimits, RiskManager
-from sqlalchemy import text
-from earnings_edge.db import configure, engine as db_engine
 
 
 def _calendar_trade(entry_price=1.85):
@@ -213,7 +216,6 @@ def test_migration_adds_enabled_column_to_old_db(tmp_path):
 
 
 def test_build_proposals_respects_db_override(tmp_path):
-    from earnings_edge.trading_types import StrategyResult
     from earnings_edge.trade_approval import PendingTradeStore, build_proposals
 
     store = PendingTradeStore(str(tmp_path / "test.db"))
@@ -232,8 +234,8 @@ def test_build_proposals_respects_db_override(tmp_path):
 # ── Bot views ------------------------------------------------------------------
 
 def _seed_fw(tmp_path):
-    from datetime import datetime, timezone
-    today = datetime.now(timezone.utc).date().isoformat()
+    from datetime import datetime
+    today = datetime.now(UTC).date().isoformat()
     configure(tmp_path / "fw.db")
     with db_engine.session_scope() as s:
         s.execute(text(

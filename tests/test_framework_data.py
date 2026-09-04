@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import text
 
+from earnings_edge.db import engine as db_engine
 from framework.data.catalog import available_as_of, latest_availability, record
 from framework.data.model_registry import get_active, promote_model, register_model, sha256_of
 from framework.jobs import recent_runs, run_job
-from sqlalchemy import text
-from earnings_edge.db import engine as db_engine
 
 
 @pytest.fixture

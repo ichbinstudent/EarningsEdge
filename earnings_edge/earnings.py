@@ -3,14 +3,10 @@ Earnings-calendar data fetching from three sources:
 Investing.com (HTTP), Finnhub (API), DoltHub (MySQL).
 """
 
-import logging
 import os
 import random
-import time
 from datetime import date, datetime, timedelta
-from typing import Dict, List, Optional
 
-import pytz
 import requests
 from bs4 import BeautifulSoup
 
@@ -36,7 +32,7 @@ _USER_AGENTS = [
 ]
 
 
-def _investing_earnings(date_: date) -> List[EarningsCandidate]:
+def _investing_earnings(date_: date) -> list[EarningsCandidate]:
     """Scrape earnings calendar from Investing.com."""
     url = "https://www.investing.com/earnings-calendar/Service/getCalendarFilteredData"
     headers = {
@@ -67,7 +63,7 @@ def _investing_earnings(date_: date) -> List[EarningsCandidate]:
         logger.error(f"Investing.com fetch failed: {exc}")
         return []
 
-    stocks: List[EarningsCandidate] = []
+    stocks: list[EarningsCandidate] = []
     for row in soup.find_all("tr"):
         if not row.find("span", class_="earnCalCompanyName"):
             continue
@@ -88,7 +84,7 @@ def _investing_earnings(date_: date) -> List[EarningsCandidate]:
 
 # ── Source: Finnhub ───────────────────────────────────────────────────
 
-def _finnhub_earnings(date_: date) -> List[EarningsCandidate]:
+def _finnhub_earnings(date_: date) -> list[EarningsCandidate]:
     """Fetch earnings from Finnhub API."""
     api_key = os.environ.get("FINNHUB_API_KEY")
     if not api_key:
@@ -108,7 +104,7 @@ def _finnhub_earnings(date_: date) -> List[EarningsCandidate]:
         logger.warning(f"Finnhub fetch failed: {exc}")
         return []
 
-    stocks: List[EarningsCandidate] = []
+    stocks: list[EarningsCandidate] = []
     for e in entries:
         symbol = e.get("symbol")
         if not symbol:
@@ -125,7 +121,7 @@ def _finnhub_earnings(date_: date) -> List[EarningsCandidate]:
 
 # ── Source: DoltHub ───────────────────────────────────────────────────
 
-def _dolthub_earnings(date_: date) -> List[EarningsCandidate]:
+def _dolthub_earnings(date_: date) -> list[EarningsCandidate]:
     """Fetch earnings from a local DoltHub MySQL instance."""
     try:
         import mysql.connector  # type: ignore
@@ -160,7 +156,7 @@ def _dolthub_earnings(date_: date) -> List[EarningsCandidate]:
             except Exception:
                 pass
 
-    stocks: List[EarningsCandidate] = []
+    stocks: list[EarningsCandidate] = []
     for row in rows:
         sym = row.get("act_symbol")
         if not sym:
@@ -178,9 +174,9 @@ def _dolthub_earnings(date_: date) -> List[EarningsCandidate]:
 
 # ── Merge helpers ─────────────────────────────────────────────────────
 
-def _merge(*lists: List[EarningsCandidate]) -> List[EarningsCandidate]:
+def _merge(*lists: list[EarningsCandidate]) -> list[EarningsCandidate]:
     """Deduplicate by ticker, preferring non-Unknown timing."""
-    merged: Dict[str, EarningsCandidate] = {}
+    merged: dict[str, EarningsCandidate] = {}
     for candidate_list in lists:
         for c in candidate_list:
             existing = merged.get(c.ticker)
@@ -200,7 +196,7 @@ def fetch_earnings(
     use_dolthub: bool = False,
     use_finnhub: bool = False,
     all_sources: bool = False,
-) -> List[EarningsCandidate]:
+) -> list[EarningsCandidate]:
     """
     Return earnings for *date_* from the selected sources.
 
@@ -242,7 +238,7 @@ def _next_trading_day(d: date) -> date:
 
 
 def scan_dates(
-    input_date: Optional[str],
+    input_date: str | None,
     eastern_tz,
 ) -> tuple:
     """Compute (post_market_date, pre_market_date) from input or current time.
