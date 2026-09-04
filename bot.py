@@ -2298,89 +2298,109 @@ class TradingBot:
         self._dispatch(self._run_and_push(scanner_name))
 
     def _setup_scheduler(self):
-        tz = pytz.timezone("Europe/Berlin")
+        tz = pytz.timezone("America/New_York")
+        
+        # Centralized ET schedules
+        # Scanners use a default 14:00 ET schedule if not otherwise specified here.
+        # (Though we have one main scanner 'Earnings Calendar')
+        et_schedules = {
+            "ff_ladder_propose": "45 13 * * mon-fri",
+            "ff_ladder_step": "0,15,30,45 14-15 * * mon-fri",
+            "equity_snapshot": "*/15 9-16 * * mon-fri",
+            "reconcile": "*/30 9-16 * * mon-fri",
+            "assignment_guard": "45 15 * * mon-fri",
+            "exit_eval": "*/15 9-16 * * mon-fri",
+            "db_backup": "15 0 * * *",
+            "db_health_check": "5 * * * *",
+            "daily_picks": "0 7 * * mon-fri",
+            "chain_cache": "5 9-16 * * mon-fri",
+        }
+
         for name, sc in self.scanners.items():
             try:
-                trigger = CronTrigger.from_crontab(sc.schedule, timezone=tz)
+                # Use a specific schedule if defined in our table, otherwise fallback to 14:00 ET
+                cron_str = et_schedules.get(name, "0 14 * * mon-fri")
+                trigger = CronTrigger.from_crontab(cron_str, timezone=tz)
                 self.scheduler.add_job(
                     self._run_sync, trigger=trigger, args=[name],
                     id=f"scanner_{name}", name=f"Run {name}",
+                    max_instances=1, coalesce=True, misfire_grace_time=300
                 )
-                logger.info("Scheduled %s: %s (Berlin TZ)", name, sc.schedule)
+                logger.info("Scheduled %s: %s (ET TZ)", name, cron_str)
             except Exception as exc:
                 logger.error("Failed to schedule %s: %s", name, exc)
         # NOTE: no separate proposal cron — trade proposals are chained to the
         # Earnings Calendar scan (14:00 ET weekdays) in _run_and_push so they
         # are built from fresh scan data and confirmed during US market hours.
 
-        # Forward-factor ladder: 13:45 ET proposals (19:45 Berlin), stepping
-        # every 15 min 14:00-15:45 ET (20:00-21:45 Berlin). Berlin TZ tracks
-        # ET correctly across DST for these slots.
         try:
             self.scheduler.add_job(
                 self._ff_propose_sync,
-                trigger=CronTrigger.from_crontab("45 19 * * mon-fri", timezone=tz),
+                trigger=CronTrigger.from_crontab(et_schedules["ff_ladder_propose"], timezone=tz),
                 id="ff_ladder_propose", name="FF ladder proposals",
+                max_instances=1, coalesce=True, misfire_grace_time=120
             )
             self.scheduler.add_job(
                 self._ff_step_sync,
-                trigger=CronTrigger.from_crontab("0,15,30,45 20-21 * * mon-fri", timezone=tz),
+                trigger=CronTrigger.from_crontab(et_schedules["ff_ladder_step"], timezone=tz),
                 id="ff_ladder_step", name="FF ladder step",
+                max_instances=1, coalesce=True, misfire_grace_time=120
             )
             logger.info("Scheduled FF ladder: proposals 13:45 ET, steps 14:00-15:45 ET")
         except Exception as exc:
             logger.error("Failed to schedule FF ladder jobs: %s", exc)
 
-        # Framework jobs (Berlin TZ tracks ET across DST for these slots):
-        # equity snapshots every 15 min 09:30-16:30 ET, reconcile every 30 min,
-        # assignment-guard evaluation 15:45 ET daily.
+        # Framework jobs (ET time directly)
         try:
             self.scheduler.add_job(
                 self._equity_snapshot_sync,
-                trigger=CronTrigger.from_crontab("*/15 15-22 * * mon-fri", timezone=tz),
+                trigger=CronTrigger.from_crontab(et_schedules["equity_snapshot"], timezone=tz),
                 id="equity_snapshot", name="Equity snapshot + loss check",
+                max_instances=1, coalesce=True, misfire_grace_time=120
             )
             self.scheduler.add_job(
                 self._reconcile_sync,
-                trigger=CronTrigger.from_crontab("*/30 15-22 * * mon-fri", timezone=tz),
+                trigger=CronTrigger.from_crontab(et_schedules["reconcile"], timezone=tz),
                 id="reconcile", name="Broker reconciliation",
+                max_instances=1, coalesce=True, misfire_grace_time=120
             )
             self.scheduler.add_job(
                 self._guard_eval_sync,
-                trigger=CronTrigger.from_crontab("45 21 * * mon-fri", timezone=tz),
+                trigger=CronTrigger.from_crontab(et_schedules["assignment_guard"], timezone=tz),
                 id="assignment_guard", name="Assignment guard eval",
+                max_instances=1, coalesce=True, misfire_grace_time=120
             )
             self.scheduler.add_job(
                 self._exit_eval_sync,
-                trigger=CronTrigger.from_crontab("*/15 15-22 * * mon-fri", timezone=tz),
+                trigger=CronTrigger.from_crontab(et_schedules["exit_eval"], timezone=tz),
                 id="exit_eval", name="Exit rule evaluation",
+                max_instances=1, coalesce=True, misfire_grace_time=120
             )
             self.scheduler.add_job(
                 self._backup_sync,
-                trigger=CronTrigger.from_crontab("15 6 * * *", timezone=tz),
+                trigger=CronTrigger.from_crontab(et_schedules["db_backup"], timezone=tz),
                 id="db_backup", name="SQLite backup",
+                max_instances=1, coalesce=True, misfire_grace_time=120
             )
-            # Hourly integrity check so corruption is caught within ~1h instead
-            # of surfacing a day later via a failed backup or missed scan.
             self.scheduler.add_job(
                 self._db_health_sync,
-                trigger=CronTrigger.from_crontab("5 * * * *", timezone=tz),
+                trigger=CronTrigger.from_crontab(et_schedules["db_health_check"], timezone=tz),
                 id="db_health_check", name="SQLite integrity check",
+                max_instances=1, coalesce=True, misfire_grace_time=120
             )
-            # Pre-market picks pipeline: 07:00 ET (13:00 Berlin) weekdays —
-            # refresh chains + signals, generate and persist today's picks.
             self.scheduler.add_job(
                 self._picks_sync,
-                trigger=CronTrigger.from_crontab("0 13 * * mon-fri", timezone=tz),
+                trigger=CronTrigger.from_crontab(et_schedules["daily_picks"], timezone=tz),
                 id="daily_picks", name="Daily picks pipeline",
+                max_instances=1, coalesce=True, misfire_grace_time=120
             )
-            # Hourly Alpaca options-chain cache 09:05–16:05 ET (Berlin 15–22).
             self.scheduler.add_job(
                 self._chain_cache_sync,
-                trigger=CronTrigger.from_crontab("5 15-22 * * mon-fri", timezone=tz),
+                trigger=CronTrigger.from_crontab(et_schedules["chain_cache"], timezone=tz),
                 id="chain_cache", name="Hourly Alpaca chain cache",
+                max_instances=1, coalesce=True, misfire_grace_time=120
             )
-            logger.info("Scheduled framework jobs: equity */15, reconcile */30, guard 15:45 ET, exits */15, backup 06:15, chain cache hourly")
+            logger.info("Scheduled framework jobs: equity */15, reconcile */30, guard 15:45 ET, exits */15, backup 00:15 ET, chain cache hourly")
         except Exception as exc:
             logger.error("Failed to schedule framework jobs: %s", exc)
 

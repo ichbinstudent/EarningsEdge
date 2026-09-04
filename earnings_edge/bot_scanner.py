@@ -308,9 +308,6 @@ class EarningsCalendarScanner(BaseScanner):
             logger.exception("Failed to load calendar model")
             self._calendar_model = None
 
-    @property
-    def schedule(self) -> str:
-        return "0 20 * * mon-fri"  # 14:00 ET (scheduler runs on Berlin time)
 
     def scan(self) -> Dict[str, Any]:
         """Delegate to ScanService for clean separation of concerns."""

@@ -48,20 +48,20 @@ History note: the repo was flattened from `cli_scanner/` to root on 2026-09-02; 
 - Panel plumbing: `_send_panel` (send + delete previous panel), `_edit_panel` (edit-in-place, fallback to new message), card/batch pushes, alert flushing.
 - Long-polls Telegram (polling mode); auth is a **fail-closed allow-list** (`TELEGRAM_APPROVAL_CHAT_ID(S)` in `.env`, parsed by `earnings_edge/ops_auth.py`). Risk commands (`/halt`, `/resume`, `/promote`, `/demote`, restart) are dead until the list is configured.
 
-### Scheduled jobs (APScheduler, Europe/Berlin TZ — tracks ET across DST)
+### Scheduled jobs (APScheduler, America/New_York TZ)
 
-| Job (id) | Crontab (Berlin) | What |
+| Job (id) | Crontab (ET) | What |
 |---|---|---|
-| `scanner_Earnings Calendar` | `0 20 * * mon-fri` (14:00 ET) | Earnings scan → **chained proposal build** (no separate proposal cron) |
-| `ff_ladder_propose` | `45 19 * * mon-fri` (13:45 ET) | FF ladder arm/proposals |
-| `ff_ladder_step` | `0,15,30,45 20-21 * * mon-fri` (14:00–15:45 ET) | Limit-ladder stepping |
-| `equity_snapshot` | `*/15 15-22 * * mon-fri` | Equity snapshot + daily-loss check |
-| `reconcile` | `*/30 15-22 * * mon-fri` | Broker reconciliation |
-| `assignment_guard` | `45 21 * * mon-fri` (15:45 ET) | Ex-div ITM short-call guard |
-| `exit_eval` | `*/15 15-22 * * mon-fri` | Exit rule evaluation |
-| `chain_cache` | `5 15-22 * * mon-fri` | Hourly Alpaca options-chain cache |
-| `daily_picks` | `0 13 * * mon-fri` (07:00 ET) | Refresh chains/signals, persist picks |
-| `db_backup` | `15 6 * * *` | SQLite backup |
+| `scanner_Earnings Calendar` | `0 14 * * mon-fri` | Earnings scan → **chained proposal build** (no separate proposal cron) |
+| `ff_ladder_propose` | `45 13 * * mon-fri` | FF ladder arm/proposals |
+| `ff_ladder_step` | `0,15,30,45 14-15 * * mon-fri` | Limit-ladder stepping |
+| `equity_snapshot` | `*/15 9-16 * * mon-fri` | Equity snapshot + daily-loss check |
+| `reconcile` | `*/30 9-16 * * mon-fri` | Broker reconciliation |
+| `assignment_guard` | `45 15 * * mon-fri` | Ex-div ITM short-call guard |
+| `exit_eval` | `*/15 9-16 * * mon-fri` | Exit rule evaluation |
+| `chain_cache` | `5 9-16 * * mon-fri` | Hourly Alpaca options-chain cache |
+| `daily_picks` | `0 7 * * mon-fri` | Refresh chains/signals, persist picks |
+| `db_backup` | `15 0 * * *` | SQLite backup |
 | `db_health_check` | `5 * * * *` | Integrity check (corruption caught ≤1h) |
 | `scan_retry` (on demand) | one-shot, +12 min | Exactly one retry after a failed scan; never stacks |
 
