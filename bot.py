@@ -74,6 +74,23 @@ from telegram.ext import (
 
 HTML = ParseMode.HTML
 
+# Single source of truth for job schedules (America/New_York wall-clock).
+# Keys are scanner names and framework job ids; /help and _setup_scheduler
+# both read this table.
+ET_SCHEDULES = {
+    "Earnings Calendar": "0 14 * * mon-fri",
+    "ff_ladder_propose": "45 13 * * mon-fri",
+    "ff_ladder_step": "0,15,30,45 14-15 * * mon-fri",
+    "equity_snapshot": "*/15 9-16 * * mon-fri",
+    "reconcile": "*/30 9-16 * * mon-fri",
+    "assignment_guard": "45 15 * * mon-fri",
+    "exit_eval": "*/15 9-16 * * mon-fri",
+    "db_backup": "15 0 * * *",
+    "db_health_check": "5 * * * *",
+    "daily_picks": "0 7 * * mon-fri",
+    "chain_cache": "5 9-16 * * mon-fri",
+}
+
 logging.basicConfig(
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     level=logging.INFO,
@@ -2358,7 +2375,6 @@ class TradingBot:
                 await self._propose_and_push()
         except Exception as exc:
             logger.exception("Scheduled run error for %s", scanner_name)
-
     def _schedule_one_scan_retry(self, scanner_name: str) -> dict:
         """Exactly one 12-minute follow-up; does not stack."""
         from framework.scan_retry import record_retry
@@ -2384,18 +2400,7 @@ class TradingBot:
         # Centralized ET schedules
         # Scanners use a default 14:00 ET schedule if not otherwise specified here.
         # (Though we have one main scanner 'Earnings Calendar')
-        et_schedules = {
-            "ff_ladder_propose": "45 13 * * mon-fri",
-            "ff_ladder_step": "0,15,30,45 14-15 * * mon-fri",
-            "equity_snapshot": "*/15 9-16 * * mon-fri",
-            "reconcile": "*/30 9-16 * * mon-fri",
-            "assignment_guard": "45 15 * * mon-fri",
-            "exit_eval": "*/15 9-16 * * mon-fri",
-            "db_backup": "15 0 * * *",
-            "db_health_check": "5 * * * *",
-            "daily_picks": "0 7 * * mon-fri",
-            "chain_cache": "5 9-16 * * mon-fri",
-        }
+        et_schedules = ET_SCHEDULES
 
         for name, sc in self.scanners.items():
             try:
