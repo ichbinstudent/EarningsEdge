@@ -297,7 +297,7 @@ def _render_card(trade: Trade, legs: list[dict], proposal_id: str = "?") -> str:
         
         record_event('silent_failure', f'trade_approval: {e}')
         
-        import logging; logging.getLogger(__name__).error('trade_approval broad exception', exc_info=True)
+        logger.error('trade_approval broad exception', exc_info=True)
         logger.warning("designer analyze failed in proposal build: %s", e)
 
     if meta:
@@ -316,7 +316,7 @@ def _render_card(trade: Trade, legs: list[dict], proposal_id: str = "?") -> str:
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
         record_event('silent_failure', f'trade_approval: {exc}')
-        import logging; logging.getLogger(__name__).error('trade_approval broad exception', exc_info=True)
+        logger.error('trade_approval broad exception', exc_info=True)
         pass
         
     footer = cards.esc(f"Expires in {PROPOSAL_TTL_HOURS:.0f}h — confirm to execute.")
@@ -338,7 +338,7 @@ def _killswitch_note(db_path=None) -> str:
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
         record_event('silent_failure', f'trade_approval: {exc}')
-        import logging; logging.getLogger(__name__).error('trade_approval broad exception', exc_info=True)
+        logger.error('trade_approval broad exception', exc_info=True)
         pass
     return ""
 
@@ -399,7 +399,7 @@ def _render_ff_card(cand, proposal_id: str = "?") -> str:
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
         record_event('silent_failure', f'trade_approval: {exc}')
-        import logging; logging.getLogger(__name__).error('trade_approval broad exception', exc_info=True)
+        logger.error('trade_approval broad exception', exc_info=True)
         pass
         
     footer = ("Confirm = arm limit ladder 14:00→15:45 ET, tick up every 15 min.\n"
@@ -450,7 +450,7 @@ def _persist_funnel(store: "PendingTradeStore", strategies: list[str], counts: d
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
         record_event('silent_failure', f'trade_approval: {exc}')
-        import logging; logging.getLogger(__name__).error('trade_approval broad exception', exc_info=True)
+        logger.error('trade_approval broad exception', exc_info=True)
         logger.warning("funnel persist failed (non-fatal): %s", exc)
 
 
@@ -499,7 +499,7 @@ def build_proposals(
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
         record_event('silent_failure', f'trade_approval: {exc}')
-        import logging; logging.getLogger(__name__).error('trade_approval broad exception', exc_info=True)
+        logger.error('trade_approval broad exception', exc_info=True)
         logger.warning("registry unavailable (%s) — all strategies enabled", exc)
         names = strategies or DEFAULT_STRATEGIES
         halted_note = ""
@@ -537,7 +537,7 @@ def build_proposals(
         except Exception as exc:
             # exc-policy: keep broad, ensure visibility
             record_event('silent_failure', f'trade_approval: {exc}')
-            import logging; logging.getLogger(__name__).error('trade_approval broad exception', exc_info=True)
+            logger.error('trade_approval broad exception', exc_info=True)
             logger.error("live signal mapping for %s failed: %s", name, exc)
             funnel[name] = {**stage, "error": str(exc)}
             continue
@@ -635,7 +635,7 @@ def _market_closed() -> Optional[str]:
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
         record_event('silent_failure', f'trade_approval: {exc}')
-        import logging; logging.getLogger(__name__).error('trade_approval broad exception', exc_info=True)
+        logger.error('trade_approval broad exception', exc_info=True)
         return f"market clock check failed ({exc}) — refusing to submit blind"
     if not clock.get("is_open"):
         return "US market is closed — confirm during 09:30–16:00 ET"
@@ -759,7 +759,7 @@ def execute_proposal(
         except Exception as exc:
             # exc-policy: keep broad, ensure visibility
             record_event('silent_failure', f'trade_approval: {exc}')
-            import logging; logging.getLogger(__name__).error('trade_approval broad exception', exc_info=True)
+            logger.error('trade_approval broad exception', exc_info=True)
             resolver = None
             sizer_resolver = None
         from earnings_edge.alpaca_bridge import (
@@ -817,7 +817,7 @@ def execute_proposal(
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
         record_event('silent_failure', f'trade_approval: {exc}')
-        import logging; logging.getLogger(__name__).error('trade_approval broad exception', exc_info=True)
+        logger.error('trade_approval broad exception', exc_info=True)
         logger.warning("managed-position record failed (non-fatal): %s", exc)
     return {"ok": True, **order}
 
