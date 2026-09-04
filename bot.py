@@ -1843,16 +1843,28 @@ class TradingBot:
             await self._flush_alerts()
             await self._edit_panel(query, text, self._desk_refresh_kb("st"), parse_mode=HTML)
         elif data == "desk_jb":
-            text = await asyncio.to_thread(self._jobs_text_sync)
-            await self._edit_panel(query, text, self._desk_refresh_kb("jb"), parse_mode=HTML)
+            from earnings_edge.rich_msg import jobs_rich_view, edit_rich_html
+            html = await asyncio.to_thread(jobs_rich_view)
+            success = await edit_rich_html(self.application.bot, query.message.chat_id, query.message.message_id, html, reply_markup=self._desk_refresh_kb("jb"))
+            if not success:
+                text = await asyncio.to_thread(self._jobs_text_sync)
+                await self._edit_panel(query, text, self._desk_refresh_kb("jb"), parse_mode=HTML)
         elif data == "desk_pd":
             await self._refresh_pending_query(query)
         elif data == "desk_or":
-            text = await asyncio.to_thread(self._orders_text_sync)
-            await self._edit_panel(query, text, self._desk_refresh_kb("or"), parse_mode=HTML)
+            from earnings_edge.rich_msg import orders_rich_view, edit_rich_html
+            html = await asyncio.to_thread(orders_rich_view)
+            success = await edit_rich_html(self.application.bot, query.message.chat_id, query.message.message_id, html, reply_markup=self._desk_refresh_kb("or"))
+            if not success:
+                text = await asyncio.to_thread(self._orders_text_sync)
+                await self._edit_panel(query, text, self._desk_refresh_kb("or"), parse_mode=HTML)
         elif data == "desk_eq":
-            text = await asyncio.to_thread(self._equity_text_sync)
-            await self._edit_panel(query, text, self._desk_refresh_kb("eq"), parse_mode=HTML)
+            from earnings_edge.rich_msg import equity_rich_view, edit_rich_html
+            html = await asyncio.to_thread(equity_rich_view)
+            success = await edit_rich_html(self.application.bot, query.message.chat_id, query.message.message_id, html, reply_markup=self._desk_refresh_kb("eq"))
+            if not success:
+                text = await asyncio.to_thread(self._equity_text_sync)
+                await self._edit_panel(query, text, self._desk_refresh_kb("eq"), parse_mode=HTML)
         elif data == "desk_run":
             msg, ikb = self._run_panel()
             await self._edit_panel(query, msg, ikb, parse_mode=HTML)
@@ -2045,25 +2057,8 @@ class TradingBot:
                 if len(formatted_df) > 50:
                     html += f"<p><i>... and {len(formatted_df) - 50} more rows.</i></p>\n"
 
-        payload = {
-            "chat_id": chat_id,
-            "rich_message": {
-                "html": html
-            }
-        }
-        
-        url = f"{self.application.bot.base_url}/sendRichMessage"
-        
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(url, json=payload, timeout=15.0)
-                if resp.status_code != 200:
-                    logger.error(f"sendRichMessage failed with {resp.status_code}: {resp.text}")
-                    return False
-                return True
-        except Exception as e:
-            logger.error(f"sendRichMessage exception: {e}")
-            return False
+        from earnings_edge.rich_msg import send_rich_html
+        return await send_rich_html(self.application.bot, chat_id, html)
 
     async def _cmd_picks(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         import pandas as pd

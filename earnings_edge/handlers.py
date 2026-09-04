@@ -205,23 +205,35 @@ async def cmd_positions(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
 
 async def cmd_orders(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     import asyncio
+    from earnings_edge.rich_msg import orders_rich_view, send_rich_html
 
-    text = await asyncio.to_thread(bot._orders_text_sync)
-    await bot._send_panel(update, text, reply_markup=desk_refresh_kb("or"), parse_mode=HTML)
+    html = await asyncio.to_thread(orders_rich_view)
+    success = await send_rich_html(bot.application.bot, update.effective_chat.id, html, reply_markup=desk_refresh_kb("or"))
+    if not success:
+        text = await asyncio.to_thread(bot._orders_text_sync)
+        await bot._send_panel(update, text, reply_markup=desk_refresh_kb("or"), parse_mode=HTML)
 
 
 async def cmd_jobs(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     import asyncio
+    from earnings_edge.rich_msg import jobs_rich_view, send_rich_html
 
-    text = await asyncio.to_thread(bot._jobs_text_sync)
-    await bot._send_panel(update, text, reply_markup=desk_refresh_kb("jb"), parse_mode=HTML)
+    html = await asyncio.to_thread(jobs_rich_view)
+    success = await send_rich_html(bot.application.bot, update.effective_chat.id, html, reply_markup=desk_refresh_kb("jb"))
+    if not success:
+        text = await asyncio.to_thread(bot._jobs_text_sync)
+        await bot._send_panel(update, text, reply_markup=desk_refresh_kb("jb"), parse_mode=HTML)
 
 
 async def cmd_equity(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     import asyncio
+    from earnings_edge.rich_msg import equity_rich_view, send_rich_html
 
-    text = await asyncio.to_thread(bot._equity_text_sync)
-    await bot._send_panel(update, text, reply_markup=desk_refresh_kb("eq"), parse_mode=HTML)
+    html = await asyncio.to_thread(equity_rich_view)
+    success = await send_rich_html(bot.application.bot, update.effective_chat.id, html, reply_markup=desk_refresh_kb("eq"))
+    if not success:
+        text = await asyncio.to_thread(bot._equity_text_sync)
+        await bot._send_panel(update, text, reply_markup=desk_refresh_kb("eq"), parse_mode=HTML)
 
 
 async def cmd_strategies(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
