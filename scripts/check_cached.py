@@ -60,5 +60,5 @@ if __name__ == "__main__":
             .fetchone()
         )
         if sample:
-            for key in sample.keys():
+            for key in sample:
                 print(f"  {key} = {sample[key]}")

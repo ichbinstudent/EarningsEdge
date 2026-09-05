@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -137,7 +137,7 @@ def select_live_calendar_call_quote(
             from earnings_edge.market_data_provider import get_provider
 
             provider = get_provider()
-        today = datetime.now().date()
+        today = datetime.now(UTC).date()
         anchor = earnings_date or today
         expiries = [
             exp

@@ -99,7 +99,7 @@ class MarketChameleonBrowser:
                 try:
                     # Health check
                     try:
-                        self._driver.window_handles
+                        _alive = bool(self._driver.window_handles)  # raises if driver died
                     except Exception:
                         self._init_driver()
 

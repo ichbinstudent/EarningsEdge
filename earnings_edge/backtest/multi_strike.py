@@ -62,7 +62,7 @@ class IronCondor:
 
     @classmethod
     def construct(
-        cls, S: float, wing_width: int = 5, r: float = 0.045, T: float = None, sigma: float = 0.5
+        cls, S: float, wing_width: int = 5, r: float = 0.045, T: float | None = None, sigma: float = 0.5
     ) -> IronCondor:
         atm = _nearest_strike(S)
         sc = atm + wing_width
@@ -113,7 +113,7 @@ class Butterfly:
 
     @classmethod
     def construct(
-        cls, S: float, width: int = 5, r: float = 0.045, T: float = None, sigma: float = 0.5
+        cls, S: float, width: int = 5, r: float = 0.045, T: float | None = None, sigma: float = 0.5
     ) -> Butterfly:
         atm = _nearest_strike(S)
         lo = atm - width
@@ -159,7 +159,7 @@ class RiskReversal:
 
     @classmethod
     def construct(
-        cls, S: float, width: int = 5, r: float = 0.045, T: float = None, sigma: float = 0.5
+        cls, S: float, width: int = 5, r: float = 0.045, T: float | None = None, sigma: float = 0.5
     ) -> RiskReversal:
         atm = _nearest_strike(S)
         kc = atm + width

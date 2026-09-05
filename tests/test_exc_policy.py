@@ -23,12 +23,15 @@ def is_banned(path: Path) -> bool:
 
 
 def contains_record_event(node):
-    # Walk the exception handler body looking for a Call to record_event or a bare raise
+    # True if the handler body calls record_event or re-raises
     for child in ast.walk(node):
-        if isinstance(child, ast.Call):
-            if isinstance(child.func, ast.Name) and child.func.id == "record_event":
-                return True
         if isinstance(child, ast.Raise):
+            return True
+        if (
+            isinstance(child, ast.Call)
+            and isinstance(child.func, ast.Name)
+            and child.func.id == "record_event"
+        ):
             return True
     return False
 

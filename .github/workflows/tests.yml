@@ -20,7 +20,7 @@ jobs:
       - name: Run test suite
         run: uv run python -m pytest tests -q --tb=short
 
-  mypy:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,5 +32,23 @@ jobs:
       - name: Sync deps
         run: uv sync --group dev
 
-      - name: Run mypy
-        run: uv run mypy .
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+  ty:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - name: Sync deps
+        run: uv sync --group dev
+
+      - name: Run ty (type check)
+        run: uv run ty check .

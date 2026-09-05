@@ -208,8 +208,11 @@ def test_execute_trade_exit_by_none_for_single_expiry_structure():
 
 def test_vol_target_budget_boundary():
     sizer = build_sizer("vol_target", {"risk_pct": 0.01})
+
     # budget = 1% × $100k = $1,000
-    ctx = lambda ml: SizeContext(equity=100_000, buying_power=50_000, price_per_unit=ml, max_loss_per_unit=ml)
+    def ctx(ml):
+        return SizeContext(equity=100_000, buying_power=50_000, price_per_unit=ml, max_loss_per_unit=ml)
+
     assert sizer.quantity(ctx(2.0 * 4.0 * 100)) == 1  # EM $4  → $800  → 1
     assert sizer.quantity(ctx(2.0 * 8.0 * 100)) == 0  # EM $8  → $1,600 → veto
     assert sizer.quantity(ctx(2.0 * 15.0 * 100)) == 0  # EM $15 → $3,000 → veto

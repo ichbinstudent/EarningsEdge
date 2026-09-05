@@ -1,6 +1,6 @@
 """Stock validation: apply the tiered filter chain and assign tiers."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from .analyzer import OptionsAnalyzer
 from .browser import MarketChameleonBrowser
@@ -87,7 +87,7 @@ class StockValidator:
 
             # 3. Expiration proximity
             first_exp = datetime.strptime(options_dates[0], "%Y-%m-%d").date()
-            days_to_exp = (first_exp - datetime.now().date()).days
+            days_to_exp = (first_exp - datetime.now(UTC).date()).days
             if days_to_exp > 9:
                 return _fail(f"Expiry too far: {days_to_exp} days")
             m.days_to_expiry = days_to_exp

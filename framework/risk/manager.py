@@ -16,7 +16,7 @@ from earnings_edge.db import risk_events_list
 from framework.risk.killswitch import record_event
 
 from .equity import daily_pnl, day_start_equity
-from .killswitch import KillSwitch, record_event
+from .killswitch import KillSwitch
 
 logger = logging.getLogger("framework.risk.manager")
 

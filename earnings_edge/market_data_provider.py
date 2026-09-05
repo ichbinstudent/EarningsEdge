@@ -540,7 +540,8 @@ class LSEProvider:
                 strike = float(r["strike"])
                 last = r.get("last_price")
                 last = float(last) if last is not None else np.nan
-                spot = r.get("underlying_price")
+                spot_raw = r.get("underlying_price")
+                spot = float(spot_raw) if spot_raw is not None else None
                 records.append(
                     {
                         "contractSymbol": r.get("ticker", ""),
@@ -552,9 +553,7 @@ class LSEProvider:
                         "openInterest": 0,
                         "volume": float(r.get("volume_today") or 0),
                         "delta": r.get("delta") if r.get("delta") is not None else np.nan,
-                        "inTheMoney": (spot > strike)
-                        if ctype == "call"
-                        else (spot < strike)
+                        "inTheMoney": ((spot > strike) if ctype == "call" else (spot < strike))
                         if spot is not None
                         else False,
                     }
@@ -648,7 +647,9 @@ class ResilientProvider:
                 with self._lock:
                     if self._active is provider:
                         self._active = nxt
-        raise last_exc
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError(f"provider chain failed with no exception for {method}")
 
     def history(self, ticker: str, period: str = "1d") -> pd.DataFrame:
         return self._dispatch("history", ticker, period)

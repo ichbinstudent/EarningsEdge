@@ -291,7 +291,7 @@ _SCAN_RUN_COLS = [
 
 def _execute(sql: str, params: Any, *, many: bool = False) -> Any:
     with session_scope() as s:
-        return s.execute(text(sql), params) if not many else s.execute(text(sql), params)
+        return s.execute(text(sql), params)
 
 
 def _execute_many(sql: str, payload: list[dict[str, Any]]) -> Any:

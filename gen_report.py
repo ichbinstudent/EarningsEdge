@@ -59,7 +59,7 @@ output = {
     "orders": [],
 }
 
-out_path = f"/tmp/paper_trade_{datetime.utcnow():%Y%m%d}.json"
+out_path = f"/tmp/paper_trade_{datetime.now(UTC):%Y%m%d}.json"
 Path(out_path).write_text(json.dumps(output, indent=2, default=str))
 print(f"Written: {out_path}")
 print(json.dumps(output, indent=2, default=str))

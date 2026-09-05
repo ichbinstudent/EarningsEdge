@@ -6,7 +6,7 @@ here under the same names for backward compatibility.
 
 import logging
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from curl_cffi import requests as curl_requests
@@ -73,7 +73,7 @@ def setup_logging(log_dir: str = "logs") -> None:
 
     fmt = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
-    fh = logging.FileHandler(f"{log_dir}/scanner_{datetime.now().strftime('%Y%m%d')}.log")
+    fh = logging.FileHandler(f"{log_dir}/scanner_{datetime.now(UTC).strftime('%Y%m%d')}.log")
     fh.setFormatter(fmt)
     logger.addHandler(fh)
 

@@ -107,7 +107,7 @@ def test_partition_unknown_strategy_defaults_approval():
     from earnings_edge.subscriptions import partition_by_mode
 
     rows = [{"strategy": "mystery", "id": 9}]
-    approval, auto = partition_by_mode(rows, lambda s: "approval" if s != "mystery" else "approval")
+    approval, auto = partition_by_mode(rows, lambda s: "approval")
     assert [r["id"] for r in approval] == [9] and auto == []
 
 

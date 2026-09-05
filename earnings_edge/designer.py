@@ -32,10 +32,11 @@ All functions are pure — no I/O — so the whole module is unit-testable.
 
 from __future__ import annotations
 
+import itertools
 import math
 from dataclasses import dataclass
 from datetime import date
-from typing import Union
+from typing import Union  # noqa: F401
 
 import numpy as np
 from scipy.stats import norm
@@ -55,7 +56,7 @@ DAYS_PER_YEAR = 365
 MIN_IV = 1e-4  # floor for shocked IVs so BSM stays defined
 
 # iv_shock: single additive shock, per-expiry dict, or per-leg-index dict
-IvShock = Union[float, dict, None]
+IvShock = float | dict[str, float] | dict[date, float] | None
 
 
 # ── Legs and positions ---------------------------------------------------------
@@ -391,7 +392,7 @@ def _win_rate_at_expiry(
         return hi - lo
 
     win = 0.0
-    for a, b in zip(bounds, bounds[1:]):
+    for a, b in itertools.pairwise(bounds):
         if math.isinf(b):
             profitable = _right_tail_slope(legs) > 0
             if not profitable and b == bounds[-1] and a > 0:

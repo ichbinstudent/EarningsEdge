@@ -165,7 +165,8 @@ def build_candidate(alpaca, ticker: str, *, today: date | None = None):
 
     factor = calculate_forward_factor(ex_iv1, fwd_vol)
     if not factor or factor < 0.10:  # < 1.1 ratio
-        return _reject(ticker, fake_ed, spot, f"factor {factor + 1:.2f} < 1.1")
+        factor_txt = f"{factor + 1:.2f}" if factor is not None else "n/a"
+        return _reject(ticker, fake_ed, spot, f"factor {factor_txt} < 1.1")
 
     near_bid = q1.get("bid", 0)
     far_ask = q2.get("ask", 0)

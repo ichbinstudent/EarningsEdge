@@ -68,14 +68,17 @@ def configure(db_path: str | Path | None = None) -> Engine:
 
 
 def get_engine() -> Engine:
+    global _engine
     if _engine is None:
-        configure()
+        _engine = configure()
     return _engine
 
 
 def get_session() -> Session:
+    global _session_factory
     if _session_factory is None:
         configure()
+    assert _session_factory is not None
     return _session_factory()
 
 

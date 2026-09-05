@@ -582,6 +582,7 @@ def test_gettex_collector_write_snapshot_and_batching(tmp_path):
     assert sum("quote/info" in u for u in calls) == 2  # 3 rics, batch 2
     path = c.write_snapshot(rows, NOW)
     assert path.endswith("gettex_quotes_2026-09-01.jsonl")
-    text = open(path).read()
+    with open(path) as f:
+        text = f.read()
     assert text.count("\n") == 3
     assert "A.GTX" in text

@@ -217,7 +217,15 @@ def _straddle_trade(row, strategy: str) -> Trade | None:
 
 def calendar_row_reason(row) -> str:
     """Why a calendar_call_ml row died or passed: take | model_skip | no_quote | no_decision."""
-    get = row.get if hasattr(row, "get") else lambda k, default=None: row[k] if k in row else default
+    if hasattr(row, "get"):
+
+        def get(k, default=None):
+            return row.get(k, default)
+    else:
+
+        def get(k, default=None):
+            return row[k] if k in row else default  # noqa: SIM401 — non-dict mapping
+
     strike = _first_positive(get("strike"))
     near = _parse_date(get("near_expiry"))
     far = _parse_date(get("far_expiry"))

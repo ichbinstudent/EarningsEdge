@@ -126,7 +126,6 @@ def _dolthub_earnings(date_: date) -> list[EarningsCandidate]:
     """Fetch earnings from a local DoltHub MySQL instance."""
     try:
         import mysql.connector  # type: ignore
-        from mysql.connector import errorcode  # type: ignore
     except ImportError:
         logger.warning("mysql-connector-python not installed — skipping DoltHub")
         return []

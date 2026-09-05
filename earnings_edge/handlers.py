@@ -291,7 +291,7 @@ async def cmd_propose(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         await pm.set_stage("live signals → legs → risk gates → persist")
         await bot._propose_and_push()
         from earnings_edge import trade_approval
-        from earnings_edge.trade_approval import funnel_line
+        from earnings_edge.subscriptions import funnel_line
 
         funnel = funnel_line(trade_approval.LAST_FUNNEL)
         tail = f"\n{funnel}" if funnel else ""

@@ -35,15 +35,11 @@ EMBED_COLOR = 3066993  # dark green — trading-terminal aesthetic
 SCANNER_NAME = "Earnings Calendar"
 
 __all__ = [
-    "ScanService",
-    # Re-exported scanner helpers the pipeline conceptually depends on. They
-    # live on bot_scanner and are exercised transitively via the wrapped
-    # scanner; they are re-exported here so service consumers have a single
-    # import surface.
     "EarningsCalendarScanner",
-    "select_live_calendar_call_quote",
+    "ScanService",
     "build_calendar_model_feature_row",
     "format_model_prediction",
+    "select_live_calendar_call_quote",
 ]
 
 

@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import joblib
@@ -144,7 +144,7 @@ def train(target: str, model_type: str, min_rows: int, large_move_threshold: flo
         "features": available,
         "target": target,
         "model_type": model_type,
-        "trained_at": datetime.utcnow().isoformat(),
+        "trained_at": datetime.now(UTC).isoformat(),
         "rows": len(df),
         "positive_rate": float(y.mean()),
         "auc": None if auc is None else float(auc),

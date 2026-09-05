@@ -90,8 +90,10 @@ def add_calendar_entry_features(row: Mapping[str, Any]) -> dict[str, Any]:
     )
 
     try:
-        near_expiry = pd.to_datetime(features.get("near_expiry"))
-        far_expiry = pd.to_datetime(features.get("far_expiry"))
+        near_raw = features.get("near_expiry") or pd.NaT
+        far_raw = features.get("far_expiry") or pd.NaT
+        near_expiry = pd.to_datetime(str(near_raw))
+        far_expiry = pd.to_datetime(str(far_raw))
         features["entry_width_days"] = int((far_expiry - near_expiry).days)
     except Exception:
         features["entry_width_days"] = None

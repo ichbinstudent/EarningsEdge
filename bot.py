@@ -259,7 +259,7 @@ class _HealthHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(str(exc).encode("utf-8"))
 
-    def log_message(self, *args):
+    def log_message(self, format: str, *args) -> None:
         pass  # suppress request logging
 
 
@@ -358,7 +358,7 @@ class TradingBot:
             from earnings_edge.db import job_runs_latest
 
             skip_row = job_runs_latest("equity_snapshot")
-            if skip_row and skip_row.get("stats_json") and "market closed" in skip_row["stats_json"]:
+            if skip_row and "market closed" in (skip_row.get("stats_json") or ""):
                 skip = True
         except Exception as e:
             logger.error("Job failed: %s", e)
@@ -678,6 +678,8 @@ class TradingBot:
 
     async def _handle_callback(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
+        if query is None or query.data is None:
+            return  # malformed callback (PTB types are Optional)
         await query.answer()
         uid = query.from_user.id
         data = query.data

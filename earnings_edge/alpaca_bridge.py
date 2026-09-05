@@ -684,7 +684,7 @@ class StrategyBridge:
                         from earnings_edge.fwd_factor import occ_parse
 
                         got = occ_parse(resolved)["strike"]
-                        raise StrikeChangedError(trade.ticker, float(leg["strike"]), resolved, got)
+                        raise StrikeChangedError(trade.ticker, float(leg["strike"]), resolved, got) from e
                     logger.info("Resolved %s -> %s", leg["symbol"], resolved)
                     leg["symbol"] = resolved
                     resolved_any = True

@@ -102,7 +102,7 @@ class OutcomeService:
         for row in pending:
             ticker = row["ticker"]
             ed = row["earnings_date"]
-            timing = row["timing"] if "timing" in row.keys() else None
+            timing = row.get("timing")
             logger.info("  %s (%s)", ticker, ed)
 
             outcome = self.compute_outcome(ticker, ed, timing=timing)

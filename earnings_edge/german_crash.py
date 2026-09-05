@@ -33,6 +33,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
+from earnings_edge.collectors.gettex import GettexCollector
+
 logger = logging.getLogger(__name__)
 
 BERLIN = ZoneInfo("Europe/Berlin")
@@ -572,7 +574,7 @@ class CrashMonitor:
     """One poll: fetch German quotes, detect drops, apply cooldown."""
 
     cfg: CrashAlertConfig = field(default_factory=CrashAlertConfig)
-    collector: object = None
+    collector: GettexCollector | None = None
     tradegate: object = None
     data_dir: str = ""
     cooldown_path: str | None = None
