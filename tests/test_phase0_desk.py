@@ -177,7 +177,7 @@ def test_book_action_banner_and_panel_refresh(tmp_path):
     assert "Adopted ATLO" in book_action_banner(
         "adopt", {"ok": True, "group_id": "adopt-ATLO"}, "ATLO260918C00030000"
     )
-    assert "⚠️" in book_action_banner("adopt", {"ok": False, "error": "gone"})
+    assert "❌" in book_action_banner("adopt", {"ok": False, "error": "gone"})
 
     configure(tmp_path / "fw.db")
     broker = [
@@ -254,6 +254,8 @@ def test_adopt_callback_edits_positions_panel(tmp_path, monkeypatch):
             return list(broker)
 
     class _Bot:
+        application = type("App", (), {"bot": type("Bot", (), {"base_url": "http://mock.api"})})()
+
         def _risk_authorized(self, uid):
             return True
 
@@ -261,6 +263,7 @@ def test_adopt_callback_edits_positions_panel(tmp_path, monkeypatch):
             return None
 
         _positions_panel_sync = TradingBot._positions_panel_sync
+        _positions_panel_sync_rich = TradingBot._positions_panel_sync_rich
         _refresh_positions_query = TradingBot._refresh_positions_query
         _edit_panel = TradingBot._edit_panel
         _handle_book_callback = TradingBot._handle_book_callback
@@ -269,6 +272,8 @@ def test_adopt_callback_edits_positions_panel(tmp_path, monkeypatch):
     query = MagicMock()
     query.edit_message_text = AsyncMock()
     query.message.reply_text = AsyncMock()
+    query.message.chat_id = 123
+    query.message.message_id = 456
     asyncio.run(TradingBot._handle_book_callback(_Bot(), query, uid=1, data="bk_ad_ATLO260918C00030000"))
     query.edit_message_text.assert_awaited()
     text = query.edit_message_text.await_args.args[0]
@@ -306,12 +311,14 @@ def test_inbox_skip_rewrites_same_panel(tmp_path):
     pid = store.add(trade, "card")
 
     class _Bot:
+        application = type("App", (), {"bot": type("Bot", (), {"base_url": "http://mock.api"})})()
         approval_store = store
 
         def _risk_authorized(self, uid):
             return True
 
         _pending_panel_sync = TradingBot._pending_panel_sync
+        _pending_panel_sync_rich = TradingBot._pending_panel_sync_rich
         _refresh_pending_query = TradingBot._refresh_pending_query
         _edit_panel = TradingBot._edit_panel
         _handle_inbox_callback = TradingBot._handle_inbox_callback
@@ -320,6 +327,8 @@ def test_inbox_skip_rewrites_same_panel(tmp_path):
     query = MagicMock()
     query.edit_message_text = AsyncMock()
     query.message.reply_text = AsyncMock()
+    query.message.chat_id = 123
+    query.message.message_id = 456
     asyncio.run(TradingBot._handle_inbox_callback(_Bot(), query, uid=1, data=f"in_sk_{pid}"))
     query.edit_message_text.assert_awaited()
     text = query.edit_message_text.await_args.args[0]

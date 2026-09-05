@@ -403,7 +403,8 @@ def book_action_banner(kind: str, result: dict, target: str = "") -> str:
     """One-line outcome for the live book panel (plain text)."""
     tgt = target or result.get("symbol") or result.get("group_id") or ""
     if not result.get("ok"):
-        return f"⚠️ {result.get('error') or 'action failed'}"
+        err = result.get("error") or "unknown error"
+        return f"❌ Action failed: {err} (check /status or /jobs, then try again)."
     if kind == "adopt":
         return f"✅ Adopted {tgt} — now on the managed book."
     if kind == "ignore":

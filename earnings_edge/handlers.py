@@ -196,19 +196,30 @@ async def cmd_monitor(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 async def cmd_status(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     import asyncio
 
-    text = await asyncio.to_thread(bot._status_text_sync)
+    from earnings_edge.rich_msg import send_rich_html
+
     await bot._flush_alerts()
-    await bot._send_panel(update, text, reply_markup=desk_refresh_kb("st"), parse_mode=HTML)
+    html = await asyncio.to_thread(bot._status_rich_sync)
+    success = await send_rich_html(
+        bot.application.bot, update.effective_chat.id, html, reply_markup=desk_refresh_kb("st")
+    )
+    if not success:
+        text = await asyncio.to_thread(bot._status_text_sync)
+        await bot._send_panel(update, text, reply_markup=desk_refresh_kb("st"), parse_mode=HTML)
 
 
 async def cmd_positions(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     import asyncio
 
-    text, rows = await asyncio.to_thread(bot._positions_panel_sync)
+    from earnings_edge.rich_msg import send_rich_html
+
     await bot._flush_alerts()
+    text, rows, html = await asyncio.to_thread(bot._positions_panel_sync_rich)
     markup = InlineKeyboardMarkup(rows) if rows else None
-    # One message: book + actions. Reply keyboard stays MAIN_KB.
-    await bot._send_panel(update, text, reply_markup=markup, parse_mode=HTML)
+
+    success = await send_rich_html(bot.application.bot, update.effective_chat.id, html, reply_markup=markup)
+    if not success:
+        await bot._send_panel(update, text, reply_markup=markup, parse_mode=HTML)
 
 
 async def cmd_orders(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -256,8 +267,14 @@ async def cmd_equity(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 async def cmd_strategies(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     import asyncio
 
-    text, ikb = await asyncio.to_thread(bot._strategies_panel_sync)
-    await bot._send_panel(update, text, reply_markup=InlineKeyboardMarkup(ikb))
+    from earnings_edge.rich_msg import send_rich_html
+
+    text, ikb, html = await asyncio.to_thread(bot._strategies_panel_sync_rich)
+    markup = InlineKeyboardMarkup(ikb) if ikb else None
+
+    success = await send_rich_html(bot.application.bot, update.effective_chat.id, html, reply_markup=markup)
+    if not success:
+        await bot._send_panel(update, text, reply_markup=markup)
 
 
 async def cmd_exits(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -280,8 +297,14 @@ async def cmd_exits(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 async def cmd_pending(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     import asyncio
 
-    text, rows = await asyncio.to_thread(bot._pending_panel_sync)
-    await bot._send_panel(update, text, parse_mode=HTML, reply_markup=InlineKeyboardMarkup(rows))
+    from earnings_edge.rich_msg import send_rich_html
+
+    text, rows, html = await asyncio.to_thread(bot._pending_panel_sync_rich)
+    markup = InlineKeyboardMarkup(rows) if rows else None
+
+    success = await send_rich_html(bot.application.bot, update.effective_chat.id, html, reply_markup=markup)
+    if not success:
+        await bot._send_panel(update, text, parse_mode=HTML, reply_markup=markup)
 
 
 async def cmd_propose(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -300,4 +323,4 @@ async def cmd_propose(bot, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         import logging
 
         logging.getLogger("trading_bot").exception("manual proposal build failed")
-        await pm.finish(f"❌ Proposal build failed: {exc}")
+        await pm.finish(f"❌ Proposal build failed: {exc}. Check /jobs for stacktrace, then try again.")

@@ -95,7 +95,9 @@ ET_SCHEDULES = {
     "db_health_check": "5 * * * *",
     "daily_picks": "0 7 * * mon-fri",
     "chain_cache": "5 9-16 * * mon-fri",
+    "outbox_drain": "*/2 * * * *",
 }
+
 
 logging.basicConfig(
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
@@ -502,6 +504,21 @@ class TradingBot:
 
     # ── Format helpers ─────────────────────────────────────────────────
 
+    def _status_rich_sync(self) -> str:
+        from earnings_edge import trade_approval
+        from earnings_edge.bot_views import desk_view_kwargs, pending_exits
+        from earnings_edge.rich_msg import status_rich_view
+        from earnings_edge.subscriptions import funnel_line
+
+        facts = self._desk_facts_sync()
+        return status_rich_view(
+            pending_proposals=len(self.approval_store.list_pending()),
+            pending_exits=len(pending_exits()),
+            next_events=self._next_events_sync(),
+            funnel=funnel_line(trade_approval.LAST_FUNNEL),
+            **desk_view_kwargs(facts),
+        )
+
     @staticmethod
     def _chunk_text(text: str, limit: int = 3800) -> list[str]:
         """Split text into Telegram-safe chunks."""
@@ -572,11 +589,36 @@ class TradingBot:
             err = str(exc)[:120]
         return build_positions_panel(broker_positions=broker, broker_error=err, banner=banner)
 
+    def _positions_panel_sync_rich(self, banner: str | None = None):
+        from earnings_edge.bot_views import build_positions_panel
+        from earnings_edge.rich_msg import positions_rich_view
+
+        broker, err = None, None
+        try:
+            broker = create_client().get_positions()
+        except Exception as exc:
+            err = str(exc)[:120]
+
+        text, rows = build_positions_panel(broker_positions=broker, broker_error=err, banner=banner)
+        html = positions_rich_view(broker_positions=broker, broker_error=err, banner=banner)
+        return text, rows, html
+
     async def _refresh_positions_query(self, query, banner: str | None = None) -> None:
-        text, rows = await asyncio.to_thread(self._positions_panel_sync, banner)
+        from earnings_edge.rich_msg import edit_rich_html
+
+        text, rows, html = await asyncio.to_thread(self._positions_panel_sync_rich, banner)
         await self._flush_alerts()
         markup = InlineKeyboardMarkup(rows) if rows else None
-        await self._edit_panel(query, text, markup)
+
+        success = await edit_rich_html(
+            self.application.bot,
+            query.message.chat_id,
+            query.message.message_id,
+            html,
+            reply_markup=markup,
+        )
+        if not success:
+            await self._edit_panel(query, text, markup)
 
     # ── Command handlers ───────────────────────────────────────────────
 
@@ -785,8 +827,21 @@ class TradingBot:
                 if enable
                 else f"⏸ {name} paused — no new proposals; open positions still exit."
             )
-            text, ikb = await asyncio.to_thread(self._strategies_panel_sync)
-            await self._edit_panel(query, f"{note}\n\n{text}", InlineKeyboardMarkup(ikb))
+            text, ikb, html = await asyncio.to_thread(self._strategies_panel_sync_rich)
+            import html as htmllib
+
+            from earnings_edge.rich_msg import edit_rich_html
+
+            markup = InlineKeyboardMarkup(ikb) if ikb else None
+            success = await edit_rich_html(
+                self.application.bot,
+                query.message.chat_id,
+                query.message.message_id,
+                f"<h3>{htmllib.escape(note)}</h3>\n{html}",
+                reply_markup=markup,
+            )
+            if not success:
+                await self._edit_panel(query, f"{note}\n\n{text}", markup)
 
         elif data == "ex_close_grp":
             if not self._risk_authorized(uid):
@@ -833,7 +888,9 @@ class TradingBot:
                 # framework job dispatched via _dispatch (postmortem 2026-07-31)
                 result = await asyncio.to_thread(self.scanners[name].scan)
             except Exception as exc:
-                await pm.finish(f"❌ {name} error: {exc}", reply_markup=again)
+                await pm.finish(
+                    f"❌ {name} error: {exc}. Run /status or try again in a minute.", reply_markup=again
+                )
                 return
             if not result.get("success"):
                 await pm.finish(f"❌ {name} failed: {result.get('error', 'Unknown')}", reply_markup=again)
@@ -859,7 +916,10 @@ class TradingBot:
                 await self._propose_and_push()
             except Exception as exc:
                 logger.exception("manual signal build after %s failed", name)
-                await pm.finish(f"⚠️ {name} scan complete, but signal build failed: {exc}", reply_markup=again)
+                await pm.finish(
+                    f"⚠️ {name} scan complete, but signal build failed: {exc}. Check /jobs for details.",
+                    reply_markup=again,
+                )
                 return
             from earnings_edge import trade_approval
 
@@ -2091,9 +2151,20 @@ class TradingBot:
 
     async def _handle_desk_refresh(self, query, uid: int, data: str) -> None:
         if data == "desk_st":
-            text = await asyncio.to_thread(self._status_text_sync)
+            from earnings_edge.rich_msg import edit_rich_html
+
             await self._flush_alerts()
-            await self._edit_panel(query, text, self._desk_refresh_kb("st"), parse_mode=HTML)
+            html = await asyncio.to_thread(self._status_rich_sync)
+            success = await edit_rich_html(
+                self.application.bot,
+                query.message.chat_id,
+                query.message.message_id,
+                html,
+                reply_markup=self._desk_refresh_kb("st"),
+            )
+            if not success:
+                text = await asyncio.to_thread(self._status_text_sync)
+                await self._edit_panel(query, text, self._desk_refresh_kb("st"), parse_mode=HTML)
         elif data == "desk_jb":
             from earnings_edge.rich_msg import edit_rich_html, jobs_rich_view
 
@@ -2194,6 +2265,17 @@ class TradingBot:
         ]
         return text, ikb
 
+    def _strategies_panel_sync_rich(self):
+        text, ikb = self._strategies_panel_sync()
+        _, _, html = self._strategies_rich_html()
+        return text, ikb, html
+
+    def _strategies_rich_html(self):
+        from earnings_edge.rich_msg import strategies_rich_view
+
+        html, buttons = strategies_rich_view()
+        return html, buttons, html
+
     async def _cmd_strategies(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         from earnings_edge.handlers import cmd_strategies
 
@@ -2264,9 +2346,75 @@ class TradingBot:
             text = f"{cards.esc(banner)}\n\n{text}"
         return text, inbox_keyboard(inbox)
 
+    def _pending_panel_sync_rich(self, banner: str | None = None):
+        text, rows = self._pending_panel_sync(banner)
+        # We need to re-fetch the inbox to build the rich view.
+        # Actually, it's easier to modify _pending_panel_sync to return inbox too,
+        # but let's just duplicate the assembly or modify _pending_panel_sync.
+
+        from earnings_edge.bot_views import pending_exits
+        from earnings_edge.db import job_runs_failed, trade_events_list
+        from earnings_edge.db.repositories import adopted_positions_symbols
+        from earnings_edge.inbox import assemble_inbox
+        from framework.execution.managed import open_positions
+
+        entries = self.approval_store.list_pending()
+        exits = pending_exits()
+        jobs = job_runs_failed(10)
+
+        raw_orphans = trade_events_list(event_type="orphan_found", limit=50)
+        raw_assigns = trade_events_list(event_type="assignment_detected", limit=50)
+
+        try:
+            broker_syms = {p.get("symbol") for p in create_client().get_positions() if p.get("symbol")}
+        except Exception:
+            broker_syms = set()
+
+        managed_syms = {row.get("symbol") for row in open_positions() if row.get("symbol")}
+        ignored_syms = adopted_positions_symbols()
+
+        def _filter_events(events):
+            valid = []
+            for row in events:
+                sym = row.get("symbol")
+                if not sym:
+                    continue
+                if sym not in broker_syms:
+                    continue  # Gone from broker
+                if sym in managed_syms:
+                    continue  # We adopted it
+                if sym in ignored_syms:
+                    continue  # We explicitly ignored it
+                valid.append(row)
+            return valid
+
+        orphans = _filter_events(raw_orphans)
+        assignments = _filter_events(raw_assigns)
+
+        inbox = assemble_inbox(
+            entries=entries, exits=exits, orphans=orphans, assignments=assignments, jobs=jobs
+        )
+
+        from earnings_edge.rich_msg import pending_rich_view
+
+        html = pending_rich_view(inbox, banner=banner)
+        return text, rows, html
+
     async def _refresh_pending_query(self, query, banner: str | None = None) -> None:
-        text, rows = await asyncio.to_thread(self._pending_panel_sync, banner)
-        await self._edit_panel(query, text, InlineKeyboardMarkup(rows), parse_mode=HTML)
+        from earnings_edge.rich_msg import edit_rich_html
+
+        text, rows, html = await asyncio.to_thread(self._pending_panel_sync_rich, banner)
+        markup = InlineKeyboardMarkup(rows) if rows else None
+
+        success = await edit_rich_html(
+            self.application.bot,
+            query.message.chat_id,
+            query.message.message_id,
+            html,
+            reply_markup=markup,
+        )
+        if not success:
+            await self._edit_panel(query, text, markup, parse_mode=HTML)
 
     async def _handle_inbox_callback(self, query, uid: int, data: str) -> None:
         """Act on a Pending-inbox row and rewrite that same message."""
@@ -2521,7 +2669,9 @@ class TradingBot:
                 return
             spot = float(px)
         except Exception as e:
-            await update.message.reply_text(f"Price fetch failed: {e}")
+            await update.message.reply_text(
+                f"❌ Price fetch failed: {e}. Check /status (broker reachable?) or try again."
+            )
             return
 
         legs = []
@@ -2588,7 +2738,7 @@ class TradingBot:
                 legs.append(Leg(action, kind, strike, expiry, qty, price, iv))
                 i = j
         except Exception as e:
-            await self._send_panel(update, f"Error parsing legs: {e}")
+            await self._send_panel(update, f"❌ Error parsing legs: {e}. Check OCC syntax and try again.")
             return
 
         summary = analyze(legs, spot, 0.045)
@@ -2793,6 +2943,7 @@ class TradingBot:
                 coalesce=True,
                 misfire_grace_time=120,
             )
+
             logger.info(
                 "Scheduled framework jobs: equity */15, reconcile */30, guard 15:45 ET, exits */15, backup 00:15 ET, chain cache hourly"
             )
