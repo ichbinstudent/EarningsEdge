@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import pytest
+
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
-import pytest
 from sqlalchemy import text
 
 from earnings_edge.db import engine as db_engine
@@ -230,3 +231,39 @@ def test_snapshot_and_daily_pnl(conn):
 
 def test_daily_pnl_none_without_baseline(conn):
     assert daily_pnl(100_000) is None
+from datetime import date
+from unittest.mock import MagicMock
+from framework.risk.manager import RiskManager, RiskLimits
+
+def test_check_trade_import_exception(monkeypatch):
+    mgr = RiskManager()
+    import sys
+    monkeypatch.setitem(sys.modules, "earnings_edge.alpaca_mode", None)
+    # the exception is swallowed and live_broker defaults to False
+    res = mgr.check_trade("strat", "AAPL", 10.0, live_broker=None)
+    assert res.approved is True
+
+def test_daily_loss_trips_killswitch(monkeypatch):
+    mgr = RiskManager()
+    mgr.limits = RiskLimits(daily_loss_limit_pct=0.05)
+    monkeypatch.setattr("framework.risk.manager.daily_pnl", lambda a, b: -60.0)
+    monkeypatch.setattr("framework.risk.manager.day_start_equity", lambda a: 1000.0)
+    mgr.killswitch = MagicMock()
+    mgr.killswitch.is_halted.return_value = False
+    
+    assert mgr.check_daily_loss(940.0) is True
+    mgr.killswitch.trip.assert_called_once()
+
+def test_day_spend_cost_parse_error(monkeypatch):
+    mgr = RiskManager()
+    # Mock RiskStore._db.execute to return a row with bad cost
+    class DummyCursor:
+        def fetchall(self):
+            return [{"detail": "AAPL cost=bad"}]
+    class DummyDB:
+        def execute(self, *args, **kwargs):
+            return DummyCursor()
+    monkeypatch.setattr("framework.risk.manager.risk_events_list", lambda **kw: [{"detail": "AAPL cost=bad"}])
+    # Should swallow ValueError and return 0
+    assert mgr._strategy_spend_today("strat") == 0.0
+
