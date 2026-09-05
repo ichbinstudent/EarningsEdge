@@ -31,6 +31,22 @@ FIELDS_TO_UPDATE = [
 
 
 def main():
+    import argparse
+
+    p = argparse.ArgumentParser()
+    p.add_argument(
+        "--read-only",
+        action="store_true",
+        help="Open the DB in SQLite read-only mode: every write is refused. "
+        "Single-writer discipline: only the bot process writes to production.",
+    )
+    args = p.parse_args()
+    if args.read_only:
+        from earnings_edge.db import engine as db_engine
+
+        db_engine.configure(read_only=True)
+        print("DB opened READ-ONLY — every write will be refused")
+
     rows = snapshots_missing_atm_iv()
     print(f"{len(rows)} snapshots to backfill")
 

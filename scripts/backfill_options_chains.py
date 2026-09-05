@@ -47,6 +47,12 @@ def _parse_args():
     p.add_argument("--tickers", nargs="*")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--resume-from-collector-run", help="Skip if existing rows for this run")
+    p.add_argument(
+        "--read-only",
+        action="store_true",
+        help="Open the DB in SQLite read-only mode: every write is refused. "
+        "Single-writer discipline: only the bot process writes to production.",
+    )
     return p.parse_args()
 
 
@@ -231,6 +237,17 @@ def main():
         raise RuntimeError("Pass --api-key + --api-secret or set APCA_API env vars")
 
     from earnings_edge.collectors.alpaca_options import AlpacaOptionsClient
+    from earnings_edge.db import engine as db_engine
+
+    if args.read_only:
+        db_engine.configure(read_only=True)
+        print("DB opened READ-ONLY — every write will be refused")
+    else:
+        print(
+            "DIRECT WRITE to production DB from a script — single-writer "
+            "discipline prefers routing writes through the bot. "
+            "Use --read-only unless this is deliberate."
+        )
 
     client = AlpacaOptionsClient(api_key=args.api_key, api_secret=args.api_secret)
 

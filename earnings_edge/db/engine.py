@@ -39,18 +39,33 @@ def _begin(conn) -> None:
     conn.exec_driver_sql("BEGIN")
 
 
-def configure(db_path: str | Path | None = None) -> Engine:
+def configure(db_path: str | Path | None = None, read_only: bool = False) -> Engine:
     """(Re)create the engine bound to ``db_path`` (default: production path).
 
     Creates the directory, applies schema (create_all + column migrations),
     and resets the session factory. Safe to call repeatedly (tests).
+
+    ``read_only=True`` opens the file in SQLite URI read-only mode (``mode=ro``):
+    SQLite itself refuses every write, so off-bot processes (scripts, crons)
+    can never mutate the production DB — the single-writer guarantee. The
+    schema step is skipped for read-only engines (a ro connection cannot
+    CREATE; the file must already exist and be migrated).
     """
     global _engine, _session_factory
     with _lock:
         path = Path(db_path) if db_path else DEFAULT_DB_PATH
-        path.parent.mkdir(parents=True, exist_ok=True)
         if _engine is not None:
             _engine.dispose()
+        if read_only:
+            if not path.exists():
+                raise FileNotFoundError(f"read-only engine requested for missing DB: {path}")
+            _engine = create_engine(
+                f"sqlite+pysqlite:///file:{path}?mode=ro&uri=true",
+                connect_args={"check_same_thread": False, "timeout": 30},
+            )
+            _session_factory = sessionmaker(bind=_engine, expire_on_commit=False)
+            return _engine
+        path.parent.mkdir(parents=True, exist_ok=True)
         _engine = create_engine(
             f"sqlite:///{path}",
             connect_args={"check_same_thread": False, "timeout": 30},
