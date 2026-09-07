@@ -16,15 +16,16 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from polygon_backfill import PolygonClient, hist_vol, realized_vol_30d
+
 from earnings_edge.db import (
     snapshots_apply_rv,
     snapshots_count_null_rv30,
     snapshots_rv_pending_pairs,
 )
-from polygon_backfill import PolygonClient, hist_vol, realized_vol_30d
 
-load_dotenv(Path(__file__).resolve().parent / ".env")
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 
 def main():

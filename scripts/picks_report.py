@@ -9,7 +9,7 @@ from pathlib import Path
 from earnings_edge.db import configure, snapshots_max_scan_date
 from earnings_edge.picks import generate_picks
 
-DEFAULT_DB = Path(__file__).parent / "data" / "earnings_ml.db"
+DEFAULT_DB = Path(__file__).resolve().parents[1] / "data" / "earnings_ml.db"
 
 
 def main() -> int:

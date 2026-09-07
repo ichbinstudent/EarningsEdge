@@ -23,6 +23,7 @@ from typing import Mapping
 import joblib
 import numpy as np
 import pandas as pd
+from polygon_backfill import PolygonClient
 from sqlalchemy import text
 
 from earnings_edge.calendar_filter import (
@@ -40,7 +41,6 @@ from earnings_edge.db import (
     configure,
     get_engine,
 )
-from polygon_backfill import PolygonClient
 
 
 @dataclass(frozen=True)

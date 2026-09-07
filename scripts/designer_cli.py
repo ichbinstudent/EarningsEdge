@@ -83,7 +83,7 @@ def main() -> int:
 
         from earnings_edge.db import configure, options_chain_latest_contract
 
-        db = args.db or str(Path(__file__).parent / "data" / "earnings_ml.db")
+        db = args.db or str(Path(__file__).resolve().parents[1] / "data" / "earnings_ml.db")
         configure(db)
         as_of = date_cls.today().isoformat()
         resolved = []

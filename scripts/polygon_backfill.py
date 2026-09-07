@@ -30,7 +30,7 @@ from dotenv import load_dotenv
 from scipy.optimize import brentq
 from scipy.stats import norm
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from earnings_edge.config import get_logger, setup_logging
 from earnings_edge.db import insert_snapshot, snapshots_exists, update_outcome
@@ -39,7 +39,7 @@ from earnings_edge.services.outcome_service import OutcomeService
 
 setup_logging()
 
-load_dotenv(Path(__file__).resolve().parent / ".env")
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 logger = get_logger("polygon_backfill")
 
 POLYGON_BASE = "https://api.polygon.io"

@@ -19,7 +19,7 @@ Design:
   via Black-Scholes and bid/ask collapse to the close. Open interest is NOT
   available — chains carry ``oi_available=False`` so callers can skip OI gates.
   NOT part of the default live chain (see below) — reserved for the
-  historical backfill/backtest scripts (``polygon_backfill.py`` and
+  historical backfill/backtest scripts (``scripts/polygon_backfill.py`` and
   friends), which use it directly rather than through this module.
 - ``ResilientProvider`` — auto mode: health-checks providers in priority
   order, latches to the first working backend, fails over mid-run on errors,

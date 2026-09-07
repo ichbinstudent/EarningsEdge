@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd "$(dirname "$0")"
+# scripts/ — run from repo root: `bash scripts/run_backtest_train.sh`
+# (cd target below is the repo root, one level up from this script)
+cd "$(dirname "$0")/.."
 PYTHON="${PYTHON:-.venv/bin/python3.12}"
 # Options Basic provides 2 years historical data. With a 120d feature lookback,
 # default to events safely after the two-year floor from this run date.

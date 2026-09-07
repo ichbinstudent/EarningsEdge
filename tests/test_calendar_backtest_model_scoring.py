@@ -2,9 +2,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from calendar_call_backtest import ensure_schema, score_existing_trades
 from sqlalchemy import text
 
-from calendar_call_backtest import ensure_schema, score_existing_trades
 from earnings_edge.db import (
     calendar_call_trades_list,
     calendar_call_trades_upsert,

@@ -29,10 +29,10 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 import os
 
+from polygon_backfill import EarningsEvent, PolygonClient, collect_polygon_features
 from sqlalchemy.exc import OperationalError
 
 from earnings_edge.db import snapshots_coalesce_features, snapshots_iv_gap_rows
-from polygon_backfill import EarningsEvent, PolygonClient, collect_polygon_features
 
 FIELDS = [
     "price",

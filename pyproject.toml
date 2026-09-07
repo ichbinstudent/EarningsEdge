@@ -32,10 +32,6 @@ dolthub = ["mysql-connector-python>=8.2"]
 yahooquery = ["yahooquery>=2.4"]
 ib = ["ib_insync>=0.9.86"]
 
-[project.scripts]
-earnings-edge = "scanner:main"
-trading-bot = "bot:main"
-
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
@@ -135,8 +131,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["DTZ", "E702", "RUF059", "SIM102", "SIM110"]
 "framework/ops.py" = ["SIM115"]  # InstanceLock holds its fd for process lifetime by design
-"scripts/*" = ["DTZ", "E402"]
-"backtest*" = ["E402"]
+"scripts/*" = ["DTZ", "E402"]  # E402: sys.path bootstrap before imports is the scripts convention
 
 [tool.ruff.format]
 docstring-code-format = true

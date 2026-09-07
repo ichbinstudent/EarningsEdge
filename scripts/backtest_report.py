@@ -34,7 +34,7 @@ from earnings_edge.backtest.stats import (
     train_test_report,
 )
 
-DEFAULT_DB = Path(__file__).parent / "data" / "earnings_ml.db"
+DEFAULT_DB = Path(__file__).resolve().parents[1] / "data" / "earnings_ml.db"
 
 COLUMNS = (
     "ticker, scan_date, net_debit, near_entry, far_entry, near_exit, far_exit, "

@@ -6,8 +6,8 @@ from datetime import date
 
 import pandas as pd
 import pytest
-
 from backtest import run_all
+
 from earnings_edge.backtest.calendar import (
     CalendarCallHighConviction,
     CalendarCallNoML,

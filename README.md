@@ -68,7 +68,7 @@ setsid ./run-crash.sh </dev/null >/dev/null 2>&1 &
 curl -s http://127.0.0.1:8502/health
 
 # CLI scanner
-uv run python scanner.py --list
+uv run python scripts/scanner.py --list
 
 # Tests
 uv run python -m pytest tests -q --tb=short
@@ -82,9 +82,11 @@ Optional crash-alert knobs (defaults in parentheses): `GERMAN_CRASH_THRESHOLD` (
 
 ```
 bot.py                 Telegram entry
-scanner.py             CLI scan
+crash_alert.py         German crash alerts (own process)
+run-bot.sh, run-crash.sh   supervisor loops (prefer systemd units in deploy/)
 earnings_edge/         scanners, live signals, FF math, collectors
 framework/             risk, sizing, orders, exits
+scripts/               pipeline CLIs: scanner, collect, outcomes, train, backtests, polygon backfills, designer
 strategies/*.toml      live strategy configs
 tests/
 data/                  SQLite + models (not in git)

@@ -140,7 +140,7 @@ def test_backtest_cli_produces_report_artifact(tmp_db_path, tmp_path):
     proc = subprocess.run(
         [
             sys.executable,
-            "backtest.py",
+            "scripts/backtest.py",
             "--db",
             str(tmp_db_path),
             "--strategies",

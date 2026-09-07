@@ -9,11 +9,18 @@ The fixtures below are defined at the root so both layers can use them; the
 integration/e2e conftests apply the network guard autouse.
 """
 
+import sys
 import tempfile
 from datetime import date
 from pathlib import Path
 
 import pytest
+
+# Moved CLIs: scripts/ modules (backtest, picks_report, designer_cli,
+# train_calendar_filter, calendar_call_backtest, …) are imported bare by unit
+# tests; root entry points (bot.py, crash_alert.py) resolve via pytest's
+# rootdir insertion.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 
 def pytest_configure(config):

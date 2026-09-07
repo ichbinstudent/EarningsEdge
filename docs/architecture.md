@@ -22,9 +22,7 @@ Both crash-alert polling (07:30–23:00 Berlin weekdays) and the bot's trading g
 
 ```
 bot.py                  TradingBot — wiring only: registration, scheduler, panel plumbing
-backtest.py             CLI backtest entry (v2.0 framework)
 crash_alert.py          German crash-alert process (standalone)
-designer_cli.py         /designer scenario CLI
 earnings_edge/          Domain layer: scanner, signals, picks, proposals, approval, views, rich messages
   db/                   SQLAlchemy engine/models/migrations + repositories (the only SQL-bearing layer)
   collectors/           Alpaca options, earnings calendar, LSE, Polygon, gettex/tradegate quotes
@@ -32,12 +30,13 @@ earnings_edge/          Domain layer: scanner, signals, picks, proposals, approv
 framework/              Trading framework: registry, risk, execution, positions, jobs, ops
 strategies/             One TOML per strategy (see STRATEGIES.md for the math)
 dashboard/              FastAPI server, desk actions, Telegram WebApp auth
-scripts/                Backfills, scans, FF analysis, ops helpers (mostly offline)
+scripts/                Pipeline + ops CLIs: scanner, collect, outcomes, train, backtest family,
+                        calendar_call_backtest, polygon backfills, FF analysis, designer CLI
 data/                   SQLite DBs, model artifacts, gettex quote cache
 deploy/                 systemd unit files
 ```
 
-History note: the repo was flattened from `cli_scanner/` to root on 2026-09-02; nothing lives in a sub-package anymore.
+History note: the repo was flattened from `cli_scanner/` to root on 2026-09-02; nothing lives in a sub-package anymore. On 2026-09-07 the root CLIs were consolidated into `scripts/`; the root keeps only `bot.py` + `crash_alert.py` (systemd `ExecStart` targets) and their supervisor scripts.
 
 ## Runtime: TradingBot (`bot.py`)
 

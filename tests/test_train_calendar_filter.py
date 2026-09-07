@@ -8,7 +8,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-
 from train_calendar_filter import (
     build_model_pipeline,
     cv_evaluate,
@@ -186,7 +185,7 @@ class CvCliTests(unittest.TestCase):
             )
 
     def test_cv_cli_writes_no_artifacts(self):
-        script = Path(__file__).resolve().parents[1] / "train_calendar_filter.py"
+        script = Path(__file__).resolve().parents[1] / "scripts" / "train_calendar_filter.py"
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             db_path = tmp_path / "test.db"

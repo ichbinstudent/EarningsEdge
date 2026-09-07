@@ -522,7 +522,7 @@ def _apply_market_data(trades: list[dict[str, Any]], rate_sleep: float, notes: l
     load_dotenv(Path(__file__).resolve().parents[1] / ".env")
     import os
 
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
     from polygon_backfill import PolygonClient  # lazy: network-capable import
 
     api_key = os.environ.get("POLYGON_API_KEY", "")

@@ -22,14 +22,8 @@ from typing import Any
 import numpy as np
 from dotenv import load_dotenv
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from earnings_edge.config import get_logger, setup_logging
-from earnings_edge.db import (
-    snapshots_iv_pending_groups,
-    snapshots_mark_iv_skip,
-    snapshots_update_iv,
-)
 from polygon_backfill import (
     PolygonClient,
     choose_atm_pair,
@@ -39,8 +33,15 @@ from polygon_backfill import (
     realized_vol_30d,
 )
 
+from earnings_edge.config import get_logger, setup_logging
+from earnings_edge.db import (
+    snapshots_iv_pending_groups,
+    snapshots_mark_iv_skip,
+    snapshots_update_iv,
+)
+
 setup_logging()
-load_dotenv(Path(__file__).resolve().parent / ".env")
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 logger = get_logger("polygon_iv_backfill")
 
 
