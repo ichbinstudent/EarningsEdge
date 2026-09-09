@@ -467,12 +467,25 @@ class LSEProvider:
         return result
 
     def healthy(self, timeout: float = 6.0) -> bool:
+        """Candles AND at least one not-yet-expired option contract.
+
+        The vault's options catalog can freeze while candles keep flowing
+        (observed 2026-07-01: every chain row carried a July expiry with
+        dte=1 forever). A candles-only probe latches ResilientProvider onto
+        a provider whose chains are all dead, so every options_expiries
+        call silently returns [] and the scan funnels everything to
+        no_quote. Requiring one live expiry catches that state.
+        """
         if not self._key:
             return False
         try:
             start = (date.today() - timedelta(days=10)).isoformat()
             rows = self._call(lambda: self.client.candles("SPY", "1d", start=start, limit=5))
-            return bool(rows)
+            if not rows:
+                return False
+            today = date.today().isoformat()
+            opts = self._call(lambda: self.client.options("SPY", limit=50))
+            return any(r.get("expiry") and r["expiry"] >= today for r in (opts or []))
         except Exception as exc:
             logger.info("LSE health check failed: %s", exc)
             return False
@@ -480,14 +493,17 @@ class LSEProvider:
     # -- stock data ----------------------------------------------------------
 
     def history(self, ticker: str, period: str = "1d") -> pd.DataFrame:
-        """yfinance-shaped OHLCV DataFrame (empty when no data)."""
+        """yfinance-shaped OHLCV DataFrame.
+
+        Raises when the vault has nothing for the ticker: the small-cap
+        universe 404s almost everywhere on LSE, and an empty-DataFrame
+        return hides that from ResilientProvider (no failover to Yahoo,
+        candidates die as no_price/no_quote). Empty DataFrames remain
+        valid only for genuinely empty successful responses (rows == []).
+        """
         days = _PERIOD_DAYS.get(period, 100)
         start = (date.today() - timedelta(days=days)).isoformat()
-        try:
-            rows = self._call(lambda: self.client.candles(ticker, "1d", start=start, order="asc", limit=5000))
-        except Exception as exc:
-            logger.info("LSE history(%s, %s) failed: %s", ticker, period, exc)
-            return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"])
+        rows = self._call(lambda: self.client.candles(ticker, "1d", start=start, order="asc", limit=5000))
         df = self._rows_to_df(rows)
         if period == "1d" and not df.empty:
             df = df.tail(1)  # match Yahoo/Polygon single-session semantics
@@ -525,7 +541,16 @@ class LSEProvider:
     def options_expiries(self, ticker: str) -> list[str]:
         today = date.today().isoformat()
         expiries = {r["expiry"] for r in self._chain(ticker) if r.get("expiry") and r["expiry"] >= today}
-        return sorted(expiries)
+        expiries = sorted(expiries)
+        if not expiries:
+            # Vault catalog gap (ticker not carried, or the options feed
+            # froze like 2026-07-01). An empty list must NOT return
+            # normally: ResilientProvider only advances on exceptions, so
+            # a silent [] here pins the scan to LSE and kills the ticker
+            # as no_quote before option_chain (which does raise) is ever
+            # consulted. Raise so the chain can try Yahoo.
+            raise ValueError(f"No live LSE expiries for {ticker} (catalog gap or stale feed)")
+        return expiries
 
     def option_chain(self, ticker: str, expiry: str) -> OptionChainData:
         rows = [r for r in self._chain(ticker) if r.get("expiry") == expiry and r.get("strike") is not None]

@@ -511,13 +511,62 @@ def test_lse_history_1d_returns_last_session_only():
     assert df["Volume"].iloc[0] == 2_000_000
 
 
-def test_lse_history_failure_returns_empty():
+def test_lse_history_failure_raises_for_failover():
+    """A dead/missing LSE ticker must RAISE, not return an empty DataFrame.
+
+    Regression (2026-09): history swallowed 404s as empty frames, so
+    ResilientProvider never saw an exception, never failed over to
+    Yahoo, and every small-cap candidate died as no_quote. The raise is
+    the failover signal; ResilientProvider translates it.
+    """
+
     class BrokenClient(FakeLSEClient):
         def candles(self, *a, **k):
             raise ConnectionError("lse down")
 
     p = LSEProvider(api_key="x", client=BrokenClient())
-    assert p.history("TEST", "3mo").empty
+    with pytest.raises(ConnectionError):
+        p.history("TEST", "3mo")
+
+
+def test_lse_expiries_empty_raises_for_failover():
+    """Empty live-expiry set must RAISE so the chain can try Yahoo.
+
+    Regression (2026-09): the vault's options catalog froze at 2026-07-01
+    while candles kept flowing; options_expiries returned [] silently,
+    pinning scans to LSE and funneling every candidate to no_quote.
+    """
+
+    class GapClient(FakeLSEClient):
+        def options(self, *a, **k):
+            return []  # catalog gap / stale feed shape
+
+    p = LSEProvider(api_key="x", client=GapClient())
+    with pytest.raises(ValueError):
+        p.options_expiries("TEST")
+
+
+def test_lse_healthy_requires_live_option_expiry():
+    """healthy() must catch a frozen options catalog.
+
+    Candles-only health probing latched ResilientProvider onto LSE even
+    when every chain row was long expired — the exact 2026-07-01 freeze.
+    """
+
+    class FrozenOptionsClient(FakeLSEClient):
+        def options(self, *a, **k):
+            return [  # candles fine, chains all in the past
+                {
+                    "ticker": "OLD",
+                    "expiry": self.past,
+                    "strike": 320.0,
+                    "contract_type": "call",
+                    "last_price": 1.0,
+                }
+            ]
+
+    p = LSEProvider(api_key="x", client=FrozenOptionsClient())
+    assert p.healthy() is False
 
 
 def test_lse_expiries_filter_past_and_sort():
