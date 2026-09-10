@@ -4,7 +4,7 @@ stock validation, and result collection.
 """
 
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytz
 from tqdm import tqdm
@@ -153,14 +153,14 @@ class EarningsScanner:
             pool = ThreadPoolExecutor(max_workers=n)
             futs = [pool.submit(_process, s) for s in candidates]
             with tqdm(total=len(candidates), desc="Analyzing") as pbar:
-                for f in futs:
+                for f in as_completed(futs):
                     try:
-                        f.result(timeout=60)
+                        f.result()
                     except Exception as exc:
                         logger.error(f"Worker error: {exc}")
                     finally:
                         pbar.update(1)
-            pool.shutdown(wait=False, cancel_futures=True)
+            pool.shutdown(wait=True)
         else:
             batch = 8
             with tqdm(total=len(candidates), desc="Analyzing") as pbar:
