@@ -25,6 +25,7 @@ class MarketChameleonBrowser:
         self._driver = None
         self._lock = threading.Lock()
         self._consecutive_failures = 0
+        self._user_data_dir = None
 
     def close(self) -> None:
         if self._driver is not None:
@@ -33,10 +34,21 @@ class MarketChameleonBrowser:
             except Exception:
                 pass
             self._driver = None
+        if self._user_data_dir:
+            import shutil
+
+            try:
+                shutil.rmtree(self._user_data_dir, ignore_errors=True)
+            except Exception:
+                pass
+            self._user_data_dir = None
 
     # -- internal ---------------------------------------------------------
 
     def _init_driver(self) -> None:
+        import shutil
+        import tempfile
+
         from selenium.webdriver.chrome.service import Service
         from webdriver_manager.chrome import ChromeDriverManager
 
@@ -45,8 +57,17 @@ class MarketChameleonBrowser:
                 self._driver.quit()
             except Exception:
                 pass
+            self._driver = None
+
+        if self._user_data_dir:
+            try:
+                shutil.rmtree(self._user_data_dir, ignore_errors=True)
+            except Exception:
+                pass
+        self._user_data_dir = tempfile.mkdtemp(prefix="mchameleon-")
 
         opts = webdriver.ChromeOptions()
+        opts.add_argument(f"--user-data-dir={self._user_data_dir}")
         for flag in (
             "--headless",
             "--no-sandbox",
@@ -93,6 +114,13 @@ class MarketChameleonBrowser:
                     self._init_driver()
                 except Exception as exc:
                     logger.error(f"Browser init failed: {exc}")
+                    self._consecutive_failures += 1
+                    if self._consecutive_failures == self._BREAKER_THRESHOLD:
+                        logger.error(
+                            "MarketChameleon unreachable %d times in a row — disabling MC "
+                            "win-rate for the rest of this process (gate auto-skips)",
+                            self._consecutive_failures,
+                        )
                     return default
 
             for attempt in range(1, self._MAX_RETRIES + 1):
@@ -130,11 +158,13 @@ class MarketChameleonBrowser:
 
                 except Exception as exc:
                     logger.warning(f"MC scrape attempt {attempt}/{self._MAX_RETRIES} for {ticker}: {exc}")
-                    try:
-                        self._init_driver()
-                    except Exception:
-                        pass
-                    time.sleep(1)
+                    if attempt < self._MAX_RETRIES:
+                        try:
+                            self._init_driver()
+                        except Exception as init_exc:
+                            logger.error(f"Browser init retry failed: {init_exc}")
+                            break
+                        time.sleep(1)
 
         self._consecutive_failures += 1
         if self._consecutive_failures == self._BREAKER_THRESHOLD:
