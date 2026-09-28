@@ -256,7 +256,8 @@ class OptionsAnalyzer:
                 strike = calls.loc[call_idx, "strike"]
 
                 bid_iv = ask_iv = None
-                if all(v is not None and v > 0 for v in (call_bid, call_ask, put_bid, put_ask)) and T > 0:
+                book_ok = all(v is not None and v > 0 for v in (put_bid, put_ask))
+                if call_bid and call_ask and call_bid > 0 and call_ask > 0 and book_ok and T > 0:
                     bid_iv = _sane_iv(implied_volatility(call_bid, current_price, strike, T, 0.04, "call"))
                     ask_iv = _sane_iv(implied_volatility(call_ask, current_price, strike, T, 0.04, "call"))
                 # an unsolvable side (bid below intrinsic, stale ask) must not
