@@ -395,6 +395,7 @@ def quote_from_tradegate(
         ric=isin,
         name=name,
         source="tradegate",
+        trade_ts=ts,
     )
 
 
@@ -404,6 +405,10 @@ class CrashDetector:
     def __init__(self, cfg: CrashAlertConfig | None = None):
         self.cfg = cfg or CrashAlertConfig()
         self._windows: dict[tuple[str, str], deque[_Sample]] = defaultdict(deque)
+        # Largest peak-to-trough drop seen on the last ingest() call, regardless
+        # of threshold. Exposed via job_runs stats for threshold tuning.
+        self.last_max_drop: float = 0.0
+        self.last_max_drop_key: str = ""
 
     def ingest(
         self,
@@ -413,6 +418,8 @@ class CrashDetector:
         now = _aware(now or datetime.now(UTC))
         cutoff = now - timedelta(seconds=self.cfg.window_secs)
         alerts: list[CrashAlert] = []
+        max_drop = 0.0
+        max_drop_key = ""
         for q in quotes:
             if q is None:
                 continue
@@ -441,6 +448,9 @@ class CrashDetector:
             if high <= 0:
                 continue
             drop = (high - last_px) / high
+            if drop > max_drop:
+                max_drop = drop
+                max_drop_key = f"{q.ticker}|{q.venue}"
             if drop > self.cfg.threshold:
                 alerts.append(
                     CrashAlert(
@@ -459,6 +469,8 @@ class CrashDetector:
                         source=last_s.source,
                     )
                 )
+        self.last_max_drop = max_drop
+        self.last_max_drop_key = max_drop_key
         return alerts
 
 
@@ -660,6 +672,8 @@ class CrashMonitor:
         return {
             "n_fetched": n_fetched,
             "n_valid": len(valid),
+            "max_drop": round(self.detector.last_max_drop, 4),
+            "max_drop_key": self.detector.last_max_drop_key,
             "n_raw_alerts": len(raw_alerts),
             "n_alerts": len(alerts),
             "tickers": [a.ticker for a in alerts],

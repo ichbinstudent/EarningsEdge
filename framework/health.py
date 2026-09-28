@@ -7,6 +7,19 @@ from datetime import UTC, datetime, timedelta
 EQUITY_STALE_MIN = 30
 SCAN_STALE_HOURS = 26
 
+HEALTH_READY_FIELDS = frozenset(
+    {
+        "lock_held",
+        "last_equity_ts",
+        "last_scan_ts",
+        "clock_ok",
+        "now",
+        "market_open",
+        "weekday",
+        "equity_skipped_closed",
+    }
+)
+
 
 def _parse(ts) -> datetime | None:
     if ts is None:

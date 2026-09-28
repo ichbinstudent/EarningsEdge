@@ -35,11 +35,8 @@ def test_scheduler_hardening_properties():
     for job in jobs:
         assert job.max_instances == 1
         assert job.coalesce is True
-        # Scanners get 300s misfire_grace_time, others get 120s
-        if job.id.startswith("scanner_"):
-            assert job.misfire_grace_time == 300
-        else:
-            assert job.misfire_grace_time == 120
+        # 300s so a long scan/chain-cache does not drop the next book job.
+        assert job.misfire_grace_time == 300
 
 
 def test_scheduler_hardening_dst_safety():

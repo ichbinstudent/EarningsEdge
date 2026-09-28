@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from earnings_edge.db import engine as db_engine
-from framework.backup import backup_db
+from framework.backup import backup_db, prune_backups
 
 NOW = datetime(2026, 9, 1, 6, 15, tzinfo=UTC)
 
@@ -100,3 +100,38 @@ def test_backup_rejects_failed_integrity(tmp_path):
         with pytest.raises(RuntimeError, match="integrity check failed"):
             backup_db(src, dest, now=NOW)
     assert list(dest.glob("earnings_ml_*.db")) == []
+
+
+def test_prune_backups_keeps_newest_and_drops_tmps(tmp_path):
+    dest = tmp_path / "backups"
+    dest.mkdir()
+    names = [
+        "earnings_ml_20260901T061500Z.db",
+        "earnings_ml_20260902T061500Z.db",
+        "earnings_ml_20260903T061500Z.db",
+    ]
+    for name in names:
+        (dest / name).write_bytes(b"x")
+    (dest / ".earnings_ml_20260902T061500Z.db.tmp-wal").write_bytes(b"")
+    (dest / ".earnings_ml_20260902T061500Z.db.tmp-shm").write_bytes(b"")
+    (dest / ".earnings_ml_20260919T041500Z.db.tmp").write_bytes(b"partial")
+    prune_backups(dest, keep=1)
+    left = sorted(p.name for p in dest.iterdir())
+    assert left == ["earnings_ml_20260903T061500Z.db"]
+
+
+def test_backup_db_prunes_to_keep(tmp_path):
+    src = tmp_path / "src.db"
+    dest = tmp_path / "backups"
+    db_engine.configure(src)
+    with db_engine.session_scope() as s:
+        from sqlalchemy import text as sa_text
+
+        s.execute(sa_text("CREATE TABLE IF NOT EXISTS t (x int)"))
+        s.execute(sa_text("INSERT INTO t VALUES (1)"))
+    first = backup_db(src, dest, now=datetime(2026, 9, 1, 6, 15, tzinfo=UTC), keep=1)
+    second = backup_db(src, dest, now=datetime(2026, 9, 2, 6, 15, tzinfo=UTC), keep=1)
+    left = sorted(p.name for p in dest.glob("earnings_ml_*.db"))
+    assert left == [second.name]
+    assert not first.exists()
+    assert not list(dest.glob(".*.tmp*"))

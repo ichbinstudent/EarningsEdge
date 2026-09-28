@@ -53,6 +53,8 @@ def test_submit_api_retry_and_fail():
     with pytest.raises(Exception, match="API error"):
         manager._submit([{"symbol": "A", "side": "buy"}], 2, 10.0, "cid", "day")
     assert client.submit_order.call_count == 3
+    cids = [c.kwargs["client_order_id"] for c in client.submit_order.call_args_list]
+    assert cids == ["cid", "cid_2", "cid_3"]
 
 
 def test_poll_fill_calculates_net_price():

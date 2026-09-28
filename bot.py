@@ -166,13 +166,15 @@ class _HealthHandler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
             return
-        from framework.health import health_ready
+        from framework.health import HEALTH_READY_FIELDS, health_ready
 
         facts = type(self).facts_fn()
         facts = dict(facts)
         broker = facts.pop("broker", None)
+        extra = {k: facts.pop(k) for k in list(facts) if k not in HEALTH_READY_FIELDS}
         result = health_ready(**facts) if "lock_held" in facts else facts
         result = dict(result)
+        result.update(extra)
         if broker:
             result["broker"] = broker
         result["uptime_secs"] = round(time.monotonic() - self._started_at, 1)
@@ -365,6 +367,18 @@ class TradingBot:
         except Exception as e:
             logger.error("Job failed: %s", e)
         from earnings_edge.alpaca_mode import broker_label
+        from earnings_edge.db import job_runs_failed
+        from framework.execution.managed import open_groups
+
+        n_open = last_fail = None
+        try:
+            n_open = len(open_groups())
+            fails = job_runs_failed(limit=1)
+            if fails:
+                row = fails[0]
+                last_fail = f"{row.get('job_name')}: {(row.get('error') or '')[:80]}"
+        except Exception:
+            pass
 
         return {
             "lock_held": lock_held,
@@ -374,6 +388,8 @@ class TradingBot:
             "market_open": market_open,
             "equity_skipped_closed": skip,
             "broker": broker_label(),
+            "n_open_groups": n_open,
+            "last_job_error": last_fail,
         }
 
     async def _capture_loop(self, application) -> None:
@@ -383,7 +399,9 @@ class TradingBot:
         from it fails with 'Event loop is closed' (broken pushes)."""
         self._main_loop = asyncio.get_running_loop()
         # Catch up on anything that happened at the broker while we were down.
-        application.create_task(self._reconcile())
+        # Await here: create_task() in post_init races the application start
+        # and is not guaranteed to run.
+        await self._reconcile()
         from dashboard.tg_auth import webapp_url
 
         url = webapp_url()
@@ -2854,7 +2872,7 @@ class TradingBot:
                 name="FF ladder proposals",
                 max_instances=1,
                 coalesce=True,
-                misfire_grace_time=120,
+                misfire_grace_time=300,
             )
             self.scheduler.add_job(
                 self._ff_step_sync,
@@ -2863,7 +2881,7 @@ class TradingBot:
                 name="FF ladder step",
                 max_instances=1,
                 coalesce=True,
-                misfire_grace_time=120,
+                misfire_grace_time=300,
             )
             logger.info("Scheduled FF ladder: proposals 13:45 ET, steps 14:00-15:45 ET")
         except Exception as exc:
@@ -2878,7 +2896,7 @@ class TradingBot:
                 name="Equity snapshot + loss check",
                 max_instances=1,
                 coalesce=True,
-                misfire_grace_time=120,
+                misfire_grace_time=300,
             )
             self.scheduler.add_job(
                 self._reconcile_sync,
@@ -2887,7 +2905,7 @@ class TradingBot:
                 name="Broker reconciliation",
                 max_instances=1,
                 coalesce=True,
-                misfire_grace_time=120,
+                misfire_grace_time=300,
             )
             self.scheduler.add_job(
                 self._guard_eval_sync,
@@ -2896,7 +2914,7 @@ class TradingBot:
                 name="Assignment guard eval",
                 max_instances=1,
                 coalesce=True,
-                misfire_grace_time=120,
+                misfire_grace_time=300,
             )
             self.scheduler.add_job(
                 self._exit_eval_sync,
@@ -2905,7 +2923,7 @@ class TradingBot:
                 name="Exit rule evaluation",
                 max_instances=1,
                 coalesce=True,
-                misfire_grace_time=120,
+                misfire_grace_time=300,
             )
             self.scheduler.add_job(
                 self._backup_sync,
@@ -2914,7 +2932,7 @@ class TradingBot:
                 name="SQLite backup",
                 max_instances=1,
                 coalesce=True,
-                misfire_grace_time=120,
+                misfire_grace_time=300,
             )
             self.scheduler.add_job(
                 self._db_health_sync,
@@ -2923,7 +2941,7 @@ class TradingBot:
                 name="SQLite integrity check",
                 max_instances=1,
                 coalesce=True,
-                misfire_grace_time=120,
+                misfire_grace_time=300,
             )
             self.scheduler.add_job(
                 self._picks_sync,
@@ -2932,7 +2950,7 @@ class TradingBot:
                 name="Daily picks pipeline",
                 max_instances=1,
                 coalesce=True,
-                misfire_grace_time=120,
+                misfire_grace_time=300,
             )
             self.scheduler.add_job(
                 self._chain_cache_sync,
@@ -2941,7 +2959,7 @@ class TradingBot:
                 name="Hourly Alpaca chain cache",
                 max_instances=1,
                 coalesce=True,
-                misfire_grace_time=120,
+                misfire_grace_time=300,
             )
 
             logger.info(

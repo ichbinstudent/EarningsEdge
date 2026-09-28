@@ -65,8 +65,11 @@ async def reconcile_job(bot) -> None:
     from framework.jobs import run_job
 
     def work():
+        from earnings_edge.trade_approval import expire_stale_proposals
+
         report = Reconciler(create_client()).run()
-        return {"summary": report.summary()}
+        expired = expire_stale_proposals()
+        return {"summary": report.summary(), "expired_proposals": expired}
 
     try:
         await asyncio.to_thread(run_job, "reconcile", work)
@@ -162,6 +165,9 @@ async def exit_eval_job(bot) -> None:
         await bot._push_risk_alert(msg)
     for err in stats.get("errors", []):
         logger.warning("exit eval: %s", err)
+        from framework.alerts import DEDUPER
+
+        DEDUPER.emit("exit_eval_error", f"⚠️ exit eval: {err}")
     await bot._flush_alerts()
     # Push any pending exit-approval cards not yet pushed this process,
     # grouped by strategy like entry proposals.
@@ -181,8 +187,17 @@ def db_backup_job() -> None:
     from framework.jobs import run_job
 
     def work():
+        from framework.backup import DEFAULT_DEST, keep_count
+
+        before = list(DEFAULT_DEST.glob("earnings_ml_*.db")) if DEFAULT_DEST.exists() else []
         path = backup_db()
-        return {"path": str(path)}
+        after = list(DEFAULT_DEST.glob("earnings_ml_*.db")) if DEFAULT_DEST.exists() else []
+        return {
+            "path": str(path),
+            "keep": keep_count(),
+            "backups": len(after),
+            "pruned": max(0, len(before) + 1 - len(after)),
+        }
 
     try:
         run_job("db_backup", work)

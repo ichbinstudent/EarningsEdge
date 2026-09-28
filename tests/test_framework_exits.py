@@ -27,8 +27,10 @@ from framework.positions.exits import (
     TimeExit,
     build_exit_rules,
     pnl_pct,
+    realized_pnl_dollars,
     remaining_close_plan,
     structure_value,
+    unit_structure_value,
 )
 from framework.positions.manager import ExitManager
 from framework.risk.killswitch import KillSwitch
@@ -95,6 +97,17 @@ def test_pnl_pct_debit_and_credit():
     assert pnl_pct(c, -1.0) == pytest.approx(0.50)  # liability shrank to 1
     assert pnl_pct(c, -3.0) == pytest.approx(-0.50)  # liability grew
     assert pnl_pct(_debit_group(entry=0.0), 1.0) is None
+
+
+def test_realized_pnl_abs_fill_and_credit():
+    d = _debit_group(entry=0.35)
+    # Alpaca signed credit close of a debit calendar: -0.20 means received 0.20
+    assert realized_pnl_dollars(d, -0.20) == pytest.approx(-15.0)
+    assert realized_pnl_dollars(d, 0.20) == pytest.approx(-15.0)
+    assert realized_pnl_dollars(_debit_group(entry=1.85), 3.0) == pytest.approx(115.0)
+    c = _credit_group(entry=2.50)
+    assert realized_pnl_dollars(c, 1.0) == pytest.approx(150.0)
+    assert realized_pnl_dollars(_debit_group(entry=0.0), 1.0) is None
 
 
 def test_profit_target_and_stop_loss():
@@ -527,6 +540,51 @@ def test_sessions_since_open_skips_holiday():
     cal = TradingCalendar()
     sessions = len(cal.sessions_between(date(2026, 7, 2), date(2026, 7, 6))) - 1
     assert sessions == 1
+
+
+def test_duplicate_legs_do_not_inflate_value_or_combo():
+    near = LegPos("AAPL260731C00190000", "sell", 1, "call", 190.0, date(2026, 7, 31))
+    far = LegPos("AAPL260828C00190000", "buy", 1, "call", 190.0, date(2026, 8, 28))
+    snaps = _snaps({"AAPL260731C00190000": 0.05, "AAPL260828C00190000": 0.30})
+    assert unit_structure_value([near, far], snaps) == pytest.approx(0.25)
+    assert unit_structure_value([near, far, near, far], snaps) == pytest.approx(0.25)
+    plan = remaining_close_plan([near, far, near, far], snaps, TODAY)
+    assert plan["mode"] == "combo"
+    assert [leg.symbol for leg in plan["close_legs"]] == [
+        "AAPL260731C00190000",
+        "AAPL260828C00190000",
+    ]
+
+
+def test_close_group_dedupes_duplicate_occ_legs(conn):
+    near, far = "AAPL260731C00190000", "AAPL260828C00190000"
+    g = PositionGroup(
+        group_id="dup1",
+        strategy="calendar_call_ml",
+        legs=[
+            LegPos(near, "sell", 1, "call", 190.0, date(2026, 7, 31)),
+            LegPos(far, "buy", 1, "call", 190.0, date(2026, 8, 28)),
+            LegPos(near, "sell", 1, "call", 190.0, date(2026, 7, 31)),
+            LegPos(far, "buy", 1, "call", 190.0, date(2026, 8, 28)),
+        ],
+        entry_price=0.35,
+        opened_at="2026-09-11T18:30:00+00:00",
+        credit=False,
+        qty=1,
+    )
+    snaps = _snaps({near: 0.05, far: 0.30})
+    client = _stub_client(snaps, fill_price=0.25)
+    mgr = ExitManager(
+        client,
+        order_manager=OrderManager(client, poll_secs=0, sleep=lambda s: None),
+        today=TODAY,
+    )
+    mo = mgr.close_group(g, reason="repair")
+    assert mo.state == "filled"
+    legs = client.submit_multi_leg_order.call_args.kwargs.get("legs")
+    if legs is None:
+        legs = client.submit_multi_leg_order.call_args[1]["legs"]
+    assert [x["symbol"] for x in legs] == [near, far]
 
 
 def test_remaining_close_plan_combo_vs_near_missing():

@@ -19,6 +19,8 @@ from earnings_edge.db import (
     trade_events_insert,
 )
 
+from .book_lock import book_lock
+
 
 def _utcnow() -> str:
     return datetime.now(UTC).isoformat()
@@ -40,15 +42,16 @@ def record_open_positions(
     framework.positions.exits. Same value stored on every leg row in the
     group; None for structures with no differential-expiry deadline.
     """
-    return managed_positions_open(
-        legs,
-        strategy,
-        group_id,
-        order_id=order_id,
-        entry_price=entry_price,
-        metadata=metadata,
-        exit_by=exit_by,
-    )
+    with book_lock():
+        return managed_positions_open(
+            legs,
+            strategy,
+            group_id,
+            order_id=order_id,
+            entry_price=entry_price,
+            metadata=metadata,
+            exit_by=exit_by,
+        )
 
 
 def open_positions(strategy: str | None = None) -> list[dict]:
@@ -96,6 +99,8 @@ def open_groups() -> list:
                 expiry = datetime.strptime(meta["expiry"], "%Y-%m-%d").date()
             except ValueError:
                 pass
+        if any(leg.symbol == row["symbol"] for leg in g.legs):
+            continue
         g.legs.append(
             LegPos(
                 symbol=row["symbol"],

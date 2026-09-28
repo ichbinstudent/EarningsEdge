@@ -24,6 +24,7 @@ from earnings_edge.db import (
     table_exists,
     trade_events_insert,
 )
+from framework.execution.book_lock import book_lock
 from framework.risk.killswitch import record_event
 
 logger = logging.getLogger("framework.execution.reconcile")
@@ -56,6 +57,10 @@ class Reconciler:
         self.client = client
 
     def run(self) -> ReconcileReport:
+        with book_lock():
+            return self._run_locked()
+
+    def _run_locked(self) -> ReconcileReport:
         report = ReconcileReport(run_at=_utcnow())
 
         # 0. Cancel any hanging/orphaned limit orders on startup
@@ -67,6 +72,10 @@ class Reconciler:
                     self.client.cancel_order(oid)
                     logger.info("reconcile: cancelled hanging order %s", oid)
                 except Exception as cancel_exc:
+                    msg = str(cancel_exc).lower()
+                    if "already" in msg and "state" in msg:
+                        logger.info("reconcile: hanging order %s already terminal: %s", oid, cancel_exc)
+                        continue
                     # exc-policy: keep broad, ensure visibility of orphaned limit orders
                     record_event("silent_failure", f"reconcile cancel_hanging_orders: {cancel_exc}")
                     logger.error(
@@ -90,7 +99,11 @@ class Reconciler:
         broker_by_symbol = {p.get("symbol"): p for p in broker_positions if p.get("symbol")}
 
         local_open = managed_positions_list()
-        local_by_symbol = {r["symbol"]: r for r in local_open}
+        local_by_symbol: dict[str, dict] = {}
+        local_rows_by_symbol: dict[str, list[dict]] = {}
+        for r in local_open:
+            local_by_symbol[r["symbol"]] = r
+            local_rows_by_symbol.setdefault(r["symbol"], []).append(r)
 
         # One-time baseline: on the very first reconcile (no managed positions
         # and no adoption history), adopt all current broker positions as
@@ -158,9 +171,11 @@ class Reconciler:
 
         # 4. Closed externally: tracked open locally but gone at the broker.
         for sym in local_by_symbol.keys() - broker_by_symbol.keys():
-            row = local_by_symbol[sym]
+            rows = local_rows_by_symbol[sym]
+            row = rows[0]
             report.closed_externally.append(sym)
-            managed_positions_close_by_id(row["id"], closed_at=ts)
+            for extra in rows:
+                managed_positions_close_by_id(extra["id"], closed_at=ts)
             self._event(
                 "close_detected",
                 sym,
@@ -214,6 +229,10 @@ class Reconciler:
             logger.error("reconcile: ff_ladders_recent failed", exc_info=True)
             return list(orphans)
         remaining = set(orphans)
+        already = {r["symbol"] for r in managed_positions_list()}
+        remaining -= already
+        if not remaining:
+            return []
         from .managed import record_open_positions
 
         for row in rows:

@@ -24,7 +24,7 @@ import pytz
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from earnings_edge.german_crash import build_monitor, format_alert
+from earnings_edge.german_crash import CrashAlertConfig, build_monitor, format_alert
 from earnings_edge.ops_auth import operator_chat_ids
 from framework.jobs import run_job
 
@@ -118,7 +118,16 @@ def main() -> None:
         name="German crash alert (23:00)",
         **kw,
     )
-    logger.info("crash_alert scheduler 07:30–23:00 Europe/Berlin; pid=%s", os.getpid())
+    cfg = CrashAlertConfig.from_env()
+    logger.info(
+        "crash_alert scheduler 07:30–23:00 Europe/Berlin; pid=%s; "
+        "threshold=%.1f%% window=%ds cooldown=%ds exchanges=%s",
+        os.getpid(),
+        cfg.threshold * 100,
+        cfg.window_secs,
+        cfg.cooldown_secs,
+        ",".join(cfg.exchanges),
+    )
     sched.start()
 
 

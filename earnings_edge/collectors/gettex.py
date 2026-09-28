@@ -14,7 +14,7 @@ import os
 import re
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import requests
 
@@ -34,6 +34,7 @@ DEFAULT_EXCHANGES = ("GTX", "GER", "FRA")
 
 QUOTE_FIDS = "q.RIC,q._TRDPRC_1,q._BID,q._ASK,q._BIDSIZE,q._ASKSIZE,q._TRDTIM_1,q._TRADE_DATE,q._DSPLY_NAME"
 INSTRUMENT_FIDS = "x.RIC"
+QUOTE_KEEP_DAYS = 3
 
 _UA = "Mozilla/5.0"
 
@@ -220,7 +221,44 @@ class GettexCollector:
                 row["timestamp"] = ts
                 f.write(json.dumps(row, separators=(",", ":")) + "\n")
         logger.info("Captured %d gettex quotes to %s", len(quotes), filepath)
+        prune_quote_files(self.data_dir, today=now)
         return filepath
+
+
+def prune_quote_files(
+    data_dir: str,
+    *,
+    keep_days: int = QUOTE_KEEP_DAYS,
+    today: datetime | None = None,
+) -> list[str]:
+    """Delete ``gettex_quotes_YYYY-MM-DD.jsonl`` older than ``keep_days``."""
+    now = today or datetime.now(UTC)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+    cutoff = now.astimezone().date() - timedelta(days=keep_days)
+    removed: list[str] = []
+    if not os.path.isdir(data_dir):
+        return removed
+    for name in os.listdir(data_dir):
+        m = re.match(r"gettex_quotes_(\d{4}-\d{2}-\d{2})\.jsonl$", name)
+        if not m:
+            continue
+        try:
+            d = datetime.strptime(m.group(1), "%Y-%m-%d").date()
+        except ValueError:
+            continue
+        if d >= cutoff:
+            continue
+        path = os.path.join(data_dir, name)
+        try:
+            os.remove(path)
+        except OSError as exc:
+            logger.warning("could not remove old quote file %s: %s", path, exc)
+            continue
+        removed.append(path)
+    if removed:
+        logger.info("pruned %d gettex quote file(s) older than %s", len(removed), cutoff)
+    return removed
 
     def capture_snapshot(self) -> str | None:
         """Full-universe fetch + jsonl append (original 07:30–08:00 CET job)."""

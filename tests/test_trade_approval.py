@@ -16,6 +16,7 @@ from earnings_edge.trade_approval import (
     build_ff_proposals,
     build_proposals,
     execute_proposal,
+    expire_stale_proposals,
     ff_candidate_from_trade,
     reject_proposal,
     trade_from_json,
@@ -409,6 +410,22 @@ class _FakeRunner:
     def drain_events(self):
         ev, self.events = self.events, []
         return ev
+
+
+def test_expire_stale_proposals_sweeps_old_ff_and_ttl(store):
+    now = datetime(2026, 9, 16, 16, 40, tzinfo=UTC)
+    ff = build_ff_proposals(store, [_ff_candidate("AAPL")])
+    assert ff
+    _age_proposal(store, ff[0]["id"], "2026-09-10T17:45:00+00:00")
+    cal = store.add(_trade(), "card")
+    _age_proposal(store, cal, (now - timedelta(hours=PROPOSAL_TTL_HOURS + 1)).isoformat())
+    fresh = store.add(_trade(ticker="MSFT"), "card")
+    _age_proposal(store, fresh, (now - timedelta(minutes=5)).isoformat())
+    n = expire_stale_proposals(now=now)
+    assert n >= 2
+    assert store.get(ff[0]["id"])["status"] == "expired"
+    assert store.get(cal)["status"] == "expired"
+    assert store.get(fresh)["status"] == "pending"
 
 
 def test_build_ff_proposals_persists_cards(store):

@@ -87,6 +87,21 @@ def pnl_pct(group: PositionGroup, value_now: float) -> float | None:
     return (value_now - group.entry_price) / group.entry_price
 
 
+def realized_pnl_dollars(group: PositionGroup, fill_price: float) -> float | None:
+    """Realized P&L in dollars for one closed group.
+
+    ``fill_price`` is the per-share structure value at exit. Alpaca sometimes
+    reports a signed credit (negative); we take abs so a debit calendar that
+    paid 0.35 and closed at 0.20 records -$15, not -$55.
+    """
+    if group.entry_price <= 0:
+        return None
+    fill = abs(float(fill_price))
+    if group.credit:
+        return (group.entry_price - fill) * 100.0 * group.qty
+    return (fill - group.entry_price) * 100.0 * group.qty
+
+
 def structure_value(legs: list[LegPos], snaps: dict[str, dict]) -> float | None:
     """Net mid value per share: +mid for long legs, −mid for short legs.
 
@@ -115,10 +130,30 @@ def leg_mid(leg: LegPos, snaps: dict[str, dict]) -> float | None:
     return _leg_mid(leg, snaps)
 
 
+def dedupe_legs(legs: list[LegPos]) -> list[LegPos]:
+    """Keep the first row per OCC symbol.
+
+    Fill bookkeeping and reconcile-adopt can race and insert the same
+    contract twice. Duplicate legs inflate structure value (so stops stop
+    firing) and make Alpaca reject combo closes (422 duplicated leg).
+    """
+    seen: set[str] = set()
+    out: list[LegPos] = []
+    for leg in legs:
+        if leg.symbol in seen:
+            continue
+        seen.add(leg.symbol)
+        out.append(leg)
+    return out
+
+
 def unit_structure_value(legs: list[LegPos], snaps: dict[str, dict]) -> float | None:
     """Net mid per 1x ratio — ignore stored contract qty so a 9-lot calendar
     is priced at the combo mid, not mid×9 (which would never fill)."""
-    unit = [LegPos(leg.symbol, leg.side, 1.0, leg.option_type, leg.strike, leg.expiry) for leg in legs]
+    unit = [
+        LegPos(leg.symbol, leg.side, 1.0, leg.option_type, leg.strike, leg.expiry)
+        for leg in dedupe_legs(legs)
+    ]
     return structure_value(unit, snaps)
 
 
@@ -137,6 +172,7 @@ def remaining_close_plan(
       ``today`` — mark the group closed; no broker order.
     - ``no_quote``: nothing quotable and no expiry evidence — retry later.
     """
+    legs = dedupe_legs(legs)
     quoted: list[LegPos] = []
     missing: list[LegPos] = []
     for leg in legs:

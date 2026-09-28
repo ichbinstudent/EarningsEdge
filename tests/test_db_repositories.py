@@ -348,6 +348,24 @@ def test_managed_positions_open_list_close():
     assert managed_positions_list() == []
 
 
+def test_managed_positions_open_skips_duplicate_symbol():
+    legs = [
+        {
+            "symbol": "AAPL260731C00190000",
+            "side": "sell",
+            "ratio_qty": 1,
+            "option_type": "call",
+            "strike": 190.0,
+            "expiry": date(2026, 7, 31),
+        }
+    ]
+    assert managed_positions_open(legs, "calendar_call_ml", "g1", entry_price=1.0) == 1
+    assert managed_positions_open(legs, "ff_ladder", "g2", entry_price=2.0) == 0
+    rows = managed_positions_list()
+    assert len(rows) == 1
+    assert rows[0]["group_id"] == "g1"
+
+
 def test_snapshots_max_scan_date_and_scan_runs_latest_success():
     assert snapshots_max_scan_date() is None
     assert scan_runs_latest_success() is None

@@ -174,6 +174,7 @@ class OrderManager:
             raise ValueError("no limit price — refusing to submit a market order")
         for attempt in range(1, 4):
             try:
+                cid_try = cid if attempt == 1 else f"{cid[:45]}_{attempt}"
                 if len(legs) == 1:
                     leg = legs[0]
                     order = self.client.submit_order(
@@ -183,7 +184,7 @@ class OrderManager:
                         order_type="limit",
                         limit_price=price,
                         time_in_force=tif,
-                        client_order_id=cid,
+                        client_order_id=cid_try,
                     )
                 else:
                     order = self.client.submit_multi_leg_order(
@@ -192,7 +193,7 @@ class OrderManager:
                         order_type="limit",
                         limit_price=price,
                         time_in_force=tif,
-                        client_order_id=cid,
+                        client_order_id=cid_try,
                     )
                 return order["id"]
             except Exception as exc:

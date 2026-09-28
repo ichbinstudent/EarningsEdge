@@ -27,6 +27,7 @@ from earnings_edge.db import (
 
 from ..core.calendar import get_calendar
 from ..core.registry import StrategyRegistry, get_registry
+from ..execution.book_lock import book_lock
 from ..execution.managed import close_positions, open_groups
 from ..execution.order_manager import LimitWalkPolicy, ManagedOrder, OrderManager
 from .exits import (
@@ -35,6 +36,7 @@ from .exits import (
     PositionGroup,
     build_exit_rules,
     leg_mid,
+    realized_pnl_dollars,
     remaining_close_plan,
     unit_structure_value,
 )
@@ -63,6 +65,10 @@ class ExitManager:
 
     def evaluate_all(self) -> dict:
         """One pass over all open groups. Returns stats + messages to push."""
+        with book_lock():
+            return self._evaluate_all_locked()
+
+    def _evaluate_all_locked(self) -> dict:
         out: dict = {"groups": 0, "auto_closed": [], "proposed": [], "held": 0, "errors": []}
         groups = open_groups()
         out["groups"] = len(groups)
@@ -181,6 +187,10 @@ class ExitManager:
         """Work a closing order; fall back to remaining-leg closes when the
         combo quote is gone (expired near). Marks the group closed on fill
         or when every remaining unquoted leg is past expiry."""
+        with book_lock():
+            return self._close_group_locked(group, reason)
+
+    def _close_group_locked(self, group: PositionGroup, reason: str = "") -> ManagedOrder:
         today = self._today or datetime.now(UTC).date()
         try:
             snaps = self.client.get_option_snapshots_bulk(*[leg.symbol for leg in group.legs]) or {}
@@ -216,6 +226,8 @@ class ExitManager:
             return mo
 
         close_legs = plan["close_legs"]
+        gid = (group.group_id or "g").replace("-", "")[:12]
+        ts = int(datetime.now(UTC).timestamp())
         if plan["mode"] == "combo":
             inverted = [
                 {
@@ -244,7 +256,7 @@ class ExitManager:
                 LimitWalkPolicy(steps=3),
                 quote_fn,
                 side=side,
-                client_order_id=f"exit_{group.group_id}_{int(datetime.now(UTC).timestamp())}",
+                client_order_id=f"x{gid}{ts}",
             )
         else:
             # Remaining-leg path: one single-leg order per still-quoted leg.
@@ -276,9 +288,7 @@ class ExitManager:
                     LimitWalkPolicy(steps=3),
                     quote_fn,
                     side=side,
-                    client_order_id=(
-                        f"exit_{group.group_id}_{leg.symbol}_{int(datetime.now(UTC).timestamp())}"
-                    ),
+                    client_order_id=f"x{gid}{leg.symbol[-6:]}{ts}",
                 )
                 if last.state in ("filled", "partial"):
                     filled_any = True
@@ -308,15 +318,13 @@ class ExitManager:
                 )
 
         if mo.state in ("filled", "partial"):
-            n = close_positions(group.group_id, exit_price=mo.filled_avg_price)
-            realized = None
-            if mo.filled_avg_price is not None and group.entry_price > 0:
-                sign = -1.0 if group.credit else 1.0
-                realized = sign * (mo.filled_avg_price - group.entry_price) * 100 * group.qty
+            fill = abs(mo.filled_avg_price) if mo.filled_avg_price is not None else None
+            n = close_positions(group.group_id, exit_price=fill)
+            realized = realized_pnl_dollars(group, fill) if fill is not None else None
             self._event(
                 "exit_filled",
                 group,
-                price=mo.filled_avg_price,
+                price=fill,
                 detail=f"{reason} | legs closed={n} mode={plan['mode']} realized_pnl={realized}",
             )
             logger.info(

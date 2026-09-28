@@ -15,6 +15,7 @@ KEYS = (
     "orphan",
     "missing",
     "daily_loss",
+    "exit_eval_error",
 )
 
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -9,6 +11,50 @@ from earnings_edge.db.engine import DEFAULT_DB_PATH, wal_checkpoint
 
 DEFAULT_SRC = DEFAULT_DB_PATH
 DEFAULT_DEST = Path(__file__).resolve().parent.parent / "data" / "backups"
+# One copy is enough for a thin disk; override with BACKUP_KEEP.
+DEFAULT_KEEP = 1
+
+logger = logging.getLogger("framework.backup")
+
+
+def keep_count(override: int | None = None) -> int:
+    if override is not None:
+        return max(0, int(override))
+    raw = os.environ.get("BACKUP_KEEP", str(DEFAULT_KEEP))
+    try:
+        return max(0, int(raw))
+    except (TypeError, ValueError):
+        return DEFAULT_KEEP
+
+
+def _unlink_sidecars(tmp_dest: Path) -> None:
+    """sqlite3 leaves -wal/-shm/-journal next to the .tmp file."""
+    tmp_dest.unlink(missing_ok=True)
+    for suffix in ("-wal", "-shm", "-journal"):
+        tmp_dest.with_name(tmp_dest.name + suffix).unlink(missing_ok=True)
+
+
+def prune_backups(dest_dir: Path, keep: int | None = None) -> list[Path]:
+    """Keep the ``keep`` newest ``earnings_ml_*.db`` files; drop the rest and leftover tmps."""
+    dest_dir = Path(dest_dir)
+    if not dest_dir.exists():
+        return []
+    removed: list[Path] = []
+    for p in dest_dir.glob(".earnings_ml_*.tmp*"):
+        p.unlink(missing_ok=True)
+        removed.append(p)
+    keep_n = keep_count(keep)
+    completed = sorted(
+        (p for p in dest_dir.glob("earnings_ml_*.db") if p.is_file()),
+        key=lambda p: p.name,
+        reverse=True,
+    )
+    for p in completed[keep_n:]:
+        p.unlink(missing_ok=True)
+        removed.append(p)
+    if removed:
+        logger.info("pruned %d backup file(s); keeping %d", len(removed), keep_n)
+    return removed
 
 
 def backup_db(
@@ -16,6 +62,7 @@ def backup_db(
     dest_dir: Path | None = None,
     *,
     now: datetime | None = None,
+    keep: int | None = None,
 ) -> Path:
     """Online-backup ``src`` (live, hot DB safe) to ``dest_dir/earnings_ml_YYYYMMDDTHHMMSSZ.db``.
 
@@ -26,6 +73,9 @@ def backup_db(
     which is exactly what corrupted this DB on 2026-08-30/31. The backup API
     reads consistent pages under a shared lock and never truncates the live
     WAL, so a live scanner process keeps running safely throughout.
+
+    After a successful copy, older backups are pruned so only ``keep``
+    completed files remain (default 1; ``BACKUP_KEEP`` env).
     """
     import sqlite3
 
@@ -55,10 +105,11 @@ def backup_db(
     finally:
         check_conn.close()
     if check.lower() != "ok":
-        tmp_dest.unlink(missing_ok=True)
+        _unlink_sidecars(tmp_dest)
         raise RuntimeError(f"Database integrity check failed on backup copy: {check}")
 
     tmp_dest.rename(dest)
+    _unlink_sidecars(tmp_dest)  # leftover -wal/-shm from the tmp name
 
     # Best-effort passive checkpoint on the live DB to keep the WAL from
     # growing unbounded. PASSIVE never blocks writers and never truncates,
@@ -68,4 +119,5 @@ def backup_db(
     except Exception:
         pass
 
+    prune_backups(dest_dir, keep=keep_count(keep))
     return dest

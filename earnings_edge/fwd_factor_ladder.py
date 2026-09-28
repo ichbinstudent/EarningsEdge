@@ -700,16 +700,8 @@ class LadderRunner:
         try:
             order = self.alpaca.get_order(ladder.order_id)
         except Exception as exc:
-            # exc-policy: keep broad, ensure visibility
             record_event("silent_failure", f"fwd_factor_ladder: {exc}")
-            import logging
-
-            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
-            # exc-policy: keep broad, ensure visibility
-            record_event("silent_failure", f"fwd_factor_ladder: {exc}")
-            import logging
-
-            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
+            logger.error("fwd_factor_ladder broad exception", exc_info=True)
             logger.info("ladder %s fill-check failed: %s", ladder.id, exc)
             return False
         status = (order.get("status") or "").lower()
@@ -769,16 +761,8 @@ class LadderRunner:
                 metadata={"earnings_date": cand.earnings_date, "side": "CALENDAR", "credit": False},
             )
         except Exception as exc:
-            # exc-policy: keep broad, ensure visibility
             record_event("silent_failure", f"fwd_factor_ladder: {exc}")
-            import logging
-
-            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
-            # exc-policy: keep broad, ensure visibility
-            record_event("silent_failure", f"fwd_factor_ladder: {exc}")
-            import logging
-
-            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
+            logger.error("fwd_factor_ladder broad exception", exc_info=True)
             logger.warning("ff fill bookkeeping failed (non-fatal): %s", exc)
 
     # ── arm / state ──────────────────────────────────────────────────────

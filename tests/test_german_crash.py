@@ -586,3 +586,21 @@ def test_gettex_collector_write_snapshot_and_batching(tmp_path):
         text = f.read()
     assert text.count("\n") == 3
     assert "A.GTX" in text
+
+
+def test_prune_quote_files_keeps_recent(tmp_path):
+    from earnings_edge.collectors.gettex import prune_quote_files
+
+    keep = tmp_path / "gettex_quotes_2026-09-25.jsonl"
+    drop = tmp_path / "gettex_quotes_2026-09-20.jsonl"
+    other = tmp_path / "german_crash_cooldown.json"
+    keep.write_text("x\n")
+    drop.write_text("y\n")
+    other.write_text("{}")
+    removed = prune_quote_files(
+        str(tmp_path), keep_days=3, today=datetime(2026, 9, 27, tzinfo=UTC)
+    )
+    assert str(drop) in removed
+    assert not drop.exists()
+    assert keep.exists()
+    assert other.exists()

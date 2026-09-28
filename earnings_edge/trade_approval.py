@@ -825,28 +825,69 @@ def execute_proposal(
 
     # Track legs as managed positions (reconcile + guards read these).
     try:
+        from framework.execution.book_lock import book_lock
         from framework.positions.exits import CREDIT_SIDES
 
         store._ensure_engine()
-        managed_positions_open(
-            result.legs,
-            trade.strategy,
-            group_id=result.order_id,
-            order_id=result.order_id,
-            entry_price=trade.entry_price or None,
-            exit_by=result.exit_by,
-            metadata={
-                "side": trade.side,
-                "credit": trade.side in CREDIT_SIDES,
-                "earnings_date": str(trade.earnings_date),
-            },
-        )
+        with book_lock():
+            managed_positions_open(
+                result.legs,
+                trade.strategy,
+                group_id=result.order_id,
+                order_id=result.order_id,
+                entry_price=trade.entry_price or None,
+                exit_by=result.exit_by,
+                metadata={
+                    "side": trade.side,
+                    "credit": trade.side in CREDIT_SIDES,
+                    "earnings_date": str(trade.earnings_date),
+                },
+            )
     except Exception as exc:
         # exc-policy: keep broad, ensure visibility
         record_event("silent_failure", f"trade_approval: {exc}")
         logger.error("trade_approval broad exception", exc_info=True)
         logger.warning("managed-position record failed (non-fatal): %s", exc)
     return {"ok": True, **order}
+
+
+def expire_stale_proposals(*, now: datetime | None = None) -> int:
+    """Mark pending cards that can no longer execute as expired. Returns count.
+
+    Inbox used to show them as stale while ``status`` stayed ``pending``, so
+    the desk filled up with un-actionable FF/calendar cards. Swept from
+    reconcile so a restart clears the backlog.
+    """
+    import pytz
+
+    eastern = pytz.timezone("US/Eastern")
+    now_utc = now or datetime.now(UTC)
+    if now_utc.tzinfo is None:
+        now_utc = now_utc.replace(tzinfo=UTC)
+    now_et = now_utc.astimezone(eastern)
+    n = 0
+    for row in pending_trades_list_pending():
+        created = datetime.fromisoformat(row["created_at"])
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=UTC)
+        strat = row["strategy"]
+        note = None
+        if strat in (FF_LADDER, "forward_factor_arb"):
+            created_et = created.astimezone(eastern)
+            if created_et.date() != now_et.date():
+                note = f"stale FF candidate (built {created_et.date()} ET)"
+            elif now_et.time() >= FF_WINDOW_END_ET:
+                note = "ladder window closed"
+        else:
+            age = now_utc - created
+            if age > timedelta(hours=PROPOSAL_TTL_HOURS):
+                note = f"age {age}"
+        if note:
+            pending_trades_mark_decided(row["id"], "expired", note=note)
+            n += 1
+    if n:
+        logger.info("expired %d stale pending proposal(s)", n)
+    return n
 
 
 def reject_proposal(store: PendingTradeStore, proposal_id: int, *, decided_by: int | None = None) -> dict:

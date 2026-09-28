@@ -239,6 +239,7 @@ def _migrate_framework(conn: Connection, tables: set) -> None:
         pos_cols = {r[1] for r in conn.execute(sqlalchemy.text("PRAGMA table_info(managed_positions)"))}
         if "exit_by" not in pos_cols:
             conn.execute(sqlalchemy.text("ALTER TABLE managed_positions ADD COLUMN exit_by TEXT"))
+        _dedupe_open_managed_positions(conn)
 
 
 def _create_indexes(conn: Connection, tables: set) -> None:
@@ -283,5 +284,35 @@ def _create_indexes(conn: Connection, tables: set) -> None:
         statements.append(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_uq_ff_universe_snapshots_ticker_date ON ff_universe_snapshots(ticker, scan_date)"
         )
+    if "managed_positions" in tables:
+        statements.append(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_uq_managed_positions_open_symbol "
+            "ON managed_positions(symbol) WHERE status = 'open'"
+        )
     for sql in statements:
         conn.execute(sqlalchemy.text(sql))
+
+
+def _dedupe_open_managed_positions(conn: Connection) -> None:
+    """One open row per OCC symbol so the unique index can be created.
+
+    Fill bookkeeping and reconcile-adopt can race and insert the same
+    contract twice; keep the latest opened_at (fill price wins over adopt).
+    """
+    rows = conn.execute(
+        sqlalchemy.text(
+            "SELECT id, symbol FROM managed_positions WHERE status = 'open' ORDER BY opened_at ASC, id ASC"
+        )
+    ).fetchall()
+    keep: dict[str, int] = {}
+    for row in rows:
+        keep[row[1]] = row[0]
+    extras = [row[0] for row in rows if keep[row[1]] != row[0]]
+    for eid in extras:
+        conn.execute(
+            sqlalchemy.text(
+                "UPDATE managed_positions SET status = 'closed', "
+                "closed_at = datetime('now') WHERE id = :id AND status = 'open'"
+            ),
+            {"id": eid},
+        )

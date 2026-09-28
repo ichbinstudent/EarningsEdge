@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 from earnings_edge.db import engine as db_engine
 from framework.execution.lifecycle import LifecycleManager
-from framework.execution.managed import open_positions, record_open_positions
+from framework.execution.managed import open_groups, open_positions, record_open_positions
 from framework.execution.order_manager import (
     LimitWalkPolicy,
     MidPricePolicy,
@@ -277,6 +277,66 @@ def test_lifecycle_eligibility():
 
 
 # ── Managed positions --------------------------------------------------------
+
+
+def test_book_lock_serializes_writers():
+    import threading
+    import time
+
+    from framework.execution.book_lock import book_lock
+
+    order: list[str] = []
+
+    def worker(n: int) -> None:
+        with book_lock():
+            order.append(f"a{n}")
+            time.sleep(0.03)
+            order.append(f"b{n}")
+
+    threads = [threading.Thread(target=worker, args=(i,)) for i in (1, 2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert order in (["a1", "b1", "a2", "b2"], ["a2", "b2", "a1", "b1"])
+
+
+def test_record_open_positions_skips_already_open_symbol(conn):
+    legs = [
+        {
+            "symbol": "PLAY260918C00008000",
+            "side": "sell",
+            "ratio_qty": 1,
+            "option_type": "call",
+            "strike": 8.0,
+            "expiry": date(2026, 9, 18),
+        },
+        {
+            "symbol": "PLAY261016C00008000",
+            "side": "buy",
+            "ratio_qty": 1,
+            "option_type": "call",
+            "strike": 8.0,
+            "expiry": date(2026, 10, 16),
+        },
+    ]
+    assert record_open_positions(legs, "ff_ladder", group_id="adopt", entry_price=0.75) == 2
+    assert record_open_positions(legs, "ff_ladder", group_id="fill", entry_price=0.35) == 0
+    assert len(open_positions()) == 2
+    groups = open_groups()
+    assert len(groups) == 1
+    assert [leg.symbol for leg in groups[0].legs] == [
+        "PLAY260918C00008000",
+        "PLAY261016C00008000",
+    ]
+
+
+def test_reconcile_expired_hanging_order_is_not_an_error(conn):
+    client = _broker_positions()
+    client.get_orders.return_value = [{"id": "oid-exp"}]
+    client.cancel_order.side_effect = Exception('[422] order is already in "expired" state')
+    report = Reconciler(client).run()
+    assert report.errors == []
 
 
 def test_record_and_query_open_positions(conn):

@@ -65,6 +65,7 @@ class ExitProposalRow(TypedDict, total=True):
 import pandas as pd
 from sqlalchemy import func, select, text, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import class_mapper
 
 from earnings_edge.config import get_logger
@@ -933,37 +934,57 @@ def managed_positions_open(
     metadata: dict | None = None,
     exit_by: date | None = None,
 ) -> int:
-    """Insert one open row per leg. Returns the number of legs written."""
+    """Insert one open row per leg. Returns the number of legs written.
+
+    Idempotent per OCC symbol: a second insert for an already-open contract
+    is skipped (fill bookkeeping vs reconcile-adopt race).
+    """
     ts = datetime.now(UTC).isoformat()
     base_meta = dict(metadata or {})
     exit_by_s = exit_by.isoformat() if exit_by else None
-    with session_scope() as s:
-        for leg in legs:
-            meta = json.dumps(
-                {
-                    **base_meta,
-                    "leg_side": leg.get("side"),
-                    "option_type": leg.get("option_type"),
-                    "strike": leg.get("strike"),
-                    "expiry": str(leg.get("expiry")),
-                },
-                default=str,
-            )
-            obj = ManagedPosition(
-                symbol=leg["symbol"],
-                strategy=strategy,
-                group_id=group_id,
-                qty=float(leg.get("ratio_qty", 1)),
-                entry_price=entry_price,
-                status="open",
-                order_id=order_id,
-                opened_at=ts,
-                metadata_=meta,
-                exit_by=exit_by_s,
-            )
-            s.add(obj)
-            s.flush()
-    return len(legs)
+    try:
+        with session_scope() as s:
+            open_syms = {
+                r[0]
+                for r in s.execute(
+                    select(ManagedPosition.symbol).where(ManagedPosition.status == "open")
+                ).all()
+            }
+            written = 0
+            for leg in legs:
+                sym = leg["symbol"]
+                if not sym or sym in open_syms:
+                    continue
+                meta = json.dumps(
+                    {
+                        **base_meta,
+                        "leg_side": leg.get("side"),
+                        "option_type": leg.get("option_type"),
+                        "strike": leg.get("strike"),
+                        "expiry": str(leg.get("expiry")),
+                    },
+                    default=str,
+                )
+                obj = ManagedPosition(
+                    symbol=sym,
+                    strategy=strategy,
+                    group_id=group_id,
+                    qty=float(leg.get("ratio_qty", 1)),
+                    entry_price=entry_price,
+                    status="open",
+                    order_id=order_id,
+                    opened_at=ts,
+                    metadata_=meta,
+                    exit_by=exit_by_s,
+                )
+                s.add(obj)
+                s.flush()
+                open_syms.add(sym)
+                written += 1
+            return written
+    except IntegrityError:
+        logger.info("managed_positions_open: duplicate open symbol raced, skipped")
+        return 0
 
 
 def managed_positions_list(strategy: str | None = None) -> list[dict]:
@@ -972,6 +993,7 @@ def managed_positions_list(strategy: str | None = None) -> list[dict]:
         stmt = select(ManagedPosition).where(ManagedPosition.status == "open")
         if strategy:
             stmt = stmt.where(ManagedPosition.strategy == strategy)
+        stmt = stmt.order_by(ManagedPosition.id)
         rows = s.execute(stmt).scalars().all()
         return [_row_dict(r) for r in rows]
 
