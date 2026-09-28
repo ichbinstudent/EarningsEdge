@@ -88,6 +88,26 @@ class DataUnavailable(ValueError):
 _DATA_MISS_STATUSES = {400, 404}
 
 
+_OSI_ROOT = re.compile(r"^([A-Z][A-Z0-9.]{0,9})\d{6}[CP]\d{8}$")
+
+
+def normalize_symbol(sym: str) -> str:
+    """Upper-case, punctuation-free symbol (BRK.B / BRK-B / BRKB compare equal)."""
+    return re.sub(r"[^A-Z0-9]", "", str(sym).upper())
+
+
+def lse_row_underlying(row: dict) -> str | None:
+    """Normalized underlying of an LSE option row, or None when unknowable.
+
+    Uses the row's ``underlying`` field, else the OSI root of its ticker.
+    """
+    und = row.get("underlying")
+    if und:
+        return normalize_symbol(und)
+    m = _OSI_ROOT.match(str(row.get("ticker") or "").upper())
+    return normalize_symbol(m.group(1)) if m else None
+
+
 def is_data_miss(exc: BaseException) -> bool:
     """True for per-query data gaps; False for outages (timeouts, 5xx, 429, auth)."""
     return isinstance(exc, DataUnavailable) or getattr(exc, "status", None) in _DATA_MISS_STATUSES
@@ -627,20 +647,6 @@ class LSEProvider:
 
     # -- options data --------------------------------------------------------
 
-    _OSI_ROOT = re.compile(r"^([A-Z][A-Z0-9.]{0,9})\d{6}[CP]\d{8}$")
-
-    @staticmethod
-    def _norm_symbol(sym: str) -> str:
-        return re.sub(r"[^A-Z0-9]", "", str(sym).upper())
-
-    def _row_underlying(self, row: dict) -> str | None:
-        """The row's underlying symbol (normalized), or None when unknowable."""
-        und = row.get("underlying")
-        if und:
-            return self._norm_symbol(und)
-        m = self._OSI_ROOT.match(str(row.get("ticker") or "").upper())
-        return self._norm_symbol(m.group(1)) if m else None
-
     def _is_stale(self, row: dict) -> bool:
         raw = row.get("last_trade_at") or row.get("updated_at")
         if not raw:
@@ -659,10 +665,10 @@ class LSEProvider:
         if cached and (time.monotonic() - cached[0]) < self._CHAIN_TTL_SECS:
             return cached[1]
         rows = self._request(lambda: self.client.options(ticker, limit=5000)) or []
-        want = self._norm_symbol(ticker)
-        kept = [r for r in rows if self._row_underlying(r) in (None, want)]
+        want = normalize_symbol(ticker)
+        kept = [r for r in rows if lse_row_underlying(r) in (None, want)]
         if rows and not kept:
-            got = sorted({u for r in rows if (u := self._row_underlying(r))})[:3]
+            got = sorted({u for r in rows if (u := lse_row_underlying(r))})[:3]
             logger.warning(
                 "LSE returned another underlying's chain for %s (%s) — ignoring (name-match resolution)",
                 ticker,

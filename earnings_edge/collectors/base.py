@@ -49,6 +49,23 @@ class BaseCollector:
         self._circuit_opened_at: float | None = None
         self._last_success: datetime | None = None
 
+    # -- error classification (override per backend) ----------------------
+
+    def _is_data_miss(self, exc: Exception) -> bool:
+        """A well-formed "nothing here" answer (e.g. HTTP 404 for one ticker).
+
+        The service responded, so it is healthy: no retry, and it must not
+        count toward the circuit breaker — otherwise a batch run over a
+        universe of uncovered tickers opens the breaker and rejects the good
+        tickers queued behind them.
+        """
+        return False
+
+    def _is_retryable(self, exc: Exception) -> bool:
+        """False for deterministic failures (auth, bad request): retrying only
+        burns backoff time and rate budget. They still count as failures."""
+        return True
+
     def with_retry(self, fn: Callable[[], T]) -> T:
         """Execute fn with retry and circuit-breaker protection."""
         self._check_circuit()
@@ -61,6 +78,11 @@ class BaseCollector:
                 return result
             except Exception as exc:
                 last_exc = exc
+                if self._is_data_miss(exc):
+                    self._on_success()
+                    raise
+                if not self._is_retryable(exc):
+                    break
                 if attempt < self.max_retries:
                     delay = min(self.base_delay * (2 ** (attempt - 1)), self.max_delay)
                     logger.warning(

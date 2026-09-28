@@ -88,8 +88,16 @@ class AlpacaTradingClient:
         json_body: dict | None = None,
         retry: int = 2,
     ) -> dict | list:
-        """Make an API request with basic retry + error handling."""
+        """Make an API request with basic retry + error handling.
+
+        429 is retried with backoff and, once attempts run out, raises
+        AlpacaError(429) — it used to fall out of the loop as ``{}``, which
+        callers read as a successful empty answer (no chain, no orders, an
+        order dict without an id). 5xx is retried for GETs only: a POST may
+        have been applied before the gateway failed, so it is not resent.
+        """
         url = (base or self.base_url).rstrip("/") + "/" + path.lstrip("/")
+        idempotent = method.upper() == "GET"
         for attempt in range(retry + 1):
             try:
                 resp = self.session.request(method, url, params=params, json=json_body, timeout=30)
@@ -105,9 +113,15 @@ class AlpacaTradingClient:
                 if resp.status_code == 404:
                     raise AlpacaNotFoundError(404, f"Not found: {path}")
                 if resp.status_code == 429:
+                    if attempt == retry:
+                        raise AlpacaError(429, f"Rate limited after {retry + 1} attempts: {path}")
                     wait = 2**attempt
                     logger.warning("Rate limited, waiting %ds", wait)
                     time.sleep(wait)
+                    continue
+                if resp.status_code >= 500 and idempotent and attempt < retry:
+                    logger.warning("Alpaca %d on GET %s (retry %d)", resp.status_code, path, attempt + 1)
+                    time.sleep(2**attempt)
                     continue
                 if resp.status_code >= 400:
                     try:
@@ -126,7 +140,7 @@ class AlpacaTradingClient:
                     raise
                 logger.warning("Request failed: %s (retry %d)", e, attempt + 1)
                 time.sleep(2**attempt)
-        return {}
+        raise AlpacaError(0, f"Request retries exhausted: {method} {path}")
 
     # ──────────────────────── Account & Portfolio ────────────────────────
 
@@ -212,15 +226,19 @@ class AlpacaTradingClient:
         )
         return result.get("snapshots", {})
 
+    MAX_CHAIN_PAGES = 40
+
     def get_options_chain_snapshots(self, underlying: str, page_limit: int = 250) -> dict[str, dict]:
-        """All option snapshots for one underlying (paginated).
+        """All option snapshots for one underlying (paginated, capped).
 
         Returns {contract_symbol: {"bid": float, "ask": float, "quote_time": str}}.
-        Quotes carry latestQuote only on this feed (no greeks/IV).
+        Quotes carry latestQuote only on this feed (no greeks/IV). The page
+        cap (10k contracts at the default size) only guards against a
+        next_page_token that never ends.
         """
         out: dict[str, dict] = {}
         params: dict = {"limit": page_limit}
-        while True:
+        for _ in range(self.MAX_CHAIN_PAGES):
             result = self._request(
                 "GET", f"/options/snapshots/{underlying}", params=params, base=self.data_url
             )
@@ -234,6 +252,8 @@ class AlpacaTradingClient:
             if not token:
                 return out
             params["page_token"] = token
+        logger.warning("%s chain truncated at %d pages", underlying, self.MAX_CHAIN_PAGES)
+        return out
 
     def get_stock_latest_trade(self, symbol: str) -> float | None:
         """Latest stock trade price (data API)."""

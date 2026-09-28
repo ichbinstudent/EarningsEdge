@@ -25,6 +25,7 @@ from datetime import date, datetime, timedelta
 
 import requests
 
+from ..market_data_provider import lse_row_underlying, normalize_symbol
 from ..settings import get_settings
 from .base import BaseCollector
 
@@ -57,6 +58,17 @@ class LSECollector(BaseCollector):
 
             self._client = LSE(api_key=self.api_key)
         return self._client
+
+    _TRANSIENT_STATUSES = {0, 429, 500, 502, 503, 504}  # 0 = no HTTP response
+
+    def _is_data_miss(self, exc: Exception) -> bool:
+        return getattr(exc, "status", None) in (400, 404)
+
+    def _is_retryable(self, exc: Exception) -> bool:
+        status = getattr(exc, "status", None)
+        if status is not None:
+            return status in self._TRANSIENT_STATUSES
+        return True  # unknown shape (raw transport error): keep retrying
 
     def _call(self, fn):
         result = self.with_retry(fn)
@@ -182,6 +194,10 @@ class LSECollector(BaseCollector):
     def _chain(self, underlying: str) -> list[dict]:
         if underlying not in self._chain_cache:
             rows = self._call(lambda: self.client.options(underlying, limit=5000)) or []
+            # the client fuzzy-matches unknown symbols to company names: drop
+            # rows that positively belong to a different underlying
+            want = normalize_symbol(underlying)
+            rows = [r for r in rows if lse_row_underlying(r) in (None, want)]
             self._chain_cache[underlying] = rows
             while len(self._chain_cache) > 32:
                 self._chain_cache.pop(next(iter(self._chain_cache)))
