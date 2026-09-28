@@ -34,6 +34,15 @@ import pandas as pd
 DEFAULT_MIN_DTE = 21
 # Minimum observations before rolling stats are reported.
 MIN_HISTORY = 20
+# How far the nearest listed delta may sit from its target before the
+# reading is refused: a chain with only deep-OTM strikes quoted would
+# otherwise report a 0.20-delta call's IV as "ATM", or an ATM pair as the
+# 25-delta wings (skew ~ 0, a fake signal for momentum-skew picks).
+ATM_DELTA_TOLERANCE = 0.15
+WING_DELTA_TOLERANCE = 0.10
+# Per-contract IVs outside this band are solver/feed artefacts.
+MIN_SANE_IV = 0.01
+MAX_SANE_IV = 5.0
 # Momentum window: 12 months of bars, skipping the most recent month.
 MOM_LOOKBACK_BARS = 252
 MOM_SKIP_BARS = 22
@@ -133,7 +142,9 @@ def compute_chain_signals(
     df["dte"] = df["expiry_date"].map(lambda d: (d - ref).days if d else None)
     df["iv"] = pd.to_numeric(df.get("implied_volatility"), errors="coerce")
     df["delta"] = pd.to_numeric(df.get("delta"), errors="coerce")
-    usable = df[(df["dte"].fillna(-1) >= min_dte) & df["iv"].notna() & df["delta"].notna()]
+    usable = df[
+        (df["dte"].fillna(-1) >= min_dte) & df["iv"].between(MIN_SANE_IV, MAX_SANE_IV) & df["delta"].notna()
+    ]
     if usable.empty:
         return out
 
@@ -143,13 +154,18 @@ def compute_chain_signals(
     calls = front[front["contract_type"] == "call"]
     if not calls.empty:
         atm = calls.iloc[(calls["delta"] - 0.50).abs().argmin()]
-        out["atm_iv"] = float(atm["iv"])
+        if abs(atm["delta"] - 0.50) <= ATM_DELTA_TOLERANCE:
+            out["atm_iv"] = float(atm["iv"])
 
     puts = front[front["contract_type"] == "put"]
     if not calls.empty and not puts.empty:
         c25 = calls.iloc[(calls["delta"] - 0.25).abs().argmin()]
         p25 = puts.iloc[(puts["delta"] + 0.25).abs().argmin()]
-        out["skew_25d"] = float(p25["iv"] - c25["iv"])
+        if (
+            abs(c25["delta"] - 0.25) <= WING_DELTA_TOLERANCE
+            and abs(p25["delta"] + 0.25) <= WING_DELTA_TOLERANCE
+        ):
+            out["skew_25d"] = float(p25["iv"] - c25["iv"])
 
     return out
 
@@ -249,11 +265,15 @@ def contract_market(
     """
     expiry_iso = expiry.isoformat() if isinstance(expiry, date) else str(expiry)
     as_of_iso = (_to_date(as_of) or date.today()).isoformat()
+    # The chain cache stores one row per contract per *hour*; within the
+    # latest day take the latest capture, not whichever hour SQLite returns.
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(options_chain)")}
+    order = "scan_date DESC, captured_hour DESC" if "captured_hour" in cols else "scan_date DESC"
     row = conn.execute(
         "SELECT midpoint, close, implied_volatility, delta, scan_date "
         "FROM options_chain "
         "WHERE ticker = ? AND contract_type = ? AND strike = ? AND expiry = ? "
-        "AND scan_date <= ? ORDER BY scan_date DESC LIMIT 1",
+        f"AND scan_date <= ? ORDER BY {order} LIMIT 1",
         (ticker, kind, float(strike), expiry_iso, as_of_iso),
     ).fetchone()
     if row is None:

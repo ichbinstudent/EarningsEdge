@@ -2869,7 +2869,14 @@ def snapshots_tickers_as_of(as_of: str, limit: int) -> list[str]:
 
 
 def options_chain_df_latest(ticker: str, as_of: str) -> pd.DataFrame:
-    """Latest options_chain rows for ticker with scan_date <= as_of."""
+    """Latest options_chain snapshot for ticker with scan_date <= as_of.
+
+    The chain cache writes one row per contract per *hour*, so a single
+    scan_date holds several captures of the same contract. Returning all of
+    them multiplied the day's option volume by the number of captures (the
+    dailyBar volume is already cumulative) and let ATM/skew readings pick
+    rows from arbitrary hours. One row per contract: its latest capture.
+    """
     with session_scope() as s:
         latest = s.execute(
             select(func.max(OptionsChain.scan_date)).where(
@@ -2879,8 +2886,14 @@ def options_chain_df_latest(ticker: str, as_of: str) -> pd.DataFrame:
         if not latest:
             return pd.DataFrame()
     return _read_df(
-        "SELECT expiry, strike, contract_type, volume, implied_volatility, delta, "
-        "midpoint, close FROM options_chain WHERE ticker = :ticker AND scan_date = :scan_date",
+        "SELECT oc.expiry, oc.strike, oc.contract_type, oc.volume, oc.implied_volatility, "
+        "oc.delta, oc.midpoint, oc.close FROM options_chain oc "
+        "JOIN (SELECT contract_ticker, MAX(COALESCE(captured_hour, '')) AS hour "
+        "      FROM options_chain WHERE ticker = :ticker AND scan_date = :scan_date "
+        "      GROUP BY contract_ticker) last "
+        "  ON oc.contract_ticker = last.contract_ticker "
+        " AND COALESCE(oc.captured_hour, '') = last.hour "
+        "WHERE oc.ticker = :ticker AND oc.scan_date = :scan_date",
         {"ticker": ticker, "scan_date": latest},
     )
 
