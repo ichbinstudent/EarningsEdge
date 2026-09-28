@@ -90,12 +90,14 @@ def test_arb_build_candidate_event_with_hist_rms(tmp_db_path):
         c.commit()
 
     al = make_fake_chain()
-    # Boost near premium so factor is high enough after removing earnings var
+    # Boost near premium so factor is high enough after removing earnings var,
+    # while keeping a real (positive-debit, tradeable-width) calendar — the old
+    # fixture priced the near leg above the far one (a credit "calendar").
     sym1 = occ_symbol("TEST", TODAY + timedelta(days=45), SPOT)
-    al.chain[sym1] = {"bid": 7.0, "ask": 7.2}  # Highly inflated near leg
+    al.chain[sym1] = {"bid": 6.77, "ask": 6.83}  # inflated near leg
 
     sym2 = occ_symbol("TEST", TODAY + timedelta(days=75), SPOT)
-    al.chain[sym2] = {"bid": 6.8, "ask": 7.0}
+    al.chain[sym2] = {"bid": 7.07, "ask": 7.13}
 
     cand = build_candidate(al, "TEST", today=TODAY)
 
@@ -103,5 +105,6 @@ def test_arb_build_candidate_event_with_hist_rms(tmp_db_path):
     assert cand.earnings_date == ed.isoformat()
     assert cand.hist_rms_move > 0
     # ensure mid_debit and d_start are populated
+    assert cand.mid_debit > 0
     assert cand.d_start > 0
     assert cand.d_cap > 0

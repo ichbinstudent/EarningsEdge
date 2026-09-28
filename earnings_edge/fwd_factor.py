@@ -187,9 +187,33 @@ class LadderSpec:
             return None
         return int((now_et - start).total_seconds() // (self.step_minutes * 60))
 
+    @property
+    def n_rungs(self) -> int:
+        """Rungs in one session's window (14:00..15:45 every 15 min → 8)."""
+        start = self.start_et.hour * 60 + self.start_et.minute
+        last = self.last_rung_et.hour * 60 + self.last_rung_et.minute
+        return (last - start) // self.step_minutes + 1
+
     def limit_at(self, rung: int, debit_start: float, debit_cap: float) -> float:
         """Limit price at *rung*: start + rung*tick, never above the cap."""
         return round(min(debit_start + rung * self.tick, debit_cap), 2)
+
+    def market_limit(self, rung: int, mid: float, ask: float | None, debit_cap: float) -> float:
+        """Limit at *rung*, anchored to the market rather than to the model.
+
+        D*(p) is the MOST the edge justifies paying, not a price to bid.
+        Alpaca paper fills a marketable multi-leg limit at (or near) the limit
+        itself, so bidding D* when the combo mid sat far below it was pure
+        overpayment (2026-09: IDT paid 2.40 for a 0.67-mid calendar, COST
+        ~19.8 vs 9.96, MTN 3.60 vs 2.84). Start at the combo mid and concede
+        evenly toward min(combo ask, D_cap) across the window's rungs; a
+        mid already above the cap rests at the cap.
+        """
+        ceiling = debit_cap if ask is None or ask <= 0 else min(debit_cap, ask)
+        if mid >= ceiling:
+            return round(ceiling, 2)
+        step = max(self.tick, (ceiling - mid) / max(self.n_rungs - 1, 1))
+        return round(min(mid + max(rung, 0) * step, ceiling), 2)
 
     def current_limit(self, now: datetime, debit_start: float, debit_cap: float) -> float | None:
         """Convenience: limit price for the current time, or None outside window."""

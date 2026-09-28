@@ -137,6 +137,7 @@ class OutcomeService:
         bars: list[dict[str, Any]],
         ed: date,
         timing: str | None = None,
+        span_both: bool = False,
     ) -> dict[str, Any] | None:
         """Pure bar→outcome transformation (no network, no DB).
 
@@ -146,6 +147,10 @@ class OutcomeService:
         Default / BMO: pre = last close *before* ``ed``, post = first close
         on/after ``ed``. AMC / Post Market: pre = last close on/before ``ed``
         (the pre-announcement session), post = first close *after* ``ed``.
+        ``span_both`` (timing unknown): pre = last close before ``ed``, post =
+        first close after it — two sessions that contain the reaction for
+        either timing, instead of a one-session window that misses it
+        entirely when the guess is wrong.
         """
         if len(bars) < 2:
             return None
@@ -157,7 +162,14 @@ class OutcomeService:
 
         for i, bar in enumerate(bars):
             bar_date = datetime.fromtimestamp(bar["t"] / 1000).date()
-            if amc:
+            if span_both:
+                if bar_date < ed:
+                    pre_bar = bar
+                if bar_date >= ed and earnings_bar is None:
+                    earnings_bar = bar  # intraday-range window starts on the event date
+                if bar_date > ed and post_bar is None:
+                    post_bar = bar
+            elif amc:
                 if bar_date <= ed:
                     pre_bar = bar
                 if bar_date > ed and post_bar is None:

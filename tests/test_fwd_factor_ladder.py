@@ -213,8 +213,10 @@ def test_arm_and_first_rung_places_order(conn):
     runner.step(now)
     assert len(al.orders) == 1
     order = next(iter(al.orders.values()))
-    # rung 0 → limit == d_start (recomputed, close to original)
-    assert abs(float(order["limit_price"]) - cand.d_start) < 0.05
+    # rung 0 → limit == the combo mid, not the model price D* (which sat far
+    # above the market and filled as pure overpayment on paper)
+    assert float(order["limit_price"]) == pytest.approx(cand.mid_debit, abs=0.01)
+    assert float(order["limit_price"]) < cand.d_start
     assert order["legs"][0]["side"] == "buy" and order["legs"][1]["side"] == "sell"
     row = conn.execute("SELECT status, order_id FROM ff_ladders WHERE id=?", (lid,)).fetchone()
     assert row[0] == "armed" and row[1] == order["id"]
@@ -229,7 +231,10 @@ def test_reprice_concedes_one_tick(conn):
     assert first_id in al.cancelled  # old order replaced
     assert len(al.orders) == 2
     new_order = al.orders[[k for k in al.orders if k != first_id][0]]
-    assert float(new_order["limit_price"]) == pytest.approx(min(cand.d_start + 0.01, cand.d_cap), abs=0.05)
+    first = float(al.orders[first_id]["limit_price"])
+    second = float(new_order["limit_price"])
+    ask_debit = al.chain[FAR_SYM]["ask"] - al.chain[NEAR_SYM]["bid"]
+    assert first < second <= min(ask_debit, cand.d_cap) + 1e-9
 
 
 def test_fill_marks_ladder_filled(conn):

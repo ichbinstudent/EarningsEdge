@@ -2722,19 +2722,24 @@ def snapshots_outcome_row(ticker: str, earnings_date: str) -> dict | None:
 def snapshots_apply_hist_backfill_batch(writes: list[dict]) -> None:
     """Apply collected hist-backfill INSERT/UPDATE writes in one transaction.
 
-    Each write is ``{existing_id?, ticker, earnings_date, outcome, fetched_at}``.
+    Each write is ``{existing_id?, ticker, earnings_date, outcome, fetched_at,
+    timing_tag?, set_timing?}``. ``timing_tag`` labels inserted rows (default
+    'Backfill'); ``set_timing`` also relabels an updated row — only for rows
+    that were backfill rows to begin with, never a scanner row's real timing.
     """
     if not writes:
         return
 
     def _write_one(execute: Any, w: dict) -> None:
         outcome = w["outcome"]
+        tag = w.get("timing_tag") or "Backfill"
         if w.get("existing_id"):
+            set_timing = ", timing=:tag" if w.get("set_timing") else ""
             execute(
-                """UPDATE snapshots SET
+                f"""UPDATE snapshots SET
                     pre_earnings_close=:pre, post_earnings_close=:post,
                     actual_move_pct=:move, actual_move_direction=:direction,
-                    max_intraday_range_pct=:rng, outcome_fetched_at=:fetched
+                    max_intraday_range_pct=:rng, outcome_fetched_at=:fetched{set_timing}
                    WHERE id=:id""",
                 {
                     "pre": outcome["pre_earnings_close"],
@@ -2744,6 +2749,7 @@ def snapshots_apply_hist_backfill_batch(writes: list[dict]) -> None:
                     "rng": outcome["max_intraday_range_pct"],
                     "fetched": w["fetched_at"],
                     "id": w["existing_id"],
+                    "tag": tag,
                 },
             )
         else:
@@ -2753,7 +2759,7 @@ def snapshots_apply_hist_backfill_batch(writes: list[dict]) -> None:
                      pre_earnings_close, post_earnings_close,
                      actual_move_pct, actual_move_direction,
                      max_intraday_range_pct, outcome_fetched_at)
-                   VALUES (:ticker, :ed, :ed, 'Backfill', 0,
+                   VALUES (:ticker, :ed, :ed, :tag, 0,
                            :pre, :post, :move, :direction, :rng, :fetched)""",
                 {
                     "ticker": w["ticker"],
@@ -2764,6 +2770,7 @@ def snapshots_apply_hist_backfill_batch(writes: list[dict]) -> None:
                     "direction": outcome["actual_move_direction"],
                     "rng": outcome["max_intraday_range_pct"],
                     "fetched": w["fetched_at"],
+                    "tag": tag,
                 },
             )
 
@@ -2773,6 +2780,16 @@ def snapshots_apply_hist_backfill_batch(writes: list[dict]) -> None:
                 _write_one(lambda sql, params: s.execute(text(sql), params), w)
             except Exception as exc:
                 logger.info("hist backfill write failed: %s", exc)
+
+
+def snapshots_legacy_backfill_rows(ticker: str | None = None) -> list[dict]:
+    """Rows written by the pre-timing-aware hist backfill (timing exactly
+    'Backfill'): ``[{id, ticker, earnings_date}]``, optionally for one ticker."""
+    where = "timing = 'Backfill'" + (" AND ticker = :ticker" if ticker else "")
+    return _fetchall(
+        f"SELECT id, ticker, earnings_date FROM snapshots WHERE {where} ORDER BY ticker, earnings_date",
+        {"ticker": ticker} if ticker else {},
+    )
 
 
 def snapshots_distinct_tickers() -> list[str]:

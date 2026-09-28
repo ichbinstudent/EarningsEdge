@@ -378,7 +378,7 @@ def ff_candidate_to_trade(cand) -> Trade:
         features={"candidate": asdict(cand)},
         model_score=None,
         ml_decision="TAKE",
-        notes=f"ladder {cand.d_start:.2f} -> cap {cand.d_cap:.2f}",
+        notes=f"ladder mid {cand.mid_debit:.2f} -> cap {cand.d_cap:.2f}",
     )
 
 
@@ -394,7 +394,7 @@ def _render_ff_card(cand, proposal_id: str = "?") -> str:
         f"  BUY  1 {cards.code(cand.far_symbol)}",
         f"  SELL 1 {cards.code(cand.near_symbol)}",
         cards.esc(f"spot {cand.spot:.2f} | strike {cand.strike:g}"),
-        cards.esc(f"mid debit {cand.mid_debit:.2f} | ladder {cand.d_start:.2f} → cap {cand.d_cap:.2f}"),
+        cards.esc(f"mid debit {cand.mid_debit:.2f} | walk mid → min(ask, cap {cand.d_cap:.2f})"),
         cards.esc(f"σ_fwd {cand.sigma_fwd:.1%} | hist RMS {cand.hist_rms_move:.1%} | τ {cand.tau_days}d"),
     ]
 
@@ -411,7 +411,10 @@ def _render_ff_card(cand, proposal_id: str = "?") -> str:
         logger.error("trade_approval broad exception", exc_info=True)
         pass
 
-    footer = "Confirm = arm limit ladder 14:00→15:45 ET, tick up every 15 min.\nExpires 15:45 ET today."
+    footer = (
+        "Confirm = arm limit ladder 14:00→15:45 ET: starts at the combo mid, "
+        "concedes every 15 min, never above the ask or cap.\nExpires 15:45 ET today."
+    )
     return cards.card_frame(
         cards.FF_EMOJI, f"Trade Proposal #{proposal_id} — {FF_LADDER}", subtitle, body, footer
     )
