@@ -29,12 +29,11 @@ Execution:
 from __future__ import annotations
 
 import math
-from datetime import UTC, date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime
 
 from .option_math import black_scholes_price, implied_volatility
 
 RISK_FREE_RATE = 0.045
-ET = timezone(timedelta(hours=-4), name="EDT")
 
 
 def occ_parse(symbol: str) -> dict:
@@ -63,9 +62,20 @@ def calculate_forward_factor(iv_near: float, fwd_vol: float) -> float | None:
     return (iv_near / fwd_vol) - 1.0
 
 
-def required_near_iv_for_factor(fwd_vol: float, target_factor: float) -> float:
-    """Calculates what the near IV should be to hit a specific forward factor."""
-    return fwd_vol * (1.0 + target_factor)
+def required_near_iv_for_factor(
+    fwd_vol: float, target_factor: float, T1: float = 0.0, event_move: float = 0.0
+) -> float:
+    """Near-leg IV at which the (ex-earnings) forward factor equals *target_factor*.
+
+    The factor is measured on the ex-earnings near IV, but the near option
+    trades with the event variance still in it. When an event sits inside
+    T1 (``event_move`` > 0, as a fraction), add that variance back so the
+    returned IV is what the listed contract must be priced at.
+    """
+    ex_iv = fwd_vol * (1.0 + target_factor)
+    if event_move > 0 and T1 > 0:
+        return math.sqrt(ex_iv**2 + event_move**2 / T1)
+    return ex_iv
 
 
 def target_debit_for_factor(
@@ -76,9 +86,15 @@ def target_debit_for_factor(
     fwd_vol: float,
     target_factor: float,
     r: float = RISK_FREE_RATE,
+    event_move: float = 0.0,
 ) -> float | None:
-    """Max calendar debit consistent with a specific Forward Factor."""
-    iv_star = required_near_iv_for_factor(fwd_vol, target_factor)
+    """Max calendar debit consistent with a specific Forward Factor.
+
+    ``event_move``: RMS earnings move (fraction) when the event falls inside
+    T1. Without it the near leg was priced ex-earnings, i.e. far too cheap,
+    which inflated D* and let the ladder pay up for event-rich calendars.
+    """
+    iv_star = required_near_iv_for_factor(fwd_vol, target_factor, T1, event_move)
     near_star = black_scholes_price(spot, strike, T1, r, iv_star, "call")
     if not math.isfinite(near_star):
         return None
@@ -99,7 +115,7 @@ def calculate_ex_earnings_iv(iv_near: float, T1: float, hist_rms_move: float) ->
 def build_candidate(alpaca, ticker: str, *, today: date | None = None):
     """Scan the option chain and evaluate if the ticker qualifies for Forward Factor Arbitrage."""
     from .db.repositories import snapshots_next_earnings_date
-    from .fwd_factor import combo_debit
+    from .fwd_factor import combo_debit, leg_quote_ok
     from .fwd_factor_ladder import CalendarCandidate, _pick_pair_tenor, _reject, hist_rms_move
 
     if today is None:
@@ -129,6 +145,8 @@ def build_candidate(alpaca, ticker: str, *, today: date | None = None):
     T2 = (t2["expiry"] - today).days / 365.0
 
     q1, q2 = chain[t1["symbol"]], chain[t2["symbol"]]
+    if not (leg_quote_ok(q1.get("bid"), q1.get("ask")) and leg_quote_ok(q2.get("bid"), q2.get("ask"))):
+        return _reject(ticker, fake_ed, spot, "invalid quotes")
     mid1 = (q1["bid"] + q1["ask"]) / 2.0
     mid2 = (q2["bid"] + q2["ask"]) / 2.0
     iv1 = implied_volatility(mid1, spot, t1["strike"], T1, RISK_FREE_RATE, "call")
@@ -173,8 +191,13 @@ def build_candidate(alpaca, ticker: str, *, today: date | None = None):
     if near_bid <= 0 or far_ask <= 0:
         return _reject(ticker, fake_ed, spot, "invalid quotes")
 
-    debit_start = target_debit_for_factor(far_ask, spot, t1["strike"], T1, fwd_vol, 0.50)  # factor 1.5
-    debit_cap = target_debit_for_factor(far_ask, spot, t1["strike"], T1, fwd_vol, 0.25)  # factor 1.25
+    event_move = rms if event_inside_t1 else 0.0
+    debit_start = target_debit_for_factor(
+        far_ask, spot, t1["strike"], T1, fwd_vol, 0.50, event_move=event_move
+    )  # factor 1.5
+    debit_cap = target_debit_for_factor(
+        far_ask, spot, t1["strike"], T1, fwd_vol, 0.25, event_move=event_move
+    )  # factor 1.25
 
     if debit_start is None or debit_cap is None:
         return _reject(ticker, fake_ed, spot, "math domain error")

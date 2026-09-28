@@ -35,6 +35,7 @@ from .fwd_factor import (
     LadderSpec,
     combo_debit,
     forward_iv,
+    leg_quote_ok,
     occ_parse,
     target_debit,
     within_fill_range,
@@ -536,8 +537,11 @@ def build_candidate(
         d_cap=0,
         mid_debit=0,
     )
-    if not (math.isfinite(iv1) and math.isfinite(iv2)):
-        return CalendarCandidate(**base, skip_reason="leg IV unsolvable")
+    quotes_ok = leg_quote_ok(q1["bid"], q1["ask"]) and leg_quote_ok(q2["bid"], q2["ask"])
+    if not quotes_ok or not (math.isfinite(iv1) and math.isfinite(iv2)):
+        # a zero-bid "mid" solves to a finite but meaningless IV
+        reason = "leg IV unsolvable" if quotes_ok else "invalid leg quotes (zero bid or crossed)"
+        return CalendarCandidate(**base, skip_reason=reason)
     fwd = forward_iv(iv1, T1, iv2, T2)
     if fwd is None:
         return CalendarCandidate(**base, skip_reason="negative fwd variance")

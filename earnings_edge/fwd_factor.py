@@ -21,13 +21,16 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
 
 from .option_math import black_scholes_price
 
 RISK_FREE_RATE = 0.045  # match polygon_backfill convention
 
-ET = timezone(timedelta(hours=-4), name="EDT")  # fixed EDT; close enough for the 14:00-16:00 window
+# Real US/Eastern zone. The old fixed UTC-4 offset shifted the whole ladder
+# window (14:00-15:45 ET) an hour early every EST winter (Nov-Mar).
+ET = ZoneInfo("America/New_York")
 
 
 # ── OCC symbol helpers (pure string ops) ─────────────────────────────
@@ -112,6 +115,19 @@ def forward_iv(iv_near: float, T1: float, iv_far: float, T2: float) -> float | N
     if var <= 0:
         return None
     return math.sqrt(var / (T2 - T1))
+
+
+def leg_quote_ok(bid, ask) -> bool:
+    """A two-sided, uncrossed quote: 0 < bid <= ask, both finite.
+
+    A zero bid makes the "mid" half the ask; solving IV from that yields a
+    finite but meaningless vol that flows straight into sigma_fwd and D*.
+    """
+    try:
+        b, a = float(bid), float(ask)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(b) and math.isfinite(a) and 0 < b <= a
 
 
 def combo_debit(
