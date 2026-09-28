@@ -597,9 +597,7 @@ def test_prune_quote_files_keeps_recent(tmp_path):
     keep.write_text("x\n")
     drop.write_text("y\n")
     other.write_text("{}")
-    removed = prune_quote_files(
-        str(tmp_path), keep_days=3, today=datetime(2026, 9, 27, tzinfo=UTC)
-    )
+    removed = prune_quote_files(str(tmp_path), keep_days=3, today=datetime(2026, 9, 27, tzinfo=UTC))
     assert str(drop) in removed
     assert not drop.exists()
     assert keep.exists()
