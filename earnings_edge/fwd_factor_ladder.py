@@ -35,6 +35,7 @@ from .fwd_factor import (
     LadderSpec,
     combo_debit,
     forward_iv,
+    leg_quote_ok,
     occ_parse,
     target_debit,
     within_fill_range,
@@ -143,11 +144,6 @@ def _lse_bars_client():
         import logging
 
         logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
-        # exc-policy: keep broad, ensure visibility
-        record_event("silent_failure", f"fwd_factor_ladder: {exc}")
-        import logging
-
-        logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
         logger.info("hist backfill: LSE unavailable (%s)", exc)
         return None
 
@@ -167,11 +163,6 @@ def _polygon_bars_client():
             _POLYGON_SINGLETON = PolygonClient()
         return _POLYGON_SINGLETON
     except Exception as exc:
-        # exc-policy: keep broad, ensure visibility
-        record_event("silent_failure", f"fwd_factor_ladder: {exc}")
-        import logging
-
-        logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
         # exc-policy: keep broad, ensure visibility
         record_event("silent_failure", f"fwd_factor_ladder: {exc}")
         import logging
@@ -224,11 +215,6 @@ def ensure_hist_moves(
         import logging
 
         logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
-        # exc-policy: keep broad, ensure visibility
-        record_event("silent_failure", f"fwd_factor_ladder: {exc}")
-        import logging
-
-        logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
         logger.info("hist backfill %s: earnings dates unavailable (%s)", ticker, exc)
         return have
     if df is None or len(df) == 0:
@@ -276,11 +262,6 @@ def ensure_hist_moves(
                 import logging
 
                 logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
-                # exc-policy: keep broad, ensure visibility
-                record_event("silent_failure", f"fwd_factor_ladder: {exc}")
-                import logging
-
-                logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
                 logger.info("hist backfill %s %s: LSE bars failed (%s)", ticker, ed, exc)
 
         # Fall back to Polygon if LSE unavailable or returned empty
@@ -297,11 +278,6 @@ def ensure_hist_moves(
                 import logging
 
                 logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
-                # exc-policy: keep broad, ensure visibility
-                record_event("silent_failure", f"fwd_factor_ladder: {exc}")
-                import logging
-
-                logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
                 logger.info("hist backfill %s %s: Polygon bars failed (%s)", ticker, ed, exc)
 
         if not bars:
@@ -310,11 +286,6 @@ def ensure_hist_moves(
         try:
             outcome = OutcomeService.outcome_from_bars(bars, ed)
         except Exception as exc:
-            # exc-policy: keep broad, ensure visibility
-            record_event("silent_failure", f"fwd_factor_ladder: {exc}")
-            import logging
-
-            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
             # exc-policy: keep broad, ensure visibility
             record_event("silent_failure", f"fwd_factor_ladder: {exc}")
             import logging
@@ -351,20 +322,10 @@ def ensure_hist_moves(
             import logging
 
             logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
-            # exc-policy: keep broad, ensure visibility
-            record_event("silent_failure", f"fwd_factor_ladder: {exc}")
-            import logging
-
-            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
             logger.info("hist backfill %s %s: write failed (%s)", ticker, ed, exc)
     try:
         snapshots_apply_hist_backfill_batch(writes=writes)
     except Exception as exc:
-        # exc-policy: keep broad, ensure visibility
-        record_event("silent_failure", f"fwd_factor_ladder: {exc}")
-        import logging
-
-        logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
         # exc-policy: keep broad, ensure visibility
         record_event("silent_failure", f"fwd_factor_ladder: {exc}")
         import logging
@@ -536,8 +497,11 @@ def build_candidate(
         d_cap=0,
         mid_debit=0,
     )
-    if not (math.isfinite(iv1) and math.isfinite(iv2)):
-        return CalendarCandidate(**base, skip_reason="leg IV unsolvable")
+    quotes_ok = leg_quote_ok(q1["bid"], q1["ask"]) and leg_quote_ok(q2["bid"], q2["ask"])
+    if not quotes_ok or not (math.isfinite(iv1) and math.isfinite(iv2)):
+        # a zero-bid "mid" solves to a finite but meaningless IV
+        reason = "leg IV unsolvable" if quotes_ok else "invalid leg quotes (zero bid or crossed)"
+        return CalendarCandidate(**base, skip_reason=reason)
     fwd = forward_iv(iv1, T1, iv2, T2)
     if fwd is None:
         return CalendarCandidate(**base, skip_reason="negative fwd variance")
@@ -627,11 +591,6 @@ class LadderRunner:
             import logging
 
             logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
-            # exc-policy: keep broad, ensure visibility
-            record_event("silent_failure", f"fwd_factor_ladder: {exc}")
-            import logging
-
-            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
             logger.warning("buying-power preflight failed: %s", exc)
             return None
 
@@ -660,11 +619,6 @@ class LadderRunner:
                 import logging
 
                 logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
-                # exc-policy: keep broad, ensure visibility
-                record_event("silent_failure", f"fwd_factor_ladder: {exc}")
-                import logging
-
-                logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
                 limits = None
             return RiskManager().check_trade(
                 strategy="ff_ladder",
@@ -676,11 +630,6 @@ class LadderRunner:
                 limits=limits,
             )
         except Exception as exc:
-            # exc-policy: keep broad, ensure visibility
-            record_event("silent_failure", f"fwd_factor_ladder: {exc}")
-            import logging
-
-            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
             # exc-policy: keep broad, ensure visibility
             record_event("silent_failure", f"fwd_factor_ladder: {exc}")
             import logging
@@ -869,11 +818,6 @@ class LadderRunner:
             import logging
 
             logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
-            # exc-policy: keep broad, ensure visibility
-            record_event("silent_failure", f"fwd_factor_ladder: {exc}")
-            import logging
-
-            logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
             logger.warning("cancel %s failed: %s", ladder.order_id, exc)
         ladder.order_id = None
 
@@ -899,11 +843,6 @@ class LadderRunner:
             try:
                 self._step_one(ladder, ladder.candidate, now, today_et, bp)
             except Exception as exc:
-                # exc-policy: keep broad, ensure visibility
-                record_event("silent_failure", f"fwd_factor_ladder: {exc}")
-                import logging
-
-                logging.getLogger(__name__).error("fwd_factor_ladder broad exception", exc_info=True)
                 # exc-policy: keep broad, ensure visibility
                 record_event("silent_failure", f"fwd_factor_ladder: {exc}")
                 import logging

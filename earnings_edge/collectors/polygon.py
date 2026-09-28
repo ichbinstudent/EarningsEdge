@@ -37,6 +37,20 @@ class PolygonClient(BaseCollector):
         self._settings = get_settings()
         self._call_times: deque = deque()
 
+    @staticmethod
+    def _status(exc: Exception) -> int | None:
+        resp = getattr(exc, "response", None)
+        return getattr(resp, "status_code", None) if resp is not None else None
+
+    def _is_data_miss(self, exc: Exception) -> bool:
+        # 404 unknown ticker/contract; 403 date beyond the plan's history.
+        # Each used to cost 15s + 30s of retries and counted toward the breaker.
+        return self._status(exc) in (403, 404)
+
+    def _is_retryable(self, exc: Exception) -> bool:
+        status = self._status(exc)
+        return status is None or status == 429 or status >= 500
+
     def _wait_for_rate_limit(self):
         """Block until we're within the rate limit window."""
         now = time.monotonic()

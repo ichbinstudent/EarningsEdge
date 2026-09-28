@@ -77,18 +77,19 @@ class AlpacaOptionsClient:
         self,
         underlying: str,
         feed: str = "indicative",
-        limit: int = 200,
+        limit: int = 1000,
         page_token: str | None = None,
     ) -> tuple[dict[str, Any], str | None]:
         """Return (snapshot_dict, next_page_token).
 
         Each value contains latestQuote {ap bp as bs ax bx t}, latestTrade,
         dailyBar {c h l n o t v vw}, minuteBar, prevDailyBar, etc.
-        Bars: underlying ticker only (no contract symbol).
+        Bars: underlying ticker only (no contract symbol). One page only —
+        follow ``next_page_token`` (``chain_cache.fetch_chain``) for the rest.
         """
         params: dict[str, Any] = {
             "feed": feed,
-            "limit": min(limit, 200),
+            "limit": min(limit, 1000),  # endpoint max
         }
         if page_token:
             params["page_token"] = page_token

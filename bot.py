@@ -1355,7 +1355,10 @@ class TradingBot:
         if earnings:
             for cand in earnings:
                 try:
-                    c = build_ff_candidate(alpaca, cand.ticker, target)
+                    # off the event loop, like the arb builds below: each build
+                    # does live Alpaca fetches and may run the hist-move
+                    # backfill (yfinance + LSE/Polygon bars) synchronously
+                    c = await asyncio.to_thread(build_ff_candidate, alpaca, cand.ticker, target)
                     if not c.skip_reason:
                         c.strategy_override = "ff_ladder"
                         ff_candidates.append(c)
