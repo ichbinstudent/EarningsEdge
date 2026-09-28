@@ -91,6 +91,7 @@ def open_groups() -> list:
                 event_date=event_date,
                 qty=int(row.get("qty") or 1),
                 exit_by=exit_by,
+                timing=meta.get("timing"),
             )
             groups[gid] = g
         expiry = None

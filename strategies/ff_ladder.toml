@@ -23,8 +23,20 @@ max_pct_per_underlying = 0.15
 max_pct_per_strategy_day = 0.20
 
 # Event-day fills cannot wait for T-1: days_before_event=1 never fired
-# for same-day entries. days_after_event=0 auto-closes once the event
-# ScheduledExit is the near-leg expiry backstop.
+# for same-day entries.
+#
+# days_after_event=0 auto-closes on the event's REACTION session — the
+# event date for before-open reporters, the next session for after-close /
+# unknown timing — which is where the near leg's IV crush (the trade) is
+# realized. (It used to count from the event date, which closed after-close
+# reporters BEFORE the announcement, so it was dropped; positions then sat
+# until the near leg expired — 2026-09 COST was assigned.)
+[[exits]]
+rule = "time"
+days_after_event = 0
+min_minutes_after_open = 30   # skip the widest spreads of the day
+
+# ScheduledExit is the near-leg expiry backstop (exit_by = near expiry).
 [[exits]]
 rule = "scheduled"
 minutes_before_close = 90

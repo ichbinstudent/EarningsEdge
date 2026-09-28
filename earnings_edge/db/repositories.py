@@ -1746,6 +1746,27 @@ def managed_positions_close_by_id(row_id: int, closed_at: str | None = None) -> 
         return getattr(result, "rowcount", 0) or 0
 
 
+def managed_positions_close_symbol(
+    group_id: str,
+    symbol: str,
+    *,
+    exit_price: float | None = None,
+    closed_at: str | None = None,
+) -> int:
+    """Mark one leg (every open row of ``symbol`` in the group) closed."""
+    with session_scope() as s:
+        result = s.execute(
+            update(ManagedPosition)
+            .where(
+                ManagedPosition.group_id == group_id,
+                ManagedPosition.symbol == symbol,
+                ManagedPosition.status == "open",
+            )
+            .values(status="closed", closed_at=closed_at or _utcnow(), exit_price=exit_price)
+        )
+        return getattr(result, "rowcount", 0) or 0
+
+
 def managed_positions_set_exit_by(group_id: str, exit_by: str) -> int:
     """UPDATE managed_positions SET exit_by=? WHERE group_id=? AND status='open'."""
     with session_scope() as s:

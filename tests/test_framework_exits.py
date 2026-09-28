@@ -131,10 +131,31 @@ def test_time_exit_sessions_and_event():
     assert t1.evaluate(g, MarketView(None, TODAY, 0, sessions_until_event=1)) is not None
     assert t1.evaluate(g, MarketView(None, TODAY, 0, sessions_until_event=5)) is None
     assert t1.evaluate(g, MarketView(None, TODAY, 0, sessions_until_event=0)) is not None
-    post = TimeExit(days_after_event=0)
-    sig = post.evaluate(g, MarketView(None, TODAY, 0, sessions_until_event=0))
+    post = TimeExit(days_after_event=0, min_minutes_after_open=30)
+
+    def mv(after, since_open=120, to_close=200, until=0):
+        return MarketView(
+            None,
+            TODAY,
+            0,
+            sessions_until_event=until,
+            sessions_after_event=after,
+            minutes_to_close=to_close,
+            minutes_since_open=since_open,
+        )
+
+    # counted from the REACTION session, not the event date
+    sig = post.evaluate(g, mv(0))
     assert sig is not None and sig.auto is True
-    assert post.evaluate(g, MarketView(None, TODAY, 0, sessions_until_event=2)) is None
+    # event date of an after-close reporter: reaction is tomorrow → hold
+    assert post.evaluate(g, mv(-1)) is None
+    assert post.evaluate(g, mv(None, until=2)) is None
+    # market closed / clock unknown → no auto close; opening minutes → wait
+    assert post.evaluate(g, mv(0, since_open=None, to_close=None)) is None
+    assert post.evaluate(g, mv(0, since_open=10)) is None
+    plus1 = TimeExit(days_after_event=1)
+    assert plus1.evaluate(g, mv(0)) is None
+    assert plus1.evaluate(g, mv(1)) is not None
 
 
 def test_build_exit_rules_from_config():
@@ -758,13 +779,19 @@ def test_remaining_leg_exhaust_does_not_orphan_far(conn):
     assert any("Remaining-leg close exhausted" in m and "TPR" in m for m in outbox)
 
 
-def test_ff_ladder_exits_are_scheduled_pt_sl():
-    """ff_ladder.toml uses scheduled near-expiry close + PT/SL, not event-day time."""
+def test_ff_ladder_exits_post_event_with_near_expiry_backstop():
+    """ff_ladder.toml closes on the event's reaction session (the IV-crush
+    capture) with the scheduled near-expiry close as backstop + PT/SL.
+
+    The post-event rule was once removed because days_after_event fired on
+    the event DATE (before an after-close announcement); it now counts from
+    the reaction session, so it is safe — and without it positions sat
+    until the near leg expired (2026-09 COST assignment)."""
     from framework.core.config import load_strategy_configs
 
     cfgs = load_strategy_configs()
     ff = cfgs["ff_ladder"]
     rules = build_exit_rules(ff.exits)
     assert any(getattr(r, "minutes_before_close", None) == 90 for r in rules)
-    assert not any(getattr(r, "days_after_event", None) == 0 for r in rules)
+    assert any(getattr(r, "days_after_event", None) == 0 for r in rules)
     assert not any(getattr(r, "days_before_event", None) == 1 for r in rules)
