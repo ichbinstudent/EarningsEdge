@@ -103,7 +103,7 @@ class CalendarCandidate:
     strategy_override: str | None = None
     # "Pre Market" / "Post Market" / ... from the earnings calendar. Decides
     # whether an expiry ON the event date spans the move (BMO) or not (AMC),
-    # and which session the post-event exit treats as the reaction day.
+    # and is booked with the position (PositionGroup.timing).
     timing: str | None = None
 
 
@@ -119,8 +119,7 @@ def is_after_close(timing: str | None) -> bool:
     """AMC-like timing: the price reaction lands on the NEXT session.
 
     Unknown timing is treated as after-close — the conservative reading for
-    both expiry selection (expiry must be after the event date) and the
-    post-event exit (wait for the next session).
+    expiry selection (the near expiry must be after the event date).
     """
     t = (timing or "").lower()
     return not ("pre" in t or "bmo" in t or "before" in t)
@@ -596,7 +595,7 @@ def build_candidate(
 
     ``timing`` is the calendar's announcement timing ("Pre Market" /
     "Post Market" / unknown); it decides whether an expiry on the event date
-    spans the move and is carried on the candidate for the post-event exit.
+    spans the move and is carried on the candidate into the booking.
     """
     today = today or datetime.now(UTC).date()
     spot = alpaca.get_stock_latest_trade(ticker)

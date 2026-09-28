@@ -779,19 +779,54 @@ def test_remaining_leg_exhaust_does_not_orphan_far(conn):
     assert any("Remaining-leg close exhausted" in m and "TPR" in m for m in outbox)
 
 
-def test_ff_ladder_exits_post_event_with_near_expiry_backstop():
-    """ff_ladder.toml closes on the event's reaction session (the IV-crush
-    capture) with the scheduled near-expiry close as backstop + PT/SL.
-
-    The post-event rule was once removed because days_after_event fired on
-    the event DATE (before an after-close announcement); it now counts from
-    the reaction session, so it is safe — and without it positions sat
-    until the near leg expired (2026-09 COST assignment)."""
+def test_ff_ladder_exits_are_scheduled_pt_sl():
+    """ff_ladder.toml holds to the near-leg expiry: scheduled close + PT/SL,
+    no event-day time rule."""
     from framework.core.config import load_strategy_configs
 
     cfgs = load_strategy_configs()
     ff = cfgs["ff_ladder"]
     rules = build_exit_rules(ff.exits)
     assert any(getattr(r, "minutes_before_close", None) == 90 for r in rules)
-    assert any(getattr(r, "days_after_event", None) == 0 for r in rules)
-    assert not any(getattr(r, "days_before_event", None) == 1 for r in rules)
+    assert not any(isinstance(r, TimeExit) for r in rules)
+
+
+def test_ff_ladder_closes_on_near_expiry_day_not_after_event():
+    """With exit_by = near expiry, ff_ladder rules stay quiet through the
+    event's reaction session and fire 90 min before the close on the near
+    expiry day (and on any later session if that one was missed)."""
+    from framework.core.config import load_strategy_configs
+
+    rules = build_exit_rules(load_strategy_configs()["ff_ladder"].exits)
+    near_expiry = date(2026, 10, 16)
+    g = PositionGroup(
+        group_id="ff-idt",
+        strategy="ff_ladder",
+        legs=[
+            LegPos("IDT261016C00065000", "sell", 1, "call", 65.0, near_expiry),
+            LegPos("IDT261120C00065000", "buy", 1, "call", 65.0, date(2026, 11, 20)),
+        ],
+        entry_price=2.40,
+        opened_at="2026-09-30T18:30:00+00:00",
+        event_date=date(2026, 10, 1),
+        exit_by=near_expiry,
+        timing="Post Market",
+    )
+
+    def fired(today, minutes_to_close, sessions_after_event):
+        m = MarketView(
+            2.40,  # flat: PT/SL out of the way
+            today,
+            0,
+            minutes_to_close=minutes_to_close,
+            sessions_after_event=sessions_after_event,
+            minutes_since_open=300,
+        )
+        return [s.rule for r in rules if (s := r.evaluate(g, m))]
+
+    assert fired(date(2026, 10, 2), 60, 0) == []  # reaction session
+    assert fired(date(2026, 10, 15), 60, 9) == []  # day before expiry
+    assert fired(near_expiry, 120, 10) == []  # expiry day, too early
+    assert fired(near_expiry, 90, 10) == ["scheduled"]
+    assert fired(date(2026, 10, 19), 300, 11) == []
+    assert fired(date(2026, 10, 19), 60, 11) == ["scheduled"]  # missed day
