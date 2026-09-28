@@ -106,6 +106,12 @@ class ValidationMetrics:
     actual_to_fair_ratio: float | None = None
     atm_call_delta: float | None = None
     atm_put_delta: float | None = None
+    # event-expiry ATM IVs and realized vol, carried so the live model row
+    # uses the same definitions the training snapshots stored (collect.py)
+    atm_iv_near: float | None = None
+    atm_call_iv: float | None = None
+    atm_put_iv: float | None = None
+    rv30: float | None = None
     tier: int = 0
 
 

@@ -42,6 +42,10 @@ VRP_MIN_EXPECTED_MOVE = 6.0
 SS_IV_RV_MIN = 1.2
 SS_MIN_EXPECTED_MOVE = 6.0
 DSE_MAX_DEBIT_PCT = 0.03
+# Upper bound on a believable IV/RV. The analyzer used to emit 9999 when
+# realized vol was missing, and those rows passed every ">= threshold"
+# gate below; anything this far out is a data fault, not a signal.
+MAX_SANE_IV_RV = 10.0
 
 LIVE_STRATEGIES = [
     "calendar_call_ml",
@@ -250,6 +254,12 @@ def calendar_funnel_reasons(df: pd.DataFrame) -> dict[str, int]:
     return counts
 
 
+def _iv_rv_between(df: pd.DataFrame, minimum: float) -> pd.Series:
+    """minimum <= iv_rv_ratio <= MAX_SANE_IV_RV (NaN/non-numeric excluded)."""
+    iv_rv = pd.to_numeric(df["iv_rv_ratio"], errors="coerce")
+    return iv_rv.between(minimum, MAX_SANE_IV_RV)
+
+
 def build_live_trades(df: pd.DataFrame, strategy_name: str) -> list[Trade]:
     """Map a latest_scan_frame onto one strategy's live entry rules."""
     if df is None or df.empty:
@@ -265,8 +275,7 @@ def build_live_trades(df: pd.DataFrame, strategy_name: str) -> list[Trade]:
 
     elif strategy_name == "vol_risk_premium":
         rows = df[
-            (df["iv_rv_ratio"].fillna(0) >= VRP_IV_RV_MIN)
-            & (df["expected_move_pct"].fillna(0) >= VRP_MIN_EXPECTED_MOVE)
+            _iv_rv_between(df, VRP_IV_RV_MIN) & (df["expected_move_pct"].fillna(0) >= VRP_MIN_EXPECTED_MOVE)
         ]
         for _, row in rows.iterrows():
             t = _straddle_trade(row, strategy_name)
@@ -275,8 +284,7 @@ def build_live_trades(df: pd.DataFrame, strategy_name: str) -> list[Trade]:
 
     elif strategy_name == "short_straddle":
         rows = df[
-            (df["iv_rv_ratio"].fillna(0) >= SS_IV_RV_MIN)
-            & (df["expected_move_pct"].fillna(0) >= SS_MIN_EXPECTED_MOVE)
+            _iv_rv_between(df, SS_IV_RV_MIN) & (df["expected_move_pct"].fillna(0) >= SS_MIN_EXPECTED_MOVE)
         ]
         for _, row in rows.iterrows():
             t = _straddle_trade(row, strategy_name)

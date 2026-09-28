@@ -221,9 +221,21 @@ def build_calendar_model_feature_row(
     """Map scanner metrics + live call-calendar marks to model feature names."""
 
     m: ValidationMetrics = report.metrics
-    atm_iv = _safe_float(m.sigma_short_leg)
+    short_leg_iv = _safe_float(m.sigma_short_leg)
     iv_rv = _safe_float(m.iv_rv_ratio)
-    rv_estimate = atm_iv / iv_rv if atm_iv is not None and iv_rv not in (None, 0) else None
+    # Training snapshots (scripts/collect.py) store the analyzer's realized
+    # vol and event-expiry ATM IVs under these names. Use the same values
+    # live; the short-leg-IV/ratio estimates are only a fallback for reports
+    # built before those metrics were carried (the estimate scales RV by the
+    # event premium, overstating it by the short leg's richness).
+    rv = _safe_float(getattr(m, "rv30", None))
+    if rv is None or rv <= 0:
+        rv = short_leg_iv / iv_rv if short_leg_iv is not None and iv_rv not in (None, 0) else None
+    atm_iv = _safe_float(getattr(m, "atm_iv_near", None))
+    if atm_iv is None:
+        atm_iv = short_leg_iv
+    call_iv = _safe_float(getattr(m, "atm_call_iv", None))
+    put_iv = _safe_float(getattr(m, "atm_put_iv", None))
     expected_move_dollars = _safe_float(m.expected_move_dollars)
     row = {
         "ticker": report.ticker,
@@ -235,9 +247,9 @@ def build_calendar_model_feature_row(
         "days_to_expiry": int(m.days_to_expiry or 0),
         "total_open_interest": int(m.open_interest or 0),
         "atm_iv_near": atm_iv,
-        "rv30": rv_estimate,
+        "rv30": rv,
         "iv30_rv30": iv_rv,
-        "hist_vol_3m": rv_estimate,
+        "hist_vol_3m": rv,
         "term_slope": _safe_float(m.term_structure),
         "term_structure_valid": 1 if (m.term_structure or 0) <= -0.004 else 0,
         "expected_move_pct": _safe_float(m.expected_move_pct),
@@ -245,10 +257,10 @@ def build_calendar_model_feature_row(
         "straddle_price": expected_move_dollars,
         "atm_call_delta": _safe_float(m.atm_call_delta),
         "atm_put_delta": _safe_float(m.atm_put_delta),
-        "atm_call_iv": atm_iv,
-        "atm_put_iv": atm_iv,
+        "atm_call_iv": call_iv if call_iv is not None else atm_iv,
+        "atm_put_iv": put_iv if put_iv is not None else atm_iv,
         "sigma_baseline_1y": _safe_float(m.sigma_baseline_1y),
-        "sigma_short_leg": atm_iv,
+        "sigma_short_leg": short_leg_iv,
         "sigma_short_leg_fair": _safe_float(m.sigma_short_leg_fair),
         "actual_to_fair_ratio": _safe_float(m.actual_to_fair_ratio),
     }

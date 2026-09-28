@@ -1,5 +1,6 @@
 """Stock validation: apply the tiered filter chain and assign tiers."""
 
+import math
 from datetime import UTC, datetime
 
 from .analyzer import OptionsAnalyzer
@@ -17,6 +18,17 @@ from .config import (
 from .models import EarningsCandidate, ValidationMetrics, ValidationResult
 
 logger = get_logger("validator")
+
+
+def _is_finite(value) -> bool:
+    try:
+        return math.isfinite(float(value))
+    except (TypeError, ValueError):
+        return False
+
+
+def _is_finite_positive(value) -> bool:
+    return _is_finite(value) and float(value) > 0
 
 
 def _fail(reason: str) -> ValidationResult:
@@ -105,9 +117,18 @@ class StockValidator:
                 logger.info("%s: OI gate skipped (%s backend has no open interest)", ticker, chain.source)
 
             # 5. Core analysis (term structure, IVs, etc.)
-            analysis = self.analyzer.compute_recommendation(ticker, candidate.earnings_date)
+            analysis = self.analyzer.compute_recommendation(
+                ticker, candidate.earnings_date, provider=provider
+            )
             if not analysis.ok:
                 return _fail(f"Analysis error: {analysis.error}")
+            # Fail closed: a NaN ratio compares False against every threshold
+            # below and would pass the IV/RV gate (and later the live
+            # short-straddle gates) on missing data.
+            if not _is_finite_positive(analysis.iv30_rv30):
+                return _fail("IV/RV unavailable (no realized volatility)")
+            if not _is_finite(analysis.term_slope):
+                return _fail("Term structure unavailable")
 
             # Carry analysis fields into metrics (direct assignment, no dict copy)
             m.sigma_baseline_1y = analysis.sigma_baseline_1y
@@ -116,6 +137,10 @@ class StockValidator:
             m.actual_to_fair_ratio = analysis.actual_to_fair_ratio
             m.atm_call_delta = analysis.atm_call_delta
             m.atm_put_delta = analysis.atm_put_delta
+            m.atm_iv_near = analysis.atm_iv_near
+            m.atm_call_iv = analysis.atm_call_iv
+            m.atm_put_iv = analysis.atm_put_iv
+            m.rv30 = analysis.rv30
 
             # 6. Term structure (hard gate)
             m.term_structure = analysis.term_slope
@@ -224,6 +249,8 @@ class StockValidator:
             except Exception:
                 return None
 
+        if not _is_finite_positive(pct):
+            return None  # unknown move: leave the metric unset, don't gate on NaN
         dollars = price * pct
         m.expected_move_dollars = dollars
         m.expected_move_pct = pct * 100
