@@ -62,7 +62,8 @@ class _FakeTicker:
         self.ticker = ticker
 
     def get_earnings_dates(self, limit=12):
-        idx = pd.DatetimeIndex([datetime(d.year, d.month, d.day) for d in EVENT_DATES])
+        # 06:00 ET announcement = before the open (Yahoo reports the time)
+        idx = pd.DatetimeIndex([datetime(d.year, d.month, d.day, 6) for d in EVENT_DATES])
         return pd.DataFrame({"EPS Estimate": [None] * len(idx)}, index=idx)
 
 
@@ -126,7 +127,7 @@ def test_ensure_hist_moves_writes_backfill_rows(conn, mocked_providers):
     ).fetchall()
     assert len(rows) == 3
     for r in rows:
-        assert r[1] == "Backfill"
+        assert r[1] == "Backfill:BMO"  # backfill row + the window it was measured with
         assert r[2] is not None and r[2] > 0  # actual_move_pct
         assert r[3] in ("UP", "DOWN")
         assert r[4] is not None  # outcome_fetched_at -> usable for the gate

@@ -1312,7 +1312,7 @@ class TradingBot:
                 continue
             for cand in earnings:
                 try:
-                    c = build_candidate(alpaca, cand.ticker, target)
+                    c = build_candidate(alpaca, cand.ticker, target, timing=cand.timing)
                 except Exception as exc:
                     logger.info("FF: candidate %s failed: %s", cand.ticker, exc)
                     continue
@@ -1358,7 +1358,9 @@ class TradingBot:
                     # off the event loop, like the arb builds below: each build
                     # does live Alpaca fetches and may run the hist-move
                     # backfill (yfinance + LSE/Polygon bars) synchronously
-                    c = await asyncio.to_thread(build_ff_candidate, alpaca, cand.ticker, target)
+                    c = await asyncio.to_thread(
+                        build_ff_candidate, alpaca, cand.ticker, target, timing=cand.timing
+                    )
                     if not c.skip_reason:
                         c.strategy_override = "ff_ladder"
                         ff_candidates.append(c)

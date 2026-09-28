@@ -263,9 +263,11 @@ class Reconciler:
             if not legs:
                 continue
             try:
+                from earnings_edge.fwd_factor_ladder import near_leg_exit_by
+
                 record_open_positions(
                     legs,
-                    "ff_ladder",
+                    cand.get("strategy_override") or "ff_ladder",
                     group_id=str(row["order_id"] or row["id"]),
                     order_id=row["order_id"],
                     entry_price=_f((broker_by_symbol.get(hit[0]) or {}).get("avg_entry_price")),
@@ -273,8 +275,11 @@ class Reconciler:
                         "side": "CALENDAR",
                         "credit": False,
                         "earnings_date": cand.get("earnings_date"),
+                        "timing": cand.get("timing"),
                         "adopted_from": "ff_ladders",
                     },
+                    # near-leg expiry deadline (ScheduledExit is a no-op without it)
+                    exit_by=near_leg_exit_by(cand.get("near_expiry")),
                 )
             except Exception as exc:
                 # exc-policy: keep broad, record failure

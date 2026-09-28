@@ -131,10 +131,31 @@ def test_time_exit_sessions_and_event():
     assert t1.evaluate(g, MarketView(None, TODAY, 0, sessions_until_event=1)) is not None
     assert t1.evaluate(g, MarketView(None, TODAY, 0, sessions_until_event=5)) is None
     assert t1.evaluate(g, MarketView(None, TODAY, 0, sessions_until_event=0)) is not None
-    post = TimeExit(days_after_event=0)
-    sig = post.evaluate(g, MarketView(None, TODAY, 0, sessions_until_event=0))
+    post = TimeExit(days_after_event=0, min_minutes_after_open=30)
+
+    def mv(after, since_open=120, to_close=200, until=0):
+        return MarketView(
+            None,
+            TODAY,
+            0,
+            sessions_until_event=until,
+            sessions_after_event=after,
+            minutes_to_close=to_close,
+            minutes_since_open=since_open,
+        )
+
+    # counted from the REACTION session, not the event date
+    sig = post.evaluate(g, mv(0))
     assert sig is not None and sig.auto is True
-    assert post.evaluate(g, MarketView(None, TODAY, 0, sessions_until_event=2)) is None
+    # event date of an after-close reporter: reaction is tomorrow → hold
+    assert post.evaluate(g, mv(-1)) is None
+    assert post.evaluate(g, mv(None, until=2)) is None
+    # market closed / clock unknown → no auto close; opening minutes → wait
+    assert post.evaluate(g, mv(0, since_open=None, to_close=None)) is None
+    assert post.evaluate(g, mv(0, since_open=10)) is None
+    plus1 = TimeExit(days_after_event=1)
+    assert plus1.evaluate(g, mv(0)) is None
+    assert plus1.evaluate(g, mv(1)) is not None
 
 
 def test_build_exit_rules_from_config():
@@ -759,12 +780,53 @@ def test_remaining_leg_exhaust_does_not_orphan_far(conn):
 
 
 def test_ff_ladder_exits_are_scheduled_pt_sl():
-    """ff_ladder.toml uses scheduled near-expiry close + PT/SL, not event-day time."""
+    """ff_ladder.toml holds to the near-leg expiry: scheduled close + PT/SL,
+    no event-day time rule."""
     from framework.core.config import load_strategy_configs
 
     cfgs = load_strategy_configs()
     ff = cfgs["ff_ladder"]
     rules = build_exit_rules(ff.exits)
     assert any(getattr(r, "minutes_before_close", None) == 90 for r in rules)
-    assert not any(getattr(r, "days_after_event", None) == 0 for r in rules)
-    assert not any(getattr(r, "days_before_event", None) == 1 for r in rules)
+    assert not any(isinstance(r, TimeExit) for r in rules)
+
+
+def test_ff_ladder_closes_on_near_expiry_day_not_after_event():
+    """With exit_by = near expiry, ff_ladder rules stay quiet through the
+    event's reaction session and fire 90 min before the close on the near
+    expiry day (and on any later session if that one was missed)."""
+    from framework.core.config import load_strategy_configs
+
+    rules = build_exit_rules(load_strategy_configs()["ff_ladder"].exits)
+    near_expiry = date(2026, 10, 16)
+    g = PositionGroup(
+        group_id="ff-idt",
+        strategy="ff_ladder",
+        legs=[
+            LegPos("IDT261016C00065000", "sell", 1, "call", 65.0, near_expiry),
+            LegPos("IDT261120C00065000", "buy", 1, "call", 65.0, date(2026, 11, 20)),
+        ],
+        entry_price=2.40,
+        opened_at="2026-09-30T18:30:00+00:00",
+        event_date=date(2026, 10, 1),
+        exit_by=near_expiry,
+        timing="Post Market",
+    )
+
+    def fired(today, minutes_to_close, sessions_after_event):
+        m = MarketView(
+            2.40,  # flat: PT/SL out of the way
+            today,
+            0,
+            minutes_to_close=minutes_to_close,
+            sessions_after_event=sessions_after_event,
+            minutes_since_open=300,
+        )
+        return [s.rule for r in rules if (s := r.evaluate(g, m))]
+
+    assert fired(date(2026, 10, 2), 60, 0) == []  # reaction session
+    assert fired(date(2026, 10, 15), 60, 9) == []  # day before expiry
+    assert fired(near_expiry, 120, 10) == []  # expiry day, too early
+    assert fired(near_expiry, 90, 10) == ["scheduled"]
+    assert fired(date(2026, 10, 19), 300, 11) == []
+    assert fired(date(2026, 10, 19), 60, 11) == ["scheduled"]  # missed day

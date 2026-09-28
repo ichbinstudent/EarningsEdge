@@ -12,7 +12,7 @@ Strategies are configured via `.toml` files in the `strategies/` directory and e
 - Focuses on capturing implied forward volatility underpricing ahead of earnings.
 - Built via `fwd_factor.py` and `fwd_factor_ladder.py`.
 - **Target Math:** Calculates the `required_near_iv` such that the implied earnings move matches a historical RMS move + 20-25% premium. Derives a theoretical limit debit price.
-- **Entry:** Steps into the market starting from the cheapest price (25% premium) down to a capped price (20% premium).
+- **Entry:** Starts at the combo mid and concedes every 15 min toward the combo ask, never above the capped price (20% premium). The model price is a ceiling, not a bid.
 - **Exit:** Uses `ScheduledExit` to hold the trade until the expiration date of the near (short) leg. 
 
 ## 2. `forward_factor_arb` (Pure Mathematical Forward Factor Arbitrage)

@@ -116,7 +116,13 @@ def build_candidate(alpaca, ticker: str, *, today: date | None = None):
     """Scan the option chain and evaluate if the ticker qualifies for Forward Factor Arbitrage."""
     from .db.repositories import snapshots_next_earnings_date
     from .fwd_factor import combo_debit, leg_quote_ok
-    from .fwd_factor_ladder import CalendarCandidate, _pick_pair_tenor, _reject, hist_rms_move
+    from .fwd_factor_ladder import (
+        CalendarCandidate,
+        _pick_pair_tenor,
+        _reject,
+        combo_liquidity_reason,
+        hist_rms_move,
+    )
 
     if today is None:
         today = datetime.now(UTC).date()
@@ -147,6 +153,9 @@ def build_candidate(alpaca, ticker: str, *, today: date | None = None):
     q1, q2 = chain[t1["symbol"]], chain[t2["symbol"]]
     if not (leg_quote_ok(q1.get("bid"), q1.get("ask")) and leg_quote_ok(q2.get("bid"), q2.get("ask"))):
         return _reject(ticker, fake_ed, spot, "invalid quotes")
+    thin = combo_liquidity_reason(q1["bid"], q1["ask"], q2["bid"], q2["ask"])
+    if thin:
+        return _reject(ticker, fake_ed, spot, f"illiquid: {thin}")
     mid1 = (q1["bid"] + q1["ask"]) / 2.0
     mid2 = (q2["bid"] + q2["ask"]) / 2.0
     iv1 = implied_volatility(mid1, spot, t1["strike"], T1, RISK_FREE_RATE, "call")

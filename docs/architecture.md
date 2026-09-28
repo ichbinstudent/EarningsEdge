@@ -91,7 +91,7 @@ Design invariants:
 - **Veto reasons are threaded to the operator** — the Execute-click footer shows `last_look: spread 0.38 > 40% of mid 0.39`, not a bare counter dict (`skip_detail` since `d849b43`).
 - The funnel (`proposal_funnel` table) counts every stage: candidates → gated → proposed → preflight-rejected → approved → executed.
 
-**FF ladder async path** (`fwd_factor_ladder.py`, `fwd_factor.py`): proposals arm at 13:45 ET with a computed fair debit, then `LimitWalkPolicy` steps resting limits down toward the capped price every 15 min through 15:45 ET. Exits via `ScheduledExit` at front-leg expiry or rule-based exits.
+**FF ladder async path** (`fwd_factor_ladder.py`, `fwd_factor.py`): proposals arm at 13:45 ET with a computed fair debit, then `LadderSpec.market_limit` rests limits from the combo mid up toward min(combo ask, capped price) every 15 min through 15:45 ET. Exits via `ScheduledExit` on the front-leg expiry day (`exit_by`, set at booking) or PT/SL.
 
 ## Risk
 

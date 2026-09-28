@@ -21,6 +21,16 @@ def create_test_db():
     return None
 
 
+def _bmo_index(days):
+    """Yahoo-style announcement timestamps: 06:00 ET, i.e. before the open.
+
+    The backfill now measures the move over the window the timing implies
+    (unknown/midnight → two sessions); pinning BMO keeps these fallback
+    tests about the data source, with the one-session BMO window.
+    """
+    return pd.DatetimeIndex([datetime.combine(d, datetime.min.time()).replace(hour=6) for d in days])
+
+
 def make_bars(ticker, ed, close_pre=100.0, close_post=105.0):
     """Create Polygon-shaped bar data."""
     bars = []
@@ -48,7 +58,7 @@ def test_lse_has_data_polygon_not_called():
     ed = date(2026, 7, 1)
 
     # Mock yfinance to return one earnings date
-    mock_df = pd.DataFrame(index=pd.to_datetime([ed - timedelta(days=10)]))
+    mock_df = pd.DataFrame(index=_bmo_index([ed - timedelta(days=10)]))
     mock_ticker = MagicMock()
     mock_ticker.get_earnings_dates = MagicMock(return_value=mock_df)
 
@@ -93,7 +103,7 @@ def test_lse_returns_empty_polygon_used():
     ed = date(2026, 7, 1)
 
     # Mock yfinance to return one earnings date
-    mock_df = pd.DataFrame(index=pd.to_datetime([ed - timedelta(days=10)]))
+    mock_df = pd.DataFrame(index=_bmo_index([ed - timedelta(days=10)]))
     mock_ticker = MagicMock()
     mock_ticker.get_earnings_dates = MagicMock(return_value=mock_df)
 
@@ -129,7 +139,7 @@ def test_lse_returns_empty_polygon_used():
             .all()
         ]
     assert len(rows) == 1
-    assert rows[0]["timing"] == "Backfill"  # timing
+    assert rows[0]["timing"] == "Backfill:BMO"  # backfill row + the window it was measured with
     assert rows[0]["actual_move_pct"] == 5.0  # actual_move_pct
     assert result == 1
 
@@ -153,7 +163,7 @@ def test_both_sources_fail_returns_existing_count():
         )
 
     # Mock yfinance to return one earnings date
-    mock_df = pd.DataFrame(index=pd.to_datetime([ed - timedelta(days=10)]))
+    mock_df = pd.DataFrame(index=_bmo_index([ed - timedelta(days=10)]))
     mock_ticker = MagicMock()
     mock_ticker.get_earnings_dates = MagicMock(return_value=mock_df)
 
@@ -260,7 +270,7 @@ def test_existing_good_outcome_not_overwritten():
         )
 
     # Mock yfinance to return same earnings date
-    mock_df = pd.DataFrame(index=pd.to_datetime([ed - timedelta(days=10)]))
+    mock_df = pd.DataFrame(index=_bmo_index([ed - timedelta(days=10)]))
     mock_ticker = MagicMock()
     mock_ticker.get_earnings_dates = MagicMock(return_value=mock_df)
 
@@ -298,7 +308,7 @@ def test_lse_raises_exception_polygon_fallback():
     ed = date(2026, 7, 1)
 
     # Mock yfinance to return one earnings date
-    mock_df = pd.DataFrame(index=pd.to_datetime([ed - timedelta(days=10)]))
+    mock_df = pd.DataFrame(index=_bmo_index([ed - timedelta(days=10)]))
     mock_ticker = MagicMock()
     mock_ticker.get_earnings_dates = MagicMock(return_value=mock_df)
 
@@ -389,7 +399,7 @@ def test_update_existing_row_with_null_outcome():
         )
 
     # Mock yfinance to return same earnings date
-    mock_df = pd.DataFrame(index=pd.to_datetime([ed - timedelta(days=10)]))
+    mock_df = pd.DataFrame(index=_bmo_index([ed - timedelta(days=10)]))
     mock_ticker = MagicMock()
     mock_ticker.get_earnings_dates = MagicMock(return_value=mock_df)
 

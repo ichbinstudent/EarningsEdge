@@ -78,6 +78,36 @@ class LimitWalkPolicy(PricingPolicy):
         return prices
 
 
+class NaturalWalkPolicy(PricingPolicy):
+    """Walk one contract from its mid to the natural side of its book.
+
+    For urgent single-leg closes (near-expiry leg-out, assignment cleanup): a
+    buy concedes mid → ask, a sell concedes mid → bid, so the last rung is
+    marketable. LimitWalkPolicy stops 1% past the mid, which on option books
+    30-80% wide never fills — and the short leg then expires into
+    assignment. Single-leg orders only: buy/sell semantics are unambiguous
+    there, unlike a multi-leg net price.
+    """
+
+    name = "natural_walk"
+
+    def __init__(self, bid: float, ask: float, steps: int = 3):
+        if steps < 1:
+            raise ValueError("steps must be >= 1")
+        self.bid = max(float(bid), 0.0)
+        self.ask = float(ask)
+        self.steps = steps
+
+    def walk(self, mid: float, side: str) -> list[float | None]:
+        start = (self.bid + self.ask) / 2.0
+        natural = self.ask if side == "buy" else self.bid
+        prices: list[float | None] = []
+        for i in range(self.steps):
+            frac = i / max(self.steps - 1, 1)
+            prices.append(max(round(start + frac * (natural - start), 2), 0.01))
+        return prices
+
+
 # ── Managed order -------------------------------------------------------------
 
 

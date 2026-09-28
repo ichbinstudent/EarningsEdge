@@ -67,6 +67,7 @@ from .repositories import (  # noqa: F401
     load_picks,
     managed_positions_close,
     managed_positions_close_by_id,
+    managed_positions_close_symbol,
     managed_positions_list,
     managed_positions_open,
     managed_positions_set_exit_by,

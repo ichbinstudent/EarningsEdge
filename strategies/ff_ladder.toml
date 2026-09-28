@@ -1,6 +1,6 @@
 # Forward-factor limit ladder: patient entry into forward-vol underpricing.
 # Entry is worked 14:00-15:45 ET by the LadderRunner; exits are managed by the
-# framework ExitManager (post-event auto close + scheduled near-expiry, PT/SL auto).
+# framework ExitManager (scheduled close on the near-leg expiry day, PT/SL auto).
 [strategy]
 name = "ff_ladder"
 enabled = true
@@ -22,9 +22,12 @@ max_pct_per_trade = 0.05
 max_pct_per_underlying = 0.15
 max_pct_per_strategy_day = 0.20
 
-# Event-day fills cannot wait for T-1: days_before_event=1 never fired
-# for same-day entries. days_after_event=0 auto-closes once the event
-# ScheduledExit is the near-leg expiry backstop.
+# Held until the near leg expires: no event-day time rule.
+#
+# ScheduledExit closes on the near-leg expiry day, 90 min before the close
+# (exit_by = near expiry, set at booking). Fills booked with exit_by=None
+# never closed — 2026-09 COST was assigned — so the ExitManager backfills
+# it for open ff_ladder groups.
 [[exits]]
 rule = "scheduled"
 minutes_before_close = 90

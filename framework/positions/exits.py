@@ -47,6 +47,7 @@ class PositionGroup:
     # (e.g. a calendar's near-leg expiry) —
     # None when the structure has no
     # differential-expiry deadline
+    timing: str | None = None  # announcement timing ("Pre Market"/"Post Market"/...)
 
     @property
     def ticker(self) -> str:
@@ -66,6 +67,11 @@ class MarketView:
     sessions_since_open: int
     sessions_until_event: int | None = None
     minutes_to_close: int | None = None  # None when unknown (clock fetch failed)
+    # Sessions since the event's REACTION session (0 = the first session whose
+    # prices contain the announcement: the event date for before-open
+    # reporters, the next session for after-close/unknown); negative before.
+    sessions_after_event: int | None = None
+    minutes_since_open: int | None = None  # None when closed/unknown
 
 
 @dataclass
@@ -254,26 +260,35 @@ class TimeExit(ExitRule):
         days_after_entry: int | None = None,
         days_before_event: int | None = None,
         days_after_event: int | None = None,
+        min_minutes_after_open: int = 0,
     ):
         self.days_after_entry = days_after_entry
         self.days_before_event = days_before_event
         self.days_after_event = days_after_event
+        # post-event auto-close waits this long after the open: the opening
+        # minutes carry the widest option spreads of the day
+        self.min_minutes_after_open = min_minutes_after_open
 
     def evaluate(self, group: PositionGroup, market: MarketView) -> ExitSignal | None:
-        # Post-event deadline: event has arrived (sessions_until_event == 0
-        # on event day and every session after). Auto — the vol-crush window
-        # is the point of the trade; waiting for a card abandoned fills.
+        # Post-event deadline, counted from the REACTION session. Auto — the
+        # vol-crush window is the point of the trade; waiting for a card
+        # abandoned fills. This used to fire on the event DATE for any value
+        # of days_after_event, i.e. before the announcement for after-close
+        # reporters.
         if (
             self.days_after_event is not None
-            and market.sessions_until_event is not None
-            and market.sessions_until_event <= 0
+            and market.sessions_after_event is not None
+            and market.sessions_after_event >= self.days_after_event
+            and market.minutes_to_close is not None  # market open (an auto close needs a book)
+            and (
+                market.minutes_since_open is None or market.minutes_since_open >= self.min_minutes_after_open
+            )
         ):
             return ExitSignal(
                 rule=self.name,
                 auto=True,
-                reason=f"event day/past (sessions_until_event="
-                f"{market.sessions_until_event}, days_after_event="
-                f"{self.days_after_event})",
+                reason=f"{market.sessions_after_event} session(s) after the event reaction "
+                f"(exit at +{self.days_after_event})",
             )
         if self.days_after_entry is not None and market.sessions_since_open >= self.days_after_entry:
             return ExitSignal(
@@ -338,6 +353,7 @@ def build_exit_rules(exits_cfg: list[dict]) -> list[ExitRule]:
                     days_after_entry=e.get("days_after_entry"),
                     days_before_event=e.get("days_before_event"),
                     days_after_event=e.get("days_after_event"),
+                    min_minutes_after_open=int(e.get("min_minutes_after_open", 0)),
                 )
             )
         elif kind == "profit_target":
