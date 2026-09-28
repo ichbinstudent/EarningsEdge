@@ -36,10 +36,12 @@ one-off scripts) — it's just no longer auto-added to the live chain.
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
+from collections import OrderedDict
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -69,6 +71,26 @@ _CHAIN_COLUMNS = [
     "delta",
     "inTheMoney",
 ]
+
+
+class DataUnavailable(ValueError):
+    """The backend answered but holds no usable data for *this* query.
+
+    Ticker not in the vault's catalog, no live expiries, unknown expiry, only
+    stale quotes. This is a per-ticker gap, not an outage: ResilientProvider
+    serves the call from the next backend without moving its latch, so one
+    uncovered small-cap no longer flips a whole scan off LSE. Subclasses
+    ValueError so pre-existing ``except ValueError`` callers keep working.
+    """
+
+
+# Statuses meaning "well-formed request, nothing here" rather than overload.
+_DATA_MISS_STATUSES = {400, 404}
+
+
+def is_data_miss(exc: BaseException) -> bool:
+    """True for per-query data gaps; False for outages (timeouts, 5xx, 429, auth)."""
+    return isinstance(exc, DataUnavailable) or getattr(exc, "status", None) in _DATA_MISS_STATUSES
 
 
 @dataclass
@@ -422,26 +444,48 @@ class LSEProvider:
     failure/backoff spiral, not the per-minute pacing, is what was making
     scans crawl. ``_concurrency`` below caps actual in-flight LSE calls at
     the plan's real limit so workers queue instead of colliding.
+
+    Data-integrity guards (each raises ``DataUnavailable`` so the resilient
+    chain serves that ticker from Yahoo instead):
+
+    - the client resolves an unknown symbol by fuzzy company-name match, so a
+      ticker missing from the catalog can come back as ANOTHER company's
+      chain; rows whose underlying differs from the request are dropped;
+    - a contract whose last update is older than ``_MAX_QUOTE_AGE_DAYS`` has
+      its price/IV blanked — a days-old last trade is not a quote;
+    - transient failures (transport, 429, 5xx) are retried before the error
+      escapes, so one blip does not latch the whole scan onto Yahoo.
     """
 
     name = "lse"
     max_expiries_hint: int | None = None  # whole chain is one call
     _CHAIN_TTL_SECS = 900.0  # re-fetch a ticker's chain at most every 15 min
+    _HISTORY_TTL_SECS = 300.0  # one candles call serves 1d/1mo/3mo per ticker
+    _HISTORY_MIN_DAYS = 100  # fetch window covering 1d/5d/1mo/3mo in one call
+    _CACHE_MAX_TICKERS = 64
     _VAULT_CONCURRENCY = 2  # observed plan limit — see class docstring
+    _REST_TIMEOUT_SECS = 30.0  # client default is 60s: a hung call pins a vault slot
+    _MAX_ATTEMPTS = 3
+    _RETRY_DELAY_SECS = 1.0
+    _TRANSIENT_STATUSES = {0, 429, 500, 502, 503, 504}  # 0 = no HTTP response
+    _MAX_QUOTE_AGE_DAYS = 5  # covers a weekend + holiday; older = no quote
 
     def __init__(self, api_key: str | None = None, client=None):
         self._key = api_key if api_key is not None else get_settings().lse_api_key
         self._client = client  # injectable; lazily constructed from the key
         self._limiter = _AimdRateLimiter(0.4, 0.31, 5.0)  # stay under 200/min
         self._concurrency = threading.Semaphore(self._VAULT_CONCURRENCY)
-        self._chain_cache: dict[str, tuple[float, list[dict]]] = {}
+        self._cache_lock = threading.Lock()
+        self._chain_cache: OrderedDict[str, tuple[float, list[dict]]] = OrderedDict()
+        self._history_cache: OrderedDict[str, tuple[float, int, pd.DataFrame]] = OrderedDict()
+        self._retry_delay = self._RETRY_DELAY_SECS
 
     @property
     def client(self):
         if self._client is None:
             from lse import LSE  # lazy import: optional dependency
 
-            self._client = LSE(api_key=self._key)
+            self._client = LSE(api_key=self._key, timeout=self._REST_TIMEOUT_SECS)
         return self._client
 
     # HTTP statuses the vault returns for a well-formed, promptly-answered
@@ -450,9 +494,10 @@ class LSEProvider:
     # vault's catalog was never going to carry, so treating these as
     # throttling pins the shared limiter at its 5s ceiling almost
     # immediately and keeps it there for the whole run.
-    _NON_OVERLOAD_STATUSES = {400, 404}
+    _NON_OVERLOAD_STATUSES = _DATA_MISS_STATUSES
 
     def _call(self, fn):
+        """One paced, concurrency-gated attempt (no retry)."""
         self._limiter.acquire()
         with self._concurrency:
             try:
@@ -466,15 +511,39 @@ class LSEProvider:
         self._limiter.success()
         return result
 
+    def _is_transient(self, exc: Exception) -> bool:
+        status = getattr(exc, "status", None)
+        if status is not None:
+            return status in self._TRANSIENT_STATUSES
+        return isinstance(exc, (ConnectionError, TimeoutError, OSError))
+
+    def _request(self, fn):
+        """``_call`` with bounded retry on transient failures.
+
+        The concurrency slot is released between attempts (``_call`` scopes
+        it), so a backing-off worker never blocks the other scan workers.
+        """
+        for attempt in range(1, self._MAX_ATTEMPTS + 1):
+            try:
+                return self._call(fn)
+            except Exception as exc:
+                if attempt >= self._MAX_ATTEMPTS or not self._is_transient(exc):
+                    raise
+                delay = self._retry_delay * 2 ** (attempt - 1)
+                logger.info("LSE transient error (%s) — retry %d in %.1fs", exc, attempt, delay)
+                if delay > 0:
+                    time.sleep(delay)
+        raise RuntimeError("unreachable")  # pragma: no cover
+
     def healthy(self, timeout: float = 6.0) -> bool:
-        """Candles AND at least one not-yet-expired option contract.
+        """Candles AND at least one live, recently-updated option contract.
 
         The vault's options catalog can freeze while candles keep flowing
         (observed 2026-07-01: every chain row carried a July expiry with
         dte=1 forever). A candles-only probe latches ResilientProvider onto
         a provider whose chains are all dead, so every options_expiries
         call silently returns [] and the scan funnels everything to
-        no_quote. Requiring one live expiry catches that state.
+        no_quote. Requiring one live, fresh expiry catches that state.
         """
         if not self._key:
             return False
@@ -485,7 +554,9 @@ class LSEProvider:
                 return False
             today = date.today().isoformat()
             opts = self._call(lambda: self.client.options("SPY", limit=50))
-            return any(r.get("expiry") and r["expiry"] >= today for r in (opts or []))
+            return any(
+                r.get("expiry") and r["expiry"] >= today and not self._is_stale(r) for r in (opts or [])
+            )
         except Exception as exc:
             logger.info("LSE health check failed: %s", exc)
             return False
@@ -500,13 +571,41 @@ class LSEProvider:
         return hides that from ResilientProvider (no failover to Yahoo,
         candidates die as no_price/no_quote). Empty DataFrames remain
         valid only for genuinely empty successful responses (rows == []).
+
+        One candles call per ticker per ``_HISTORY_TTL_SECS`` serves every
+        period up to ``_HISTORY_MIN_DAYS`` (the validator + analyzer ask for
+        1d, 1mo and 3mo of the same ticker back to back): 1 call instead of
+        3-4 against the 200/min plan budget.
         """
         days = _PERIOD_DAYS.get(period, 100)
-        start = (date.today() - timedelta(days=days)).isoformat()
-        rows = self._call(lambda: self.client.candles(ticker, "1d", start=start, order="asc", limit=5000))
-        df = self._rows_to_df(rows)
+        df = self._cached_history(ticker, days)
+        if df is None:
+            window = max(days, self._HISTORY_MIN_DAYS)
+            start = (date.today() - timedelta(days=window)).isoformat()
+            rows = self._request(
+                lambda: self.client.candles(ticker, "1d", start=start, order="asc", limit=5000)
+            )
+            df = self._rows_to_df(rows)
+            with self._cache_lock:
+                self._history_cache[ticker] = (time.monotonic(), window, df)
+                self._history_cache.move_to_end(ticker)
+                while len(self._history_cache) > self._CACHE_MAX_TICKERS:
+                    self._history_cache.popitem(last=False)
+        if not df.empty:
+            cutoff = pd.Timestamp(date.today() - timedelta(days=days))
+            df = df[df.index >= cutoff]
         if period == "1d" and not df.empty:
             df = df.tail(1)  # match Yahoo/Polygon single-session semantics
+        return df.copy()
+
+    def _cached_history(self, ticker: str, days: int) -> pd.DataFrame | None:
+        with self._cache_lock:
+            hit = self._history_cache.get(ticker)
+        if hit is None:
+            return None
+        fetched_at, window, df = hit
+        if window < days or (time.monotonic() - fetched_at) >= self._HISTORY_TTL_SECS:
+            return None
         return df
 
     @staticmethod
@@ -528,20 +627,60 @@ class LSEProvider:
 
     # -- options data --------------------------------------------------------
 
+    _OSI_ROOT = re.compile(r"^([A-Z][A-Z0-9.]{0,9})\d{6}[CP]\d{8}$")
+
+    @staticmethod
+    def _norm_symbol(sym: str) -> str:
+        return re.sub(r"[^A-Z0-9]", "", str(sym).upper())
+
+    def _row_underlying(self, row: dict) -> str | None:
+        """The row's underlying symbol (normalized), or None when unknowable."""
+        und = row.get("underlying")
+        if und:
+            return self._norm_symbol(und)
+        m = self._OSI_ROOT.match(str(row.get("ticker") or "").upper())
+        return self._norm_symbol(m.group(1)) if m else None
+
+    def _is_stale(self, row: dict) -> bool:
+        raw = row.get("last_trade_at") or row.get("updated_at")
+        if not raw:
+            return False  # no timestamp: can't tell, keep
+        try:
+            ts = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        except ValueError:
+            return False
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=UTC)
+        return datetime.now(UTC) - ts > timedelta(days=self._MAX_QUOTE_AGE_DAYS)
+
     def _chain(self, ticker: str) -> list[dict]:
-        cached = self._chain_cache.get(ticker)
+        with self._cache_lock:
+            cached = self._chain_cache.get(ticker)
         if cached and (time.monotonic() - cached[0]) < self._CHAIN_TTL_SECS:
             return cached[1]
-        rows = self._call(lambda: self.client.options(ticker, limit=5000))
-        self._chain_cache[ticker] = (time.monotonic(), rows or [])
-        while len(self._chain_cache) > 32:
-            self._chain_cache.pop(next(iter(self._chain_cache)))
-        return self._chain_cache[ticker][1]
+        rows = self._request(lambda: self.client.options(ticker, limit=5000)) or []
+        want = self._norm_symbol(ticker)
+        kept = [r for r in rows if self._row_underlying(r) in (None, want)]
+        if rows and not kept:
+            got = sorted({u for r in rows if (u := self._row_underlying(r))})[:3]
+            logger.warning(
+                "LSE returned another underlying's chain for %s (%s) — ignoring (name-match resolution)",
+                ticker,
+                ",".join(got),
+            )
+        with self._cache_lock:
+            self._chain_cache[ticker] = (time.monotonic(), kept)
+            self._chain_cache.move_to_end(ticker)
+            while len(self._chain_cache) > self._CACHE_MAX_TICKERS:
+                self._chain_cache.popitem(last=False)
+        return kept
 
     def options_expiries(self, ticker: str) -> list[str]:
         today = date.today().isoformat()
-        expiries = {r["expiry"] for r in self._chain(ticker) if r.get("expiry") and r["expiry"] >= today}
-        expiries = sorted(expiries)
+        rows = self._chain(ticker)
+        expiries = sorted(
+            {r["expiry"] for r in rows if r.get("expiry") and r["expiry"] >= today and not self._is_stale(r)}
+        )
         if not expiries:
             # Vault catalog gap (ticker not carried, or the options feed
             # froze like 2026-07-01). An empty list must NOT return
@@ -549,13 +688,15 @@ class LSEProvider:
             # a silent [] here pins the scan to LSE and kills the ticker
             # as no_quote before option_chain (which does raise) is ever
             # consulted. Raise so the chain can try Yahoo.
-            raise ValueError(f"No live LSE expiries for {ticker} (catalog gap or stale feed)")
+            raise DataUnavailable(f"No live LSE expiries for {ticker} (catalog gap or stale feed)")
         return expiries
 
     def option_chain(self, ticker: str, expiry: str) -> OptionChainData:
         rows = [r for r in self._chain(ticker) if r.get("expiry") == expiry and r.get("strike") is not None]
         if not rows:
-            raise ValueError(f"No LSE contracts for {ticker} {expiry}")
+            raise DataUnavailable(f"No LSE contracts for {ticker} {expiry}")
+        if all(self._is_stale(r) for r in rows):
+            raise DataUnavailable(f"Only stale LSE quotes for {ticker} {expiry}")
 
         frames = {}
         for ctype in ("call", "put"):
@@ -563,8 +704,10 @@ class LSEProvider:
             records = []
             for r in sorted(typed, key=lambda x: float(x["strike"])):
                 strike = float(r["strike"])
+                stale = self._is_stale(r)
                 last = r.get("last_price")
-                last = float(last) if last is not None else np.nan
+                last = float(last) if last is not None and not stale else np.nan
+                iv = r.get("iv") if r.get("iv") is not None and not stale else np.nan
                 spot_raw = r.get("underlying_price")
                 spot = float(spot_raw) if spot_raw is not None else None
                 records.append(
@@ -574,7 +717,7 @@ class LSEProvider:
                         "bid": last,
                         "ask": last,
                         "lastPrice": last,
-                        "impliedVolatility": r.get("iv") if r.get("iv") is not None else np.nan,
+                        "impliedVolatility": iv,
                         "openInterest": 0,
                         "volume": float(r.get("volume_today") or 0),
                         "delta": r.get("delta") if r.get("delta") is not None else np.nan,
@@ -597,6 +740,17 @@ class ResilientProvider:
     so a recovered connection is picked up again. LSE is only included when
     explicitly passed or an ``LSE_API_KEY`` is configured.
 
+    Two kinds of failure are handled differently:
+
+    - **outage** (timeout, 5xx, 429, auth, anything unclassified): the
+      latch moves to the next provider for every later call, as before;
+    - **data miss** (``is_data_miss``: DataUnavailable or a 400/404 — the
+      ticker simply isn't carried): only *this* call falls through, and the
+      ticker is pinned to the provider that served it for
+      ``affinity_ttl_secs`` so its remaining calls (every expiry's chain) go
+      straight there and come from one consistent source. The latch stays,
+      so the rest of the universe keeps using the primary.
+
     Polygon is deliberately NOT auto-added here — it's reserved for the
     backtest/backfill scripts, which call it directly. Pass ``polygon=``
     explicitly (tests, one-off scripts) to include it in the chain anyway.
@@ -610,6 +764,7 @@ class ResilientProvider:
         polygon: PolygonProvider | None = None,
         lse: LSEProvider | None = None,
         recheck_calls: int = 60,
+        affinity_ttl_secs: float = 1800.0,
     ):
         if lse is None and get_settings().lse_api_key:
             lse = LSEProvider()
@@ -617,7 +772,10 @@ class ResilientProvider:
         self._polygon = polygon
         self._order = [p for p in (lse, self._yahoo, self._polygon) if p is not None]
         self._recheck_calls = recheck_calls
+        self._affinity_ttl = affinity_ttl_secs
+        self._affinity: OrderedDict[tuple[str, str], tuple[int, float]] = OrderedDict()
         self._lock = threading.Lock()
+        self._probing = False
         self._call_count = 0
         self._active = self._first_healthy()
         if self._active is not self._order[0]:
@@ -627,10 +785,20 @@ class ResilientProvider:
         else:
             logger.info("Market data provider: using %s", self._active.name)
 
+    @staticmethod
+    def _probe(provider) -> bool:
+        probe = getattr(provider, "healthy", None)
+        if probe is None:
+            return True
+        try:
+            return bool(probe())
+        except Exception as exc:
+            logger.info("%s health probe raised: %s", provider.name, exc)
+            return False
+
     def _first_healthy(self):
         for p in self._order[:-1]:
-            probe = getattr(p, "healthy", None)
-            if probe is None or probe():
+            if self._probe(p):
                 return p
         return self._order[-1]
 
@@ -643,35 +811,96 @@ class ResilientProvider:
         return self._active.max_expiries_hint
 
     def _maybe_recheck(self) -> None:
-        idx = self._order.index(self._active)
-        if idx == 0 or self._call_count % self._recheck_calls != 0:
-            return
-        for p in self._order[:idx]:
-            probe = getattr(p, "healthy", None)
-            if probe is None or probe():
-                logger.warning("Market data provider: %s recovered — switching back", p.name)
-                self._active = p
+        """Every ``recheck_calls`` calls, re-probe the providers above the latch.
+
+        Probes run OUTSIDE the lock (they are network calls — holding the
+        lock stalled every scan worker for the probe's duration), and only
+        one thread probes at a time.
+        """
+        with self._lock:
+            idx = self._order.index(self._active)
+            if idx == 0 or self._probing or self._call_count % self._recheck_calls != 0:
                 return
+            self._probing = True
+            candidates = self._order[:idx]
+        try:
+            for p in candidates:
+                if self._probe(p):
+                    with self._lock:
+                        if self._order.index(p) < self._order.index(self._active):
+                            logger.warning("Market data provider: %s recovered — switching back", p.name)
+                            self._active = p
+                    return
+        finally:
+            with self._lock:
+                self._probing = False
+
+    @staticmethod
+    def _family(method: str) -> str:
+        return "history" if method == "history" else "options"
+
+    def _start_index(self, method: str, ticker) -> int:
+        """Latch index, or a later provider this ticker is pinned to. Caller holds the lock."""
+        start = self._order.index(self._active)
+        if ticker is None:
+            return start
+        key = (str(ticker), self._family(method))
+        pin = self._affinity.get(key)
+        if pin is None:
+            return start
+        idx, expires = pin
+        if time.monotonic() >= expires:
+            self._affinity.pop(key, None)
+            return start
+        return max(start, idx)
+
+    def _pin(self, method: str, ticker, idx: int) -> None:
+        if ticker is None:
+            return
+        key = (str(ticker), self._family(method))
+        with self._lock:
+            self._affinity[key] = (idx, time.monotonic() + self._affinity_ttl)
+            self._affinity.move_to_end(key)
+            while len(self._affinity) > 2048:
+                self._affinity.popitem(last=False)
 
     def _dispatch(self, method: str, *args):
+        ticker = args[0] if args else None
         with self._lock:
             self._call_count += 1
-            self._maybe_recheck()
-            start = self._order.index(self._active)
+        self._maybe_recheck()
+        with self._lock:
+            start = self._start_index(method, ticker)
         last_exc: Exception | None = None
+        missed = False
         for idx in range(start, len(self._order)):
             provider = self._order[idx]
             try:
-                return getattr(provider, method)(*args)
+                result = getattr(provider, method)(*args)
             except Exception as exc:
                 last_exc = exc
                 if idx >= len(self._order) - 1:
                     break
                 nxt = self._order[idx + 1]
+                if is_data_miss(exc):
+                    missed = True
+                    logger.info(
+                        "%s has no %s data for %s (%s) — serving it from %s",
+                        provider.name,
+                        method,
+                        ticker,
+                        exc,
+                        nxt.name,
+                    )
+                    continue
                 logger.warning("%s %s failed (%s) — switching to %s", provider.name, method, exc, nxt.name)
                 with self._lock:
                     if self._active is provider:
                         self._active = nxt
+                continue
+            if missed:
+                self._pin(method, ticker, idx)
+            return result
         if last_exc is not None:
             raise last_exc
         raise RuntimeError(f"provider chain failed with no exception for {method}")

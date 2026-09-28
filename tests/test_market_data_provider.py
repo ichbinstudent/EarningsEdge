@@ -433,6 +433,9 @@ class FakeLSEClient:
         self.past = (today - timedelta(days=7)).isoformat()
 
     def candles(self, symbol, timeframe="1m", start=None, end=None, limit=5000, order="asc", dataset=None):
+        # relative dates: the provider slices cached bars by period client-side
+        d1 = (date.today() - timedelta(days=2)).isoformat()
+        d2 = (date.today() - timedelta(days=1)).isoformat()
         return [
             {
                 "symbol": symbol,
@@ -441,7 +444,7 @@ class FakeLSEClient:
                 "low": 99.0,
                 "close": 101.0,
                 "volume": 1_000_000,
-                "timestamp": "2026-07-20T00:00:00.000000Z",
+                "timestamp": f"{d1}T00:00:00.000000Z",
             },
             {
                 "symbol": symbol,
@@ -450,7 +453,7 @@ class FakeLSEClient:
                 "low": 100.0,
                 "close": 102.0,
                 "volume": 2_000_000,
-                "timestamp": "2026-07-21T00:00:00.000000Z",
+                "timestamp": f"{d2}T00:00:00.000000Z",
             },
         ]
 
@@ -473,7 +476,8 @@ class FakeLSEClient:
                         "delta": 0.55 - 0.1 * i if ctype == "call" else -0.45 - 0.1 * i,
                         "underlying_price": self.spot,
                         "dte": 7,
-                        "updated_at": "2026-07-24T20:00:00.000000Z",
+                        # fresh: the provider blanks quotes older than 5 days
+                        "updated_at": f"{date.today() - timedelta(days=1)}T20:00:00.000000Z",
                     }
                 )
         rows.append(
